@@ -1,0 +1,29 @@
+:root { --pf-v5-global--primary-color--100: #79599c; --pf-v5-global--primary-color--200: #604878; --pf-v5-global--FontFamily--text: 'Trebuchet MS', 'Segoe UI', sans-serif; --pf-v5-global--FontFamily--heading: 'Trebuchet MS', 'Segoe UI', sans-serif; }
+html, body, .login-pf, .login-pf body { min-height: 100%; background: #f9f7f2 !important; color: #3b3444; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; }
+.pf-v5-c-login { background: radial-gradient(ellipse at 20% 15%, #eee7f6, transparent 55%), #f9f7f2; }
+.pf-v5-c-login__container { max-width: 500px; margin: 30px auto; }
+.pf-v5-c-login__header { text-align: center; padding-top: 12px; }
+.pf-v5-c-login__header::before { content: ''; display: block; width: 130px; height: 130px; margin: 0 auto 18px; background: url('../img/lumi.svg') center/contain no-repeat; }
+#kc-header-wrapper { color: #79599c; font-size: 38px; font-weight: 700; letter-spacing: -1px; }
+.pf-v5-c-login__main { border-radius: 24px; border: 1px solid #e8e0ed; box-shadow: 0 12px 48px #79599c12; overflow: hidden; background: #fffdfb; }
+.pf-v5-c-login__main-header { text-align: center; padding-top: 30px; }
+.pf-v5-c-title { color: #604878; font-size: 24px; line-height: 1.4; }
+.pf-v5-c-button { border-radius: 12px; min-height: 46px; font-weight: 600; }
+.pf-v5-c-button.pf-m-primary { background: #79599c; color: white; }
+.pf-v5-c-button.pf-m-primary:hover { background: #604878; }
+.pf-v5-c-form-control { border-radius: 10px; background: #fffdfb; min-height: 46px; }
+a { color: #79599c; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #9778b8 !important; outline-offset: 3px; }
+.pf-v5-c-login__main-footer,
+.pf-v5-c-login__main-footer-band { background: transparent; }
+.pf-v5-c-login__main-footer-band { border-top: 0; }
+.pf-v5-c-login__main-footer-band-item { padding-top: 16px; padding-bottom: 16px; }
+.pf-v5-c-login__main-footer:empty { display: none; }
+#social-google { border-radius: 12px; background: #fffdfb; border: 1px solid #d6c6e7; min-height: 48px; }
+@media(max-width: 600px) { .pf-v5-c-login__container { margin: 16px; width: auto; }.pf-v5-c-login__header::before { width: 100px; height: 100px; }.pf-v5-c-login__main { border-radius: 18px; } }
+#kc-header-wrapper { color: #79599c !important; text-transform: none !important; }
+body, .pf-v5-c-title, .pf-v5-c-button, input, label { font-family: 'Trebuchet MS', 'Segoe UI', sans-serif !important; }
+.pf-v5-c-login__main { --pf-v5-c-login__main--BorderTopColor: #c7afe2; --pf-v5-c-login__main--BorderTopWidth: 0; }
+.pf-v5-c-login__main::before { background-color: #c7afe2 !important; }
+.pf-v5-c-login__main::before { border-top-color: #d6c6e7 !important; }
+.pf-v5-c-form-control::after { border-bottom-color: #9778b8 !important; }

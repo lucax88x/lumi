@@ -1,0 +1,80 @@
+name: lumi
+services:
+  keycloak-db:
+    image: postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Configure database password}
+    volumes:
+      - keycloak-db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U keycloak -d keycloak]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt: [no-new-privileges:true]
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    command: [start, --import-realm]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${KEYCLOAK_ADMIN_PORT:-19090}:8080"
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /keycloak
+      KC_HOSTNAME: ${PUBLIC_ORIGIN}/keycloak
+      KC_HOSTNAME_ADMIN: ${KEYCLOAK_ADMIN_ORIGIN:-http://localhost:19090}/keycloak
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Configure administrator password}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}
+      NATIVE_ORIGIN: ${NATIVE_ORIGIN:-${PUBLIC_ORIGIN}}
+      KEYCLOAK_ADMIN_ORIGIN: ${KEYCLOAK_ADMIN_ORIGIN:-http://localhost:19090}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      SMTP_HOST: ${SMTP_HOST:?Configure SMTP}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:?Configure sender address}
+      SMTP_AUTH: ${SMTP_AUTH:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      SMTP_SSL: ${SMTP_SSL:-false}
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    volumes:
+      - ./deploy/keycloak/lumi-realm.json:/opt/keycloak/data/import/lumi-realm.json:ro
+      - ./deploy/keycloak/themes/lumi:/opt/keycloak/themes/lumi:ro
+    healthcheck:
+      test: [CMD, bash, -ec, "exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /keycloak/health/ready HTTP/1.0\r\n\r\n' >&3; cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 15
+    security_opt: [no-new-privileges:true]
+  keycloak-init:
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    entrypoint: [bash, /init.sh]
+    restart: "no"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_ADMIN_USER: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_ADMIN_ORIGIN: ${KEYCLOAK_ADMIN_ORIGIN:-http://localhost:19090}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - ./deploy/keycloak/init.sh:/init.sh:ro
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+volumes:
+  keycloak-db:

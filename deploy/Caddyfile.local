@@ -1,0 +1,21 @@
+{
+  auto_https off
+}
+:80 {
+  @keycloak path /keycloak/realms/lumi/* /keycloak/resources/*
+  handle @keycloak {
+    reverse_proxy keycloak:8080 {
+      header_up X-Forwarded-Host {http.request.host}
+      header_up X-Forwarded-Proto http
+    }
+  }
+  handle /keycloak* {
+    respond 404
+  }
+  handle /healthz {
+    respond 404
+  }
+  handle {
+    respond 404
+  }
+}

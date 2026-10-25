@@ -1,0 +1,28 @@
+services:
+  lumi:
+    image: ${LUMI_IMAGE:?Supply the published image digest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${LUMI_PORT:-18080}:8080"
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN}
+      OIDC_ISSUER_URL: ${PUBLIC_ORIGIN}/keycloak/realms/lumi
+      OIDC_INTERNAL_URL: http://keycloak:8080/keycloak/realms/lumi
+      OIDC_CLIENT_ID: lumi
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Run local setup or configure a secret}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      keycloak-init:
+        condition: service_completed_successfully
+    volumes:
+      - lumi-data:/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    stop_grace_period: 15s
+volumes:
+  lumi-data:

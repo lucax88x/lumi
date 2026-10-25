@@ -1,0 +1,1 @@
+ALTER TABLE portal_sessions ADD COLUMN portal_admin INTEGER NOT NULL DEFAULT 0;

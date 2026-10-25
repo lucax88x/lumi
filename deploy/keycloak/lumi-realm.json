@@ -1,0 +1,88 @@
+{
+  "realm": "lumi",
+  "enabled": true,
+  "displayName": "lumi.",
+  "loginTheme": "lumi",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "verifyEmail": true,
+  "resetPasswordAllowed": true,
+  "rememberMe": false,
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "it",
+    "en"
+  ],
+  "defaultLocale": "it",
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 43200,
+  "roles": {
+    "realm": [
+      {
+        "name": "portal-access",
+        "description": "Administrator-approved access to Lumi"
+      },
+      {
+        "name": "portal-admin",
+        "description": "Manage the ChatGPT connection and model shared by all families"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "lumi",
+      "name": "Lumi",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${OIDC_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "${PUBLIC_ORIGIN}/auth/callback",
+        "${NATIVE_ORIGIN}/auth/callback"
+      ],
+      "webOrigins": [
+        "${PUBLIC_ORIGIN}",
+        "${NATIVE_ORIGIN}"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "basic"
+      ],
+      "protocolMappers": [
+        {
+          "name": "lumi-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "lumi",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "smtpServer": {
+    "host": "${SMTP_HOST}",
+    "port": "${SMTP_PORT}",
+    "from": "${SMTP_FROM}",
+    "auth": "${SMTP_AUTH}",
+    "user": "${SMTP_USER}",
+    "password": "${SMTP_PASSWORD}",
+    "starttls": "${SMTP_STARTTLS}",
+    "ssl": "${SMTP_SSL}"
+  }
+}

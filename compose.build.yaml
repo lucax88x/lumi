@@ -1,0 +1,5 @@
+# Workstation builds only. Published deployments never load this override.
+services:
+  lumi:
+    image: lumi:local
+    build: .

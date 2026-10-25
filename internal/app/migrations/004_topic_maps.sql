@@ -1,0 +1,1 @@
+ALTER TABLE messages ADD COLUMN topic_map TEXT NOT NULL DEFAULT 'null';

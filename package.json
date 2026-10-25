@@ -1,0 +1,14 @@
+{
+  "name": "lumi-workspace",
+  "private": true,
+  "packageManager": "pnpm@12.8.2",
+  "scripts": {
+    "dev": "pnpm --dir web dev",
+    "build": "pnpm --dir web build",
+    "test": "pnpm --dir web test",
+    "typecheck": "pnpm --dir web typecheck",
+    "generate": "openapi-ts && go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.json",
+    "test:e2e": "pnpm --dir web test:e2e"
+  },
+  "devDependencies": { "@hey-api/openapi-ts": "0.99.0" }
+}

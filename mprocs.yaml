@@ -1,0 +1,10 @@
+procs:
+  API:
+    shell: "just api"
+    stop: SIGTERM
+  Vite:
+    shell: "just ui"
+    stop: SIGTERM
+
+keymap_procs:
+  <C-c>: { c: quit }

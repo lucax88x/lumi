@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f9f7f2" />
+    <meta name="description" content="Una piccola luce per capire parole e frasi. Impariamo insieme, un pezzetto alla volta." />
+    <link rel="icon" type="image/svg+xml" href="/lumi.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Lumi · Una piccola luce per imparare</title>
+    <style>
+      body { margin: 0; background: #f9f7f2; }
+      #lumi-splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px; background: #f9f7f2; color: #79599c; font-family: 'Trebuchet MS', 'Avenir Next', 'Segoe UI', sans-serif; text-align: center; }
+      #lumi-splash img { width: 112px; height: 112px; border-radius: 26px; }
+      #lumi-splash p { margin: 0; font-size: 18px; }
+    </style>
+  </head>
+  <body>
+    <div id="lumi-splash" role="status" aria-live="polite">
+      <img src="/lumi.svg" alt="" width="112" height="112" />
+      <p>Un attimo, arriva Lumi…</p>
+    </div>
+    <div id="root" hidden inert></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

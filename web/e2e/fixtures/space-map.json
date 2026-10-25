@@ -1,0 +1,83 @@
+{
+  "branches": [
+    {
+      "explanation": "Gli otto pianeti che girano intorno al Sole.",
+      "items": [
+        {
+          "explanation": "È il pianeta più vicino al Sole.",
+          "label": "Mercurio"
+        },
+        {
+          "explanation": "È il secondo pianeta dal Sole.",
+          "label": "Venere"
+        },
+        {
+          "explanation": "È il pianeta dove viviamo.",
+          "label": "Terra"
+        },
+        {
+          "explanation": "È chiamato pianeta rosso.",
+          "label": "Marte"
+        },
+        {
+          "explanation": "È il pianeta più grande del Sistema solare.",
+          "label": "Giove"
+        },
+        {
+          "explanation": "È famoso per i suoi anelli.",
+          "label": "Saturno"
+        },
+        {
+          "explanation": "È un pianeta molto freddo, con anelli sottili.",
+          "label": "Urano"
+        },
+        {
+          "explanation": "È lontano dal Sole e appare blu.",
+          "label": "Nettuno"
+        }
+      ],
+      "label": "I pianeti"
+    },
+    {
+      "explanation": "Le stelle sono grandi sfere luminose; i pianeti non brillano di luce propria.",
+      "items": [
+        {
+          "explanation": "È la stella al centro del Sistema solare e ci dà luce e calore.",
+          "label": "Sole"
+        },
+        {
+          "explanation": "Sono stelle che vediamo come piccoli punti luminosi nel cielo notturno.",
+          "label": "Altre stelle"
+        }
+      ],
+      "label": "Le stelle"
+    },
+    {
+      "explanation": "Alcuni sono corpi nello spazio, altri sono scie luminose o frammenti arrivati al suolo.",
+      "items": [
+        {
+          "explanation": "È un corpo roccioso che gira intorno al Sole.",
+          "label": "Asteroide"
+        },
+        {
+          "explanation": "È un piccolo corpo ghiacciato che può formare una coda vicino al Sole.",
+          "label": "Cometa"
+        },
+        {
+          "explanation": "È un piccolo frammento di roccia o metallo nello spazio.",
+          "label": "Meteoroide"
+        },
+        {
+          "explanation": "È la scia luminosa che vediamo quando un frammento attraversa l’atmosfera.",
+          "label": "Meteora"
+        },
+        {
+          "explanation": "È un frammento che arriva fino al suolo.",
+          "label": "Meteorite"
+        }
+      ],
+      "label": "Piccoli corpi e fenomeni"
+    }
+  ],
+  "title": "Il Sistema solare e i corpi celesti"
+}
