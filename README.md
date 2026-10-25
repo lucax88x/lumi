@@ -99,6 +99,8 @@ I test live OpenAI restano opt-in tramite `LUMI_LIVE_TEST_DATA_DIR` e consumano 
 
 ## VPS
 
-La [guida operativa](docs/deployment.md) descrive Docker Compose, Caddy già installato sull’host, Google, SMTP, amministrazione tramite SSH e backup. I comandi `docker-prod-*` usano `.env`; quelli `local-*` usano `.env.stack.local`.
+La [guida operativa](docs/deployment.md) descrive Docker Compose, Caddy sull’host per HTTPS e gateway Caddy in Compose per il routing interno, Google, SMTP, amministrazione tramite SSH e backup. I comandi `docker-prod-*` usano `.env`; quelli `local-*` usano `.env.stack.local`.
+
+Il Caddy host inoltra `ciaolumi.fyi` al gateway su `127.0.0.1:18081`. Il container Lumi serve insieme React e API Go; le porte private `18080` (Lumi) e `19090` (Keycloak) restano disponibili. Configura il blocco host da `deploy/Caddyfile.example` e `PUBLIC_ORIGIN=https://ciaolumi.fyi` sul server prima del primo deploy.
 
 Per le immagini private GHCR, `just deploy-setup` prepara l’ambiente di serviceman, `just deploy --check` verifica l’ultima pubblicazione riuscita su `main` e `just deploy` la attiva. `--run RUN_ID` seleziona un’altra pubblicazione e `--rollback RUN_ID-ATTEMPT` riattiva una release conservata. `just ssh` apre `lumi-server`. Repository pubblico, autenticazione GHCR sul VPS e configurazione iniziale sono descritti nella guida; questi comandi non caricano gli ambienti del computer sul server.

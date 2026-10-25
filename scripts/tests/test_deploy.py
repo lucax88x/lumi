@@ -123,6 +123,7 @@ class RemoteTests(unittest.TestCase):
         for file in ('compose.yaml', 'compose.prod.yaml', '.env.example'):
             shutil.copyfile(ROOT / file, self.bundle / file)
         shutil.copytree(ROOT / 'deploy/keycloak', self.bundle / 'deploy/keycloak')
+        shutil.copyfile(ROOT / 'deploy/Caddyfile.prod', self.bundle / 'deploy/Caddyfile.prod')
         self.env = os.environ | dict(HOME=str(self.home), PATH=str(self.bin) + ':' + os.environ['PATH'],
                                      TEST_STATE=str(self.state), TEST_BUNDLE=str(self.bundle))
         for key in ('DOCKER_CONTEXT', 'DOCKER_HOST'):
@@ -203,7 +204,7 @@ class RemoteTests(unittest.TestCase):
                     self.assertIn('lumi', args)
 
     def test_failed_activation_and_health_restore_preceding_release(self):
-        for failure in ('FAIL_UP', 'FAIL_HEALTH'):
+        for failure in ('FAIL_UP', 'FAIL_HEALTH', 'FAIL_GATEWAY'):
             with self.subTest(failure=failure):
                 self.setup()
                 self.assertEqual(self.invoke('deploy', release(100, digest='2')).returncode, 0)
@@ -213,6 +214,45 @@ class RemoteTests(unittest.TestCase):
                 self.assertEqual((self.state / 'active').read_text(), '100-1')
                 self.assertEqual(os.readlink(self.root / 'current'), 'releases/100-1')
                 self.assertTrue((self.root / 'releases/101-1').exists())
+
+    def test_gateway_requires_private_binding_matching_bundle_and_healthcheck(self):
+        self.setup()
+        for key in ('INVALID_GATEWAY_BIND', 'INVALID_GATEWAY_MOUNT', 'INVALID_GATEWAY_HEALTH', 'DUPLICATE_GATEWAY_PORT'):
+            with self.subTest(key=key):
+                result = self.invoke('check', release(), **{key: '1'})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNoActivation()
+                self.assertNotIn('PRIVATE_TEST_SECRET', result.stdout + result.stderr)
+        (self.bundle / 'deploy/Caddyfile.prod').unlink()
+        result = self.invoke('check', release())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Missing bundled production Caddyfile', result.stderr)
+        self.assertNoActivation()
+
+    def test_gateway_routes_are_checked_before_current_is_promoted(self):
+        self.setup()
+        result = self.invoke('deploy', release())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        urls = [args[-1] for name, args in self.events() if name == 'curl']
+        for path in ('/api/v1/session', '/auth/login', '/keycloak/realms/lumi/.well-known/openid-configuration',
+                     '/healthz', '/keycloak/admin/', '/keycloak/realms/master/.well-known/openid-configuration'):
+            self.assertIn('http://127.0.0.1:18081' + path, urls)
+
+    def test_legacy_rollback_stops_gateway_and_uses_original_health_checks(self):
+        self.setup()
+        legacy = self.seed(release(100, digest='2'))
+        file = legacy / 'compose.prod.yaml'
+        file.write_text('services:\n  lumi:' + file.read_text().split('\n  lumi:', 1)[1])
+        (legacy / 'deploy/Caddyfile.prod').unlink()
+        result = self.invoke('deploy', release())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        count = len(self.events())
+        result = self.invoke('rollback', '100-1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('original direct routing', result.stderr)
+        events = self.events()[count:]
+        self.assertTrue(any(name == 'docker' and args[-2:] == ['stop', 'gateway'] for name, args in events))
+        self.assertFalse(any(name == 'curl' and args[-1].startswith('http://127.0.0.1:18081') for name, args in events))
 
     def test_first_failure_reports_no_preceding_release(self):
         self.setup()

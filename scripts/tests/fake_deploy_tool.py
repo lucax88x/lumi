@@ -61,6 +61,7 @@ elif name == 'docker':
         elif args[1:3] == ['up', '--help']:
             print('--wait --wait-timeout')
         elif 'config' in args:
+            directory = Path(args[args.index('--project-directory') + 1])
             model = {
                 'name': 'lumi',
                 'services': {
@@ -72,6 +73,22 @@ elif name == 'docker':
                 },
                 'volumes': {name: {'name': 'lumi_' + name} for name in ('lumi-data', 'keycloak-db')},
             }
+            if '  gateway:' in (directory / 'compose.prod.yaml').read_text():
+                model['services']['gateway'] = {
+                    'ports': [{'host_ip': '127.0.0.1', 'target': 8080, 'published': '18081'}],
+                    'volumes': [{'type': 'bind', 'source': str(directory / 'deploy/Caddyfile.prod'),
+                                 'target': '/etc/caddy/Caddyfile', 'read_only': True}],
+                    'healthcheck': {'test': ['CMD', 'wget', 'http://127.0.0.1:8081/healthz']},
+                }
+                gateway = model['services']['gateway']
+                if os.environ.get('INVALID_GATEWAY_BIND'):
+                    gateway['ports'][0]['host_ip'] = '0.0.0.0'
+                if os.environ.get('INVALID_GATEWAY_MOUNT'):
+                    gateway['volumes'][0]['source'] = '/another-release/Caddyfile'
+                if os.environ.get('INVALID_GATEWAY_HEALTH'):
+                    gateway.pop('healthcheck')
+                if os.environ.get('DUPLICATE_GATEWAY_PORT'):
+                    gateway['ports'][0]['published'] = '18080'
             if os.environ.get('INVALID_CONFIG'):
                 model['services']['lumi']['build'] = '.'
             print(json.dumps(model))
@@ -87,6 +104,8 @@ elif name == 'curl':
     url = args[-1]
     active = (state / 'active').read_text() if (state / 'active').exists() else ''
     if os.environ.get('FAIL_HEALTH') == active:
+        sys.exit(22)
+    if url.startswith('http://127.0.0.1:18081/') and os.environ.get('FAIL_GATEWAY') == active:
         sys.exit(22)
     if url.endswith('/keycloak/realms/lumi/.well-known/openid-configuration'):
         print(json.dumps({'issuer': 'https://lumi.test/keycloak/realms/lumi'}))

@@ -1,19 +1,8 @@
-# Import this site into the existing host Caddy configuration.
-# Set LUMI_DOMAIN in Caddy's environment; match PUBLIC_ORIGIN in Lumi's .env.
-{$LUMI_DOMAIN} {
-  @keycloak path /keycloak/realms/lumi/* /keycloak/resources/*
-  handle @keycloak {
-    reverse_proxy 127.0.0.1:19090
-  }
-  handle /keycloak* {
-    respond 404
-  }
-  handle /healthz {
-    respond 404
-  }
-  handle {
-    reverse_proxy 127.0.0.1:18080 {
-      flush_interval -1
-    }
+# Add this site to the existing host Caddyfile; preserve its globals and sites.
+# Point DNS at the VPS and set PUBLIC_ORIGIN=https://ciaolumi.fyi in Lumi's .env.
+# Match the upstream port to LUMI_GATEWAY_PORT (default 18081).
+ciaolumi.fyi {
+  reverse_proxy 127.0.0.1:18081 {
+    flush_interval -1
   }
 }

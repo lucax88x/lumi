@@ -1,0 +1,34 @@
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:8080 {
+	@keycloak path /keycloak/realms/lumi/* /keycloak/resources/*
+	handle @keycloak {
+		reverse_proxy keycloak:8080 {
+			header_up X-Forwarded-Proto https
+			flush_interval -1
+		}
+	}
+	handle /keycloak* {
+		respond 404
+	}
+	handle /healthz {
+		respond 404
+	}
+	handle {
+		reverse_proxy lumi:8080 {
+			header_up X-Forwarded-Proto https
+			flush_interval -1
+		}
+	}
+}
+
+# Container-only readiness listener; never published or proxied by the host.
+http://127.0.0.1:8081 {
+	bind 127.0.0.1
+	respond /healthz 200
+	respond 404
+}

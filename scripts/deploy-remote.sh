@@ -35,6 +35,7 @@ container=''
 model=''
 activating=0
 preceding=''
+gateway_directory=''
 cleanup() {
     status=$?
     trap - EXIT HUP INT TERM
@@ -104,6 +105,7 @@ if [[ $mode == setup ]]; then
 # Production: copy to .env and fill private values. No trailing slash.
 PUBLIC_ORIGIN=https://lumi.example.com
 LUMI_PORT=18080
+LUMI_GATEWAY_PORT=18081
 KEYCLOAK_ADMIN_PORT=19090
 KEYCLOAK_ADMIN_ORIGIN=http://localhost:19090
 KEYCLOAK_ADMIN_USER=admin
@@ -182,8 +184,8 @@ validate_configuration() {
     model=$(mktemp "$root/.compose.XXXXXXXX") || return
     # Resolved configuration contains secrets: keep it private and never print it.
     compose "$directory" config --format json >"$model" || return
-    values=$(python3 -I - "$model" "$selected_image" <<'PY'
-import json, sys, urllib.parse
+    values=$(python3 -I - "$model" "$selected_image" "$directory" <<'PY'
+import json, pathlib, sys, urllib.parse
 c = json.load(open(sys.argv[1])); services = c['services']
 assert c['name'] == 'lumi'
 assert all('build' not in s for s in services.values()), 'Production cannot build'
@@ -192,11 +194,21 @@ assert c['volumes']['lumi-data']['name'] == 'lumi_lumi-data'
 assert c['volumes']['keycloak-db']['name'] == 'lumi_keycloak-db'
 assert not services['keycloak-db'].get('ports'), 'Database must stay private'
 ports = []
-for name in ('lumi', 'keycloak'):
+names = ['lumi', 'keycloak']
+if 'gateway' in services:
+    names.append('gateway')
+    file = pathlib.Path(sys.argv[3]) / 'deploy/Caddyfile.prod'
+    assert file.is_file() and not file.is_symlink(), 'Missing bundled production Caddyfile'
+    mounts = [v for v in services['gateway'].get('volumes', []) if v['target'] == '/etc/caddy/Caddyfile']
+    assert len(mounts) == 1 and mounts[0]['type'] == 'bind' and mounts[0].get('read_only'), 'Gateway configuration must be read-only'
+    assert pathlib.Path(mounts[0]['source']).resolve() == file.resolve(), 'Gateway must use its release Caddyfile'
+    assert services['gateway'].get('healthcheck', {}).get('test'), 'Gateway needs a health check'
+for name in names:
     p = services[name]['ports']
     assert len(p) == 1 and p[0]['host_ip'] == '127.0.0.1' and p[0]['target'] == 8080
     port = int(p[0]['published']); assert 1024 <= port <= 65535
     ports.append(str(port))
+assert len(set(ports)) == len(ports), 'Loopback ports must be distinct'
 origin = services['lumi']['environment']['PUBLIC_ORIGIN']
 url = urllib.parse.urlsplit(origin)
 assert url.scheme == 'https' and url.hostname and not url.username and not url.password
@@ -212,34 +224,45 @@ PY
 }
 
 verify_health() {
-    local origin=${connection[0]} lumi_port=${connection[1]} keycloak_port=${connection[2]} code body path headers
+    local origin=${connection[0]} lumi_port=${connection[1]} keycloak_port=${connection[2]} code body path headers endpoint
+    local endpoints=("$origin")
+    if [[ -n ${connection[3]:-} ]]; then endpoints+=("http://127.0.0.1:${connection[3]}"); fi
     curl --fail --silent --show-error --max-time 15 "http://127.0.0.1:$lumi_port/healthz" >/dev/null || return
-    for path in "http://127.0.0.1:$keycloak_port" "$origin"; do
+    for path in "http://127.0.0.1:$keycloak_port" "${endpoints[@]}"; do
         body=$(curl --fail --silent --show-error --max-time 15 "$path/keycloak/realms/lumi/.well-known/openid-configuration") || return
         python3 -I -c 'import json,sys; assert json.loads(sys.argv[1])["issuer"] == sys.argv[2]+"/keycloak/realms/lumi"' "$body" "$origin" || return
     done
-    for path in "http://127.0.0.1:$lumi_port" "$origin"; do
+    for path in "http://127.0.0.1:$lumi_port" "${endpoints[@]}"; do
         code=$(curl --silent --show-error --max-time 15 --output /dev/null --write-out '%{http_code}' "$path/api/v1/session") || return
         [[ $code == 401 ]] || { printf 'Authentication gate failed (%s).\n' "$code" >&2; return 1; }
     done
-    headers=$(curl --silent --show-error --max-time 15 --dump-header - --output /dev/null "$origin/auth/login") || return
-    # Login state cookies stay on stdin, never in process arguments or output.
-    printf '%s' "$headers" | python3 -I -c '
+    for endpoint in "${endpoints[@]}"; do
+        headers=$(curl --silent --show-error --max-time 15 --dump-header - --output /dev/null "$endpoint/auth/login") || return
+        # Login state cookies stay on stdin, never in process arguments or output.
+        printf '%s' "$headers" | python3 -I -c '
 import sys
 lines = sys.stdin.read().splitlines()
 assert lines and lines[0].split()[1] in ("302", "303"), "Login redirect failed"
 locations = [line.split(":", 1)[1].strip() for line in lines if line.lower().startswith("location:")]
 assert len(locations) == 1 and locations[0].startswith(sys.argv[1] + "/keycloak/realms/lumi/protocol/openid-connect/auth?"), "Unexpected identity redirect"
 ' "$origin" || return
-    for path in /healthz /keycloak/admin/ /keycloak/realms/master/.well-known/openid-configuration; do
-        code=$(curl --silent --show-error --max-time 15 --output /dev/null --write-out '%{http_code}' "$origin$path") || return
-        [[ $code == 404 ]] || { printf 'Private route exposed through the gateway: %s (%s).\n' "$path" "$code" >&2; return 1; }
+        for path in /healthz /keycloak/admin/ /keycloak/realms/master/.well-known/openid-configuration; do
+            code=$(curl --silent --show-error --max-time 15 --output /dev/null --write-out '%{http_code}' "$endpoint$path") || return
+            [[ $code == 404 ]] || { printf 'Private route exposed through the gateway: %s (%s).\n' "$path" "$code" >&2; return 1; }
+        done
     done
 }
 
 activate() {
     local directory=$1
     validate_configuration "$directory" || return
+    if [[ -n ${connection[3]:-} ]]; then
+        gateway_directory=$directory
+    elif [[ -n $gateway_directory ]]; then
+        printf 'Restoring a pre-gateway release; host Caddy must use its original direct routing.\n' >&2
+        compose "$gateway_directory" stop gateway || return
+        gateway_directory=''
+    fi
     compose "$directory" up --no-build --pull never --wait --wait-timeout 300 || return
     verify_health || return
 }
@@ -269,6 +292,7 @@ for link in current previous; do
     [[ ! -L $root/.$link.next ]] || rm -- "$root/.$link.next"
 done
 [[ ! -L $root/current ]] || preceding=$(readlink "$root/current")
+if [[ -n $preceding && -f $root/$preceding/deploy/Caddyfile.prod ]]; then gateway_directory="$root/$preceding"; fi
 
 directory="$root/releases/$release_id"
 if [[ $mode != rollback ]]; then
