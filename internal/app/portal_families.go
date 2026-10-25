@@ -12,7 +12,7 @@ import (
 )
 
 func (p *Portal) userFamilies(user string) ([]api.Family, error) {
-	rows, err := p.db.Query(`SELECT f.id,f.name,m.role FROM families f JOIN memberships m ON m.family_id=f.id WHERE m.user_id=? ORDER BY f.name,f.id`, user)
+	rows, err := p.db.Query(`SELECT f.id,f.name,m.role,f.access_enabled FROM families f JOIN memberships m ON m.family_id=f.id WHERE m.user_id=? ORDER BY f.name,f.id`, user)
 	if err != nil {
 		return nil, err
 	}
@@ -20,7 +20,7 @@ func (p *Portal) userFamilies(user string) ([]api.Family, error) {
 	out := []api.Family{}
 	for rows.Next() {
 		var f api.Family
-		if err = rows.Scan(&f.Id, &f.Name, &f.Role); err != nil {
+		if err = rows.Scan(&f.Id, &f.Name, &f.Role, &f.AccessEnabled); err != nil {
 			return nil, err
 		}
 		out = append(out, f)
@@ -52,7 +52,7 @@ func (p *Portal) CreateFamily(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	if _, err = tx.Exec(`INSERT INTO families VALUES(?,?)`, id, name); err == nil {
+	if _, err = tx.Exec(`INSERT INTO families(id,name) VALUES(?,?)`, id, name); err == nil {
 		_, err = tx.Exec(`INSERT INTO memberships VALUES(?,?,'parent')`, id, currentSession(r).UserID)
 	}
 	if err == nil {
@@ -62,10 +62,10 @@ func (p *Portal) CreateFamily(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	sendJSON(w, 201, api.Family{Id: id, Name: name, Role: api.FamilyRoleParent})
+	sendJSON(w, 201, api.Family{Id: id, Name: name, Role: api.FamilyRoleParent, AccessEnabled: true})
 }
 func (p *Portal) ListMembers(w http.ResponseWriter, r *http.Request, familyID string) {
-	p.withFamily(w, r, familyID, true, func(_ *Server) {
+	p.withFamilyManagement(w, r, familyID, func() {
 		rows, err := p.db.Query(`SELECT i.id,i.email,m.role FROM memberships m JOIN identities i ON i.id=m.user_id WHERE m.family_id=? ORDER BY i.email`, familyID)
 		if err != nil {
 			internalError(w, err)
@@ -111,10 +111,13 @@ func (p *Portal) changeMember(w http.ResponseWriter, r *http.Request, familyID, 
 	defer tx.Rollback()
 	// Authorization and last-parent checks share the same transaction as the mutation.
 	var actor, target string
-	err = tx.QueryRow(`SELECT role FROM memberships WHERE family_id=? AND user_id=?`, familyID, currentSession(r).UserID).Scan(&actor)
-	if err != nil || actor != "parent" {
-		problem(w, 403, "parent_required", "Questa parte è riservata ai genitori.")
-		return
+	if !currentSession(r).Admin {
+		var enabled bool
+		err = tx.QueryRow(`SELECT m.role,f.access_enabled FROM memberships m JOIN families f ON f.id=m.family_id WHERE family_id=? AND user_id=?`, familyID, currentSession(r).UserID).Scan(&actor, &enabled)
+		if err != nil || actor != "parent" || !enabled {
+			problem(w, 403, "parent_required", "Questa parte è riservata ai genitori di una famiglia attiva.")
+			return
+		}
 	}
 	err = tx.QueryRow(`SELECT role FROM memberships WHERE family_id=? AND user_id=?`, familyID, userID).Scan(&target)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -151,7 +154,7 @@ func (p *Portal) changeMember(w http.ResponseWriter, r *http.Request, familyID, 
 	w.WriteHeader(204)
 }
 func (p *Portal) CreateInvitation(w http.ResponseWriter, r *http.Request, familyID string) {
-	p.withFamily(w, r, familyID, true, func(_ *Server) {
+	p.withFamilyManagement(w, r, familyID, func() {
 		var body api.InviteEmail
 		if !decode(w, r, &body) {
 			return
@@ -174,7 +177,7 @@ func (p *Portal) CreateInvitation(w http.ResponseWriter, r *http.Request, family
 	})
 }
 func (p *Portal) ListInvitations(w http.ResponseWriter, r *http.Request, familyID string) {
-	p.withFamily(w, r, familyID, true, func(_ *Server) {
+	p.withFamilyManagement(w, r, familyID, func() {
 		rows, err := p.db.Query(`SELECT id,email,expires_at FROM invitations WHERE family_id=? AND expires_at>? ORDER BY expires_at`, familyID, time.Now().Unix())
 		if err != nil {
 			internalError(w, err)
@@ -200,7 +203,7 @@ func (p *Portal) ListInvitations(w http.ResponseWriter, r *http.Request, familyI
 	})
 }
 func (p *Portal) RevokeInvitation(w http.ResponseWriter, r *http.Request, familyID, invitationID string) {
-	p.withFamily(w, r, familyID, true, func(_ *Server) {
+	p.withFamilyManagement(w, r, familyID, func() {
 		_, err := p.db.Exec(`DELETE FROM invitations WHERE family_id=? AND id=?`, familyID, invitationID)
 		if err != nil {
 			internalError(w, err)
@@ -226,7 +229,7 @@ func (p *Portal) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 	var familyID, email, name string
-	err = tx.QueryRow(`SELECT i.family_id,i.email,f.name FROM invitations i JOIN families f ON f.id=i.family_id WHERE token_hash=? AND expires_at>?`, digest(body.Token), time.Now().Unix()).Scan(&familyID, &email, &name)
+	err = tx.QueryRow(`SELECT i.family_id,i.email,f.name FROM invitations i JOIN families f ON f.id=i.family_id WHERE token_hash=? AND expires_at>? AND f.access_enabled=1`, digest(body.Token), time.Now().Unix()).Scan(&familyID, &email, &name)
 	if errors.Is(err, sql.ErrNoRows) {
 		problem(w, 404, "invalid_invitation", "L’invito è scaduto o non è più disponibile.")
 		return
@@ -254,5 +257,5 @@ func (p *Portal) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	sendJSON(w, 200, api.Family{Id: familyID, Name: name, Role: role})
+	sendJSON(w, 200, api.Family{Id: familyID, Name: name, Role: role, AccessEnabled: true})
 }

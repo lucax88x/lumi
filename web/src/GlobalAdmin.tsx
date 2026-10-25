@@ -7,13 +7,14 @@ import { completeConnection, disconnect, startConnection, updateAdminSettings } 
 import type { OAuthStart } from './api/types.gen';
 import { useSession } from './portal-state';
 import { errorMessage } from './lib';
+import { AdminFamilies } from './AdminFamilies';
 
 export function GlobalAdminPage({ familyId }: { familyId: string }) {
   const session = useSession();
   return <div className="admin-page">
     {familyId ? <Link className="back-link" to="/famiglie/$familyId" params={{ familyId }}><ArrowLeft size={16}/>Torna da Lumi</Link> : <Link className="back-link" to="/"><ArrowLeft size={16}/>Torna da Lumi</Link>}
-    <div className="admin-heading"><span className="admin-badge"><ShieldCheck size={24}/></span><div><span className="eyebrow">PER TUTTE LE FAMIGLIE</span><h1>Admin</h1><p>Un solo collegamento ChatGPT e una chiave API condivisi da tutte le famiglie.</p></div></div>
-    {session.admin ? <SharedConnection/> : <p role="alert">Questa parte è riservata agli amministratori.</p>}
+    <div className="admin-heading"><span className="admin-badge"><ShieldCheck size={24}/></span><div><span className="eyebrow">PER TUTTE LE FAMIGLIE</span><h1>Admin</h1><p>Gestisci le famiglie, i loro accessi e il piano ChatGPT condiviso.</p></div></div>
+    {session.admin ? <><AdminFamilies/><SharedConnection/></> : <p role="alert">Questa parte è riservata agli amministratori.</p>}
   </div>;
 }
 

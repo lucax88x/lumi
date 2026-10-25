@@ -311,6 +311,15 @@ button svg, a svg { flex-shrink: 0; }
 .member-row > span { flex: 1; min-width: 150px; }
 .member-row select { width: auto; }
 .members-card h2 { margin-top: 32px; }
+.members-card h3 { margin-top: 28px; }
+.members-card form { display: grid; gap: 12px; }
+.admin-family-list { display: grid; gap: 16px; margin-top: 20px; }
+.admin-family { min-width: 0; padding: 18px; border: 1px solid #eee7f6; border-radius: 16px; }
+.admin-family-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.admin-family-heading > div { min-width: 0; overflow-wrap: anywhere; }
+.admin-family-heading h3 { margin: 0; }
+.admin-family-heading p { margin: 6px 0; }
+.suspended-family { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 600px) { .portal-card { padding: 22px; margin: 22px auto; }.portal-card h1 { font-size: 26px; } }
 .connection-error-page { position: fixed; inset: 0; z-index: 40; background: #f9f7f2; }
 .portal-card input { border: 1px solid #d6c6e7; border-radius: 10px; min-height: 46px; padding: 11px 13px; background: #fff; color: #3b3444; }

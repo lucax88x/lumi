@@ -21,12 +21,14 @@ function FamilyLayout() {
     return () => { void qc.cancelQueries(filter); qc.removeQueries(filter); };
   }, [id, qc]);
   if (!session.families.some(f => f.id === id)) return <main className="portal-card"><h1>Famiglia non disponibile</h1><a href="/">Torna alle tue famiglie</a></main>;
+  if (session.families.find(f => f.id === id)?.accessEnabled === false) return <main className="portal-card"><h1>Accesso sospeso</h1><p>L’accesso a questa famiglia è sospeso. Contatta un amministratore.</p><a href="/">Torna alle tue famiglie</a></main>;
   return <AppShell key={id}/>;
 }
 function GlobalAdminLayout() {
   const session = useSession();
   const { family: requestedFamily } = globalAdmin.useSearch();
-  const id = session.families.find(f => f.id === requestedFamily)?.id ?? session.families[0]?.id ?? '';
+  const available = session.families.filter(f => f.accessEnabled !== false);
+  const id = available.find(f => f.id === requestedFamily)?.id ?? available[0]?.id ?? '';
   return <AppShell familyId={id} checkConnection={false}><GlobalAdminPage familyId={id}/></AppShell>;
 }
 const root = createRootRoute({ component: PortalRoot, notFoundComponent: () => <div className="empty-state"><h1>Questa pagina si è nascosta!</h1><a href="/">Torniamo da Lumi</a></div> });

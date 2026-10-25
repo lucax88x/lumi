@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Mail, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
 import { getSessionOptions, getSessionQueryKey, listMembersOptions, listInvitationsOptions } from './api/@tanstack/react-query.gen';
 import { acceptInvitation, createFamily, createInvitation, logout, removeMember, revokeInvitation, updateMember } from './api/sdk.gen';
 import { AccountContext, SessionContext, familyID, useSession } from './portal-state';
@@ -29,7 +30,7 @@ export function PortalRoot() {
   const [expired, setExpired] = useState(false); const [error, setError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
   const session = useQuery({ ...getSessionOptions(), enabled: !expired && !signingOut, retry: false, staleTime: 0, refetchInterval: 60_000 });
-  const inFamily = pathname.startsWith('/famiglie/') && session.data?.portalAccess && session.data.families.some(f => f.id === familyID());
+  const inFamily = pathname.startsWith('/famiglie/') && session.data?.portalAccess && session.data.families.some(f => f.id === familyID() && f.accessEnabled !== false);
   useEffect(() => {
     if (expired || (!session.isPending && !inFamily)) { document.getElementById('lumi-splash')?.remove(); const root = document.getElementById('root'); if (root) { root.hidden = false; root.inert = false; } }
     setCSRF(expired ? '' : session.data?.csrfToken ?? '');
@@ -73,7 +74,7 @@ export function FamilyHub() {
     try { const { data } = await createFamily({ body: { name }, throwOnError: true }); await qc.invalidateQueries({ queryKey: getSessionQueryKey() }); await navigate({ to: '/famiglie/$familyId', params: { familyId: data.id } }); }
     catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
-  return <main className="portal-card"><img src="/lumi.svg" alt="Lumi"/><h1>Le tue famiglie</h1>{session.admin && <Link className="soft-button" to="/admin">Admin</Link>}<p>Ogni famiglia ha le proprie scoperte. Lumi usa un unico piano condiviso.</p><div className="family-list">{session.families.map(f => <Link className="soft-button" key={f.id} to="/famiglie/$familyId" params={{ familyId: f.id }}>{f.name}<small>{f.role === 'parent' ? 'Genitore' : 'Membro'}</small></Link>)}</div><form onSubmit={create}><label htmlFor="family-name">Crea una famiglia</label><input id="family-name" value={name} onChange={e => setName(e.target.value)} maxLength={80} required placeholder="Il nome della famiglia"/><button className="primary-button" disabled={busy || !name.trim()}>Crea famiglia</button></form>{error && <p role="alert">{error}</p>}</main>;
+  return <main className="portal-card"><img src="/lumi.svg" alt="Lumi"/><h1>Le tue famiglie</h1>{session.admin && <Link className="soft-button" to="/admin">Admin</Link>}<p>Ogni famiglia ha le proprie scoperte. Lumi usa un unico piano condiviso.</p><div className="family-list">{session.families.map(f => f.accessEnabled === false ? <div className="soft-button suspended-family" key={f.id}>{f.name}<small>Accesso sospeso</small></div> : <Link className="soft-button" key={f.id} to="/famiglie/$familyId" params={{ familyId: f.id }}>{f.name}<small>{f.role === 'parent' ? 'Genitore' : 'Membro'}</small></Link>)}</div><form onSubmit={create}><label htmlFor="family-name">Crea una famiglia</label><input id="family-name" value={name} onChange={e => setName(e.target.value)} maxLength={80} required placeholder="Il nome della famiglia"/><button className="primary-button" disabled={busy || !name.trim()}>Crea famiglia</button></form>{error && <p role="alert">{error}</p>}</main>;
 }
 export function InvitationPage() {
   const [token] = useState(() => window.location.hash.slice(1)); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
@@ -86,14 +87,51 @@ export function InvitationPage() {
   return <main className="portal-card"><h1>Un invito per te</h1><p>Entra nella famiglia con l’indirizzo email verificato a cui è destinato l’invito.</p><button className="primary-button" disabled={busy || !token} onClick={() => void accept()}>Accetta invito</button>{!token && <p>Questo invito non è completo.</p>}{error && <p role="alert">{error}</p>}</main>;
 }
 export function FamilyMembers() {
-  const session = useSession(); const qc = useQueryClient(); const family = session.families.find(f => f.id === familyID()); const path = { familyId: familyID() };
-  const members = useQuery({ ...listMembersOptions({ path }), enabled: family?.role === 'parent' });
-  const invitations = useQuery({ ...listInvitationsOptions({ path }), enabled: family?.role === 'parent' });
+  const session = useSession(); const family = session.families.find(f => f.id === familyID());
+  return <div className="admin-page">
+    <Link className="back-link" to="/famiglie/$familyId/genitore" params={{ familyId: familyID() }}><ArrowLeft size={16}/>Torna al genitore</Link>
+    <div className="admin-heading"><span className="admin-badge"><UsersRound size={24}/></span><div><span className="eyebrow">GESTISCI LA FAMIGLIA</span><h1>{family?.name ?? 'La famiglia'}</h1><p>Gestisci chi può entrare e invita le persone della tua famiglia.</p></div></div>
+    {family?.role === 'parent' ? <>
+      <div className="admin-toolbar"><span className="private-label"><ShieldCheck size={15}/>Accesso privato</span></div>
+      <FamilyAccessManager key={family.id} family={family} variant="page"/>
+    </> : <p role="alert">Questa parte è riservata ai genitori.</p>}
+  </div>;
+}
+
+export function FamilyAccessManager({ family, variant = 'embedded' }: { family: Pick<Family, 'id' | 'name'>; variant?: 'page' | 'embedded' }) {
+  const qc = useQueryClient(); const path = { familyId: family.id };
+  const members = useQuery(listMembersOptions({ path }));
+  const invitations = useQuery(listInvitationsOptions({ path }));
   const [email, setEmail] = useState(''); const [url, setUrl] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  const page = variant === 'page';
+  const Heading = page ? 'h2' : 'h3';
   async function run(action: () => Promise<unknown>) { setBusy(true); setError(''); try { await action(); await qc.invalidateQueries(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); } }
-  if (family?.role !== 'parent') return <main className="portal-card"><p>Questa parte è riservata ai genitori.</p></main>;
-  return <main className="portal-card members-card"><Link to="/famiglie/$familyId/genitore" params={path}>← Torna al genitore</Link><h1>{family.name}</h1><h2>I membri</h2>{members.isError && <p role="alert">{errorMessage(members.error)}</p>}{members.data?.map(m => <div className="member-row" key={m.userId}><span>{m.email}</span><select aria-label={`Ruolo di ${m.email}`} disabled={busy} value={m.role} onChange={e => void run(() => updateMember({ path: { ...path, userId: m.userId }, body: { role: e.target.value as Family['role'] }, throwOnError: true }))}><option value="parent">Genitore</option><option value="member">Membro</option></select><button className="text-button danger-text" disabled={busy} onClick={() => { if (window.confirm(`Rimuovere ${m.email} dalla famiglia?`)) void run(() => removeMember({ path: { ...path, userId: m.userId }, throwOnError: true })); }}>Rimuovi</button></div>)}
-    <h2>Invita una persona</h2><form onSubmit={e => { e.preventDefault(); void run(async () => { const { data } = await createInvitation({ path, body: { email }, throwOnError: true }); setUrl(data.url); setEmail(''); }); }}><label htmlFor="invite-email">Email della persona</label><input id="invite-email" type="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)}/><button className="primary-button" disabled={busy}>Crea link di invito</button></form><p className="field-hint">Il link dura sette giorni. La persona deve verificare l’email e avere l’approvazione dell’amministratore.</p>{url && <div className="notice"><label htmlFor="invite-link">Link da condividere</label><input id="invite-link" value={url} readOnly onFocus={e => e.target.select()}/><button className="text-button" onClick={() => void navigator.clipboard.writeText(url).catch(() => setError('Seleziona e copia il link.'))}>Copia link</button></div>}
-    <h2>Inviti in attesa</h2>{invitations.isError && <p role="alert">{errorMessage(invitations.error)}</p>}{invitations.data?.map(i => <div className="member-row" key={i.id}><span>{i.email}<small>Scade il {new Date(i.expiresAt).toLocaleDateString('it')}</small></span><button className="text-button" disabled={busy} onClick={() => void run(() => revokeInvitation({ path: { ...path, invitationId: i.id }, throwOnError: true }))}>Revoca</button></div>)}{error && <p className="error-text" role="alert">{error}</p>}
-  </main>;
+  return <div className={page ? undefined : 'members-card'}>
+    {error && <p className="notice error-notice" role="alert">{error}</p>}
+    <section className={page ? 'admin-card' : undefined}>
+      <div className={page ? 'section-heading' : undefined}>{page && <span className="section-icon lilac"><UsersRound size={22}/></span>}<div><Heading>I membri</Heading>{page && <p>Scegli il ruolo di ogni persona e gestisci gli accessi alla famiglia.</p>}</div></div>
+      {members.isPending && <p role="status">Carico i membri…</p>}
+      {members.isError && <p role="alert">{errorMessage(members.error)}</p>}
+      {members.data?.map(m => <div className="member-row" key={m.userId}>
+        <span>{m.email}</span>
+        <select aria-label={`Ruolo di ${m.email}`} disabled={busy} value={m.role} onChange={e => void run(() => updateMember({ path: { ...path, userId: m.userId }, body: { role: e.target.value as Family['role'] }, throwOnError: true }))}><option value="parent">Genitore</option><option value="member">Membro</option></select>
+        <button className="text-button danger-text" disabled={busy} onClick={() => { if (window.confirm(`Rimuovere ${m.email} dalla famiglia?`)) void run(() => removeMember({ path: { ...path, userId: m.userId }, throwOnError: true })); }}>Rimuovi</button>
+      </div>)}
+    </section>
+    <section className={page ? 'admin-card' : undefined}>
+      <div className={page ? 'section-heading' : undefined}>{page && <span className="section-icon peach"><UserPlus size={22}/></span>}<div><Heading>Invita una persona</Heading>{page && <p>Crea un link personale per entrare nella famiglia.</p>}</div></div>
+      <form onSubmit={e => { e.preventDefault(); void run(async () => { const { data } = await createInvitation({ path, body: { email }, throwOnError: true }); setUrl(data.url); setEmail(''); }); }}>
+        <label htmlFor="invite-email">Email della persona</label><input id="invite-email" type="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)}/>
+        <div className="button-row"><button className="primary-button" disabled={busy}><UserPlus size={17}/>Crea link di invito</button></div>
+      </form>
+      <p className="field-hint">Il link dura sette giorni. La persona deve verificare l’email e avere l’approvazione dell’amministratore.</p>
+      {url && <div className="notice"><label htmlFor="invite-link">Link da condividere</label><input id="invite-link" value={url} readOnly onFocus={e => e.target.select()}/><button className="text-button" onClick={() => void navigator.clipboard.writeText(url).catch(() => setError('Seleziona e copia il link.'))}>Copia link</button></div>}
+    </section>
+    <section className={page ? 'admin-card' : undefined}>
+      <div className={page ? 'section-heading' : undefined}>{page && <span className="section-icon mint"><Mail size={22}/></span>}<div><Heading>Inviti in attesa</Heading>{page && <p>Controlla gli inviti ancora validi e revoca quelli che non servono più.</p>}</div></div>
+      {invitations.data?.length === 0 && <p>Nessun invito in attesa.</p>}
+      {invitations.isError && <p role="alert">{errorMessage(invitations.error)}</p>}
+      {invitations.data?.map(i => <div className="member-row" key={i.id}><span>{i.email}<small>Scade il {new Date(i.expiresAt).toLocaleDateString('it')}</small></span><button className="text-button" disabled={busy} onClick={() => void run(async () => { await revokeInvitation({ path: { ...path, invitationId: i.id }, throwOnError: true }); setUrl(''); })}>Revoca</button></div>)}
+    </section>
+  </div>;
 }

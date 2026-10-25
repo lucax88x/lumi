@@ -144,6 +144,10 @@ export type Family = {
     id: string;
     name: string;
     role: 'parent' | 'member';
+    /**
+     * Whether members may access this family.
+     */
+    accessEnabled: boolean;
 };
 
 export type FamilyMember = {
@@ -192,6 +196,17 @@ export type DictionaryEntry = {
     example: string;
     firstAskedAt: string;
     lastAskedAt: string;
+};
+
+export type FamilyAccess = {
+    accessEnabled: boolean;
+};
+
+export type AdminFamily = {
+    id: string;
+    name: string;
+    accessEnabled: boolean;
+    memberCount: number;
 };
 
 export type GetStatusData = {
@@ -1751,3 +1766,55 @@ export type DeleteDictionaryWordResponses = {
 };
 
 export type DeleteDictionaryWordResponse = DeleteDictionaryWordResponses[keyof DeleteDictionaryWordResponses];
+
+export type ListAdminFamiliesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/families';
+};
+
+export type ListAdminFamiliesErrors = {
+    /**
+     * Error
+     */
+    default: Error;
+};
+
+export type ListAdminFamiliesError = ListAdminFamiliesErrors[keyof ListAdminFamiliesErrors];
+
+export type ListAdminFamiliesResponses = {
+    /**
+     * All families
+     */
+    200: Array<AdminFamily>;
+};
+
+export type ListAdminFamiliesResponse = ListAdminFamiliesResponses[keyof ListAdminFamiliesResponses];
+
+export type UpdateFamilyAccessData = {
+    body: FamilyAccess;
+    path: {
+        familyId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/families/{familyId}/access';
+};
+
+export type UpdateFamilyAccessErrors = {
+    /**
+     * Error
+     */
+    default: Error;
+};
+
+export type UpdateFamilyAccessError = UpdateFamilyAccessErrors[keyof UpdateFamilyAccessErrors];
+
+export type UpdateFamilyAccessResponses = {
+    /**
+     * Access updated
+     */
+    204: void;
+};
+
+export type UpdateFamilyAccessResponse = UpdateFamilyAccessResponses[keyof UpdateFamilyAccessResponses];

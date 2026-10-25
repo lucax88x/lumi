@@ -179,13 +179,18 @@ func (p *Portal) family(id string) (*Server, error) {
 func (p *Portal) withFamily(w http.ResponseWriter, r *http.Request, id string, parent bool, serve func(*Server)) {
 	sess := currentSession(r)
 	var role string
-	err := p.db.QueryRow(`SELECT role FROM memberships WHERE family_id=? AND user_id=?`, id, sess.UserID).Scan(&role)
+	var enabled bool
+	err := p.db.QueryRow(`SELECT m.role,f.access_enabled FROM memberships m JOIN families f ON f.id=m.family_id WHERE family_id=? AND user_id=?`, id, sess.UserID).Scan(&role, &enabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
 		return
 	}
 	if err != nil {
 		internalError(w, err)
+		return
+	}
+	if !enabled {
+		problem(w, 403, "family_suspended", "L’accesso a questa famiglia è sospeso. Contatta un amministratore.")
 		return
 	}
 	if parent && role != "parent" {

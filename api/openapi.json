@@ -3,7 +3,7 @@
   "info": {
     "title": "Lumi API",
     "version": "1.0.0",
-    "description": "Family assistant. All application requests use opaque server-side session cookies. Mutations require matching Origin and X-CSRF-Token. Family operations require membership; admin operations require a parent membership. OIDC tokens are never exposed to the frontend."
+    "description": "Family assistant. All application requests use opaque server-side session cookies. Mutations require matching Origin and X-CSRF-Token. Family operations require membership; admin operations require a parent membership. OIDC tokens are never exposed to the frontend. Portal administrators may list every family and manage family access, memberships and invitations. Conversation and parent settings access still requires membership. Suspended families are unavailable to members."
   },
   "paths": {
     "/api/v1/families/{familyId}/status": {
@@ -3002,6 +3002,78 @@
           }
         ]
       }
+    },
+    "/api/v1/admin/families": {
+      "get": {
+        "operationId": "listAdminFamilies",
+        "summary": "List all families for portal administrators",
+        "responses": {
+          "200": {
+            "description": "All families",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminFamily"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/families/{familyId}/access": {
+      "parameters": [
+        {
+          "name": "familyId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateFamilyAccess",
+        "summary": "Enable or suspend access for every member of a family",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FamilyAccess"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Access updated"
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3547,12 +3619,17 @@
               "parent",
               "member"
             ]
+          },
+          "accessEnabled": {
+            "type": "boolean",
+            "description": "Whether members may access this family."
           }
         },
         "required": [
           "id",
           "name",
-          "role"
+          "role",
+          "accessEnabled"
         ],
         "additionalProperties": false
       },
@@ -3740,6 +3817,40 @@
           "firstAskedAt",
           "lastAskedAt"
         ]
+      },
+      "FamilyAccess": {
+        "type": "object",
+        "required": [
+          "accessEnabled"
+        ],
+        "properties": {
+          "accessEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AdminFamily": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "accessEnabled",
+          "memberCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "accessEnabled": {
+            "type": "boolean"
+          },
+          "memberCount": {
+            "type": "integer"
+          }
+        }
       }
     },
     "securitySchemes": {
