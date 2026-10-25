@@ -38,14 +38,6 @@ services:
       NATIVE_ORIGIN: ${NATIVE_ORIGIN:-${PUBLIC_ORIGIN}}
       KEYCLOAK_ADMIN_ORIGIN: ${KEYCLOAK_ADMIN_ORIGIN:-http://localhost:19090}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
-      SMTP_HOST: ${SMTP_HOST:?Configure SMTP}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_FROM: ${SMTP_FROM:?Configure sender address}
-      SMTP_AUTH: ${SMTP_AUTH:-true}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
-      SMTP_SSL: ${SMTP_SSL:-false}
     depends_on:
       keycloak-db:
         condition: service_healthy
@@ -72,6 +64,15 @@ services:
       KEYCLOAK_ADMIN_ORIGIN: ${KEYCLOAK_ADMIN_ORIGIN:-http://localhost:19090}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_AUTH: ${SMTP_AUTH:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      SMTP_SSL: ${SMTP_SSL:-false}
     volumes:
       - ./deploy/keycloak/init.sh:/init.sh:ro
     tmpfs: [/tmp]

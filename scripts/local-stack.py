@@ -13,7 +13,7 @@ else:
         'KEYCLOAK_ADMIN_PORT': '19090', 'KEYCLOAK_ADMIN_ORIGIN': 'http://localhost:19090',
         'KEYCLOAK_ADMIN_USER': 'admin', 'KEYCLOAK_ADMIN_PASSWORD': secrets.token_urlsafe(32),
         'KEYCLOAK_DB_PASSWORD': secrets.token_urlsafe(32), 'OIDC_CLIENT_SECRET': secrets.token_urlsafe(32),
-        'SMTP_HOST': 'mailpit', 'SMTP_PORT': '1025', 'SMTP_FROM': 'lumi@example.test',
+        'SMTP_ENABLED': 'true', 'SMTP_HOST': 'mailpit', 'SMTP_PORT': '1025', 'SMTP_FROM': 'lumi@example.test',
         'SMTP_AUTH': 'false', 'SMTP_USER': '', 'SMTP_PASSWORD': '',
         'SMTP_STARTTLS': 'false', 'SMTP_SSL': 'false', 'MAILPIT_PORT': '18025',
     }

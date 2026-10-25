@@ -110,6 +110,8 @@ KEYCLOAK_ADMIN_USER=admin
 KEYCLOAK_ADMIN_PASSWORD=
 KEYCLOAK_DB_PASSWORD=
 OIDC_CLIENT_SECRET=
+# Optional email. Enable only after configuring host, sender and credentials.
+SMTP_ENABLED=false
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_FROM=

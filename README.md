@@ -2,7 +2,7 @@
 
 Una PWA per capire parole e frasi, pensata per prima e seconda elementare. Lumi è una lucciola: ascolta una domanda e accompagna la comprensione un pezzetto alla volta.
 
-L’accesso è protetto da Keycloak. Ci si può registrare con email/password o Google, ma un amministratore deve assegnare il ruolo `portal-access` prima di entrare. Il browser usa soltanto un cookie di sessione opaco: i token OIDC restano nel backend.
+L’accesso è protetto da Keycloak. Un amministratore può creare gli account; con SMTP abilitato è disponibile anche la registrazione email/password. Google è opzionale. Un amministratore deve assegnare il ruolo `portal-access` prima di entrare. Il browser usa soltanto un cookie di sessione opaco: i token OIDC restano nel backend.
 
 ## Prova locale
 
@@ -43,6 +43,8 @@ Un account approvato può creare più famiglie e far parte di altre. La persona 
 I membri condividono le scoperte della propria famiglia. Solo i genitori possono modificare le preferenze didattiche e vocali, gestire la cronologia e invitare o rimuovere persone. Una persona può essere genitore in una famiglia e membro in un’altra. Non si può rimuovere o declassare l’ultimo genitore. Il ruolo Keycloak **`portal-admin`**, assegnato esplicitamente oltre a `portal-access`, abilita la sezione **Admin** (`/admin`): essere genitore non concede accesso alle connessioni condivise e gli amministratori non ottengono accesso alle conversazioni delle altre famiglie.
 
 Gli inviti sono link copiabili, validi sette giorni e utilizzabili una sola volta dall’indirizzo email verificato indicato. Un invito non concede `portal-access`: l’approvazione resta all’amministratore Keycloak.
+
+In produzione SMTP è opzionale e spento per impostazione predefinita: con `SMTP_ENABLED=false`, host e mittente possono restare vuoti e Keycloak disabilita registrazione autonoma e recupero password. Crea gli utenti nella console del realm **lumi**, imposta email verificata e password e assegna i ruoli richiesti. Per abilitare le email in seguito, imposta `SMTP_ENABLED=true`, configura i campi `SMTP_*` e riesegui il deploy. Lo sviluppo locale usa Mailpit con SMTP abilitato.
 
 ## Collegare il piano ChatGPT
 

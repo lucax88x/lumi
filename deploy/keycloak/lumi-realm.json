@@ -3,12 +3,12 @@
   "enabled": true,
   "displayName": "lumi.",
   "loginTheme": "lumi",
-  "registrationAllowed": true,
+  "registrationAllowed": false,
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "verifyEmail": true,
-  "resetPasswordAllowed": true,
+  "resetPasswordAllowed": false,
   "rememberMe": false,
   "internationalizationEnabled": true,
   "supportedLocales": [
@@ -75,14 +75,5 @@
       ]
     }
   ],
-  "smtpServer": {
-    "host": "${SMTP_HOST}",
-    "port": "${SMTP_PORT}",
-    "from": "${SMTP_FROM}",
-    "auth": "${SMTP_AUTH}",
-    "user": "${SMTP_USER}",
-    "password": "${SMTP_PASSWORD}",
-    "starttls": "${SMTP_STARTTLS}",
-    "ssl": "${SMTP_SSL}"
-  }
+  "smtpServer": {}
 }

@@ -10,6 +10,7 @@ import socket
 import subprocess
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,13 +74,41 @@ def main():
             f'PUBLIC_ORIGIN={origin}', f'LUMI_PORT={app_port}', f'KEYCLOAK_ADMIN_PORT={admin_port}',
             f'KEYCLOAK_ADMIN_ORIGIN=http://localhost:{admin_port}', 'KEYCLOAK_ADMIN_USER=admin',
             'KEYCLOAK_ADMIN_PASSWORD=' + secrets.token_hex(24), 'KEYCLOAK_DB_PASSWORD=' + secrets.token_hex(24),
-            'OIDC_CLIENT_SECRET=' + secrets.token_hex(24), 'SMTP_HOST=unused.test', 'SMTP_FROM=smoke@unused.test',
+            'OIDC_CLIENT_SECRET=' + secrets.token_hex(24), 'SMTP_ENABLED=false', 'SMTP_HOST=', 'SMTP_FROM=',
             'SMTP_AUTH=false', 'SMTP_STARTTLS=false', 'SMTP_SSL=false',
             # Exercise broker create/update before the master issuer changes.
             # These disposable values are never used to contact Google.
             'GOOGLE_CLIENT_ID=smoke-test-client', 'GOOGLE_CLIENT_SECRET=' + secrets.token_hex(24), '',
         ]))
         config.chmod(0o600)
+        def set_email(enabled):
+            values = {'SMTP_ENABLED': 'true' if enabled else 'false',
+                      'SMTP_HOST': 'unused.test' if enabled else '',
+                      'SMTP_FROM': 'smoke@unused.test' if enabled else '',
+                      'SMTP_PASSWORD': '\'test-only-"quoted"\\password$\'' if enabled else ''}
+            lines = [line for line in config.read_text().splitlines() if line.split('=', 1)[0] not in values]
+            config.write_text('\n'.join(lines + [key + '=' + value for key, value in values.items()]) + '\n')
+
+        def verify_email(enabled):
+            # Read back Keycloak's effective realm, without printing credentials.
+            values = dict(line.split('=', 1) for line in config.read_text().splitlines() if '=' in line)
+            base = f'http://localhost:{admin_port}/keycloak'
+            form = urllib.parse.urlencode({'grant_type': 'password', 'client_id': 'admin-cli',
+                                          'username': values['KEYCLOAK_ADMIN_USER'],
+                                          'password': values['KEYCLOAK_ADMIN_PASSWORD']}).encode()
+            with urllib.request.urlopen(base + '/realms/master/protocol/openid-connect/token', data=form, timeout=15) as response:
+                token = json.load(response)['access_token']
+            request = urllib.request.Request(base + '/admin/realms/lumi', headers={'Authorization': 'Bearer ' + token})
+            with urllib.request.urlopen(request, timeout=15) as response:
+                realm = json.load(response)
+            assert realm['registrationAllowed'] is enabled
+            assert realm['resetPasswordAllowed'] is enabled
+            assert realm['verifyEmail'] is True
+            if enabled:
+                assert realm['smtpServer']['host'] == 'unused.test'
+                assert realm['smtpServer']['from'] == 'smoke@unused.test'
+            else:
+                assert not realm.get('smtpServer')
         (directory / 'Caddyfile').write_text(''':80 {
     @keycloak path /keycloak/realms/lumi/* /keycloak/resources/*
     handle @keycloak {
@@ -120,6 +149,7 @@ def main():
             for service in ('keycloak-db', 'keycloak', 'gateway'):
                 command('docker', 'pull', model['services'][service]['image'])
             command(*compose, 'up', '--no-build', '--pull', 'never', '--wait', '--wait-timeout', '360', env=env)
+            verify_email(False)
             app_container = command(*compose, 'ps', '-q', 'lumi', env=env, capture=True).stdout.strip()
             assert command('docker', 'inspect', '--format', '{{.Image}}', app_container, capture=True).stdout.strip() == image_id
             assert status(f'http://127.0.0.1:{app_port}/healthz')[0] == 200
@@ -146,11 +176,16 @@ def main():
             assert next_model['volumes'] == model['volumes']
             command(*compose, 'exec', '-T', 'lumi', 'sh', '-ec', 'printf retained > /data/.deployment-smoke', env=env)
             volumes_before = command('docker', 'volume', 'ls', '-q', '--filter', 'label=com.docker.compose.project=' + project, capture=True).stdout
+            set_email(True)
             command(*next_compose, 'up', '--no-build', '--pull', 'never', '--wait', '--wait-timeout', '360', env=env)
+            verify_email(True)
+            set_email(False)
+            command(*next_compose, 'up', '--no-build', '--pull', 'never', '--wait', '--wait-timeout', '360', env=env)
+            verify_email(False)
             assert command('docker', 'volume', 'ls', '-q', '--filter', 'label=com.docker.compose.project=' + project, capture=True).stdout == volumes_before
             command(*next_compose, 'exec', '-T', 'lumi', 'sh', '-ec', 'test "$(cat /data/.deployment-smoke)" = retained', env=env)
             assert status(f'http://127.0.0.1:{app_port}/healthz')[0] == 200
-            print('Isolated extraction, Compose activation, authentication gate, and volume persistence passed.')
+            print('Isolated extraction, Compose activation, authentication gate, SMTP off/on/off, and volume persistence passed.')
         except subprocess.CalledProcessError:
             # Initialization diagnostics contain only this disposable test's
             # configuration; never render or log the resolved Compose model.
