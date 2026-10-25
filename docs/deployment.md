@@ -1,6 +1,6 @@
 # Lumi: immagini private GHCR e deploy SSH
 
-GitHub Actions pubblica immagini `linux/amd64` private in `ghcr.io/lucax88x/lumi`; il VPS scarica un digest preciso e usa Compose senza compilare. Il deploy non modifica il Caddy dell’host. Non è prevista l’importazione automatica di installazioni precedenti.
+GitHub Actions pubblica immagini `linux/amd64` private in `ghcr.io/lucax88x/lumi`; il deploy completo scarica un digest preciso e usa Compose senza compilare. Watchtower può aggiornare automaticamente soltanto l’applicazione tramite il tag `main`. Il deploy non modifica il Caddy dell’host. Non è prevista l’importazione automatica di installazioni precedenti.
 
 ## Servizi e porte
 
@@ -16,7 +16,7 @@ Il gateway pubblica soltanto `/keycloak/realms/lumi/*` e `/keycloak/resources/*`
 
 1. Il codice viene pubblicato nel repository **pubblico** `lucax88x/lumi`, con ramo principale `main`; le immagini GHCR restano **private**. Controlla prima di ogni push che nessun `.env`, database o directory `data/` sia incluso. Abilita Actions e la possibilità di pubblicare pacchetti.
 2. Il workflow `Publish` (`.github/workflows/publish.yml`) viene eseguito a ogni push su `main` o manualmente da **Actions → Publish → Run workflow → main**. Prima di pubblicare richiama `Check`: codice generato, analisi Go, tipi TypeScript, test backend/frontend, test degli script e regressioni browser desktop/Android. Gli altri rami e le pull request eseguono soltanto i controlli. Una pubblicazione manuale su altri rami non pubblica immagini.
-3. Soltanto il job di pubblicazione ha `packages: write` e usa `GITHUB_TOKEN`. Il tag è `run-RUN_ID-RUN_ATTEMPT`, con label OCI per repository e commit. L’artifact `lumi-release-RUN_ID-RUN_ATTEMPT` contiene `release.json` con digest, commit e identificativo del run. Non si usa un tag mobile per attivare servizi.
+3. Soltanto il job di pubblicazione ha `packages: write` e usa `GITHUB_TOKEN`. Il tag immutabile è `run-RUN_ID-RUN_ATTEMPT`, con label OCI per repository e commit. L’artifact `lumi-release-RUN_ID-RUN_ATTEMPT` contiene `release.json` con digest, commit e identificativo del run. Dopo l’upload dell’artifact, il job promuove lo stesso digest al tag mobile `main` per Watchtower. I publisher sono serializzati; una pubblicazione il cui commit non è più la punta di `main`, o il cui tentativo è superato, conserva la release immutabile senza spostare il tag mobile. I deploy manuali continuano a selezionare un digest preciso.
 4. Dopo la prima pubblicazione verifica che il pacchetto GHCR sia **Private**, collegato a `lucax88x/lumi` e accessibile dall’account che eseguirà il pull sul VPS. Non renderlo pubblico. Conserva gli artifact per scegliere run espliciti (retention configurata: 90 giorni); le release già estratte restano disponibili per rollback anche dopo la scadenza dell’artifact.
 
 GitHub raccomanda `GITHUB_TOKEN` per pubblicare dal workflow e un PAT classic con `read:packages` per scaricare pacchetti privati dal server: [autenticazione GHCR](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry).
@@ -84,6 +84,8 @@ Dal computer:
 ```sh
 just deploy --check                 # ultima pubblicazione riuscita su main
 just deploy                         # attiva la stessa selezione predefinita
+just deploy --check --auto-update    # verifica anche Watchtower e il tag main
+just deploy --auto-update            # deploy completo, poi aggiornamenti automatici dell’app
 just deploy --check --run 123456789  # controlla un run esplicito
 just deploy --run 123456789          # attiva quel run riuscito su main
 just deploy --rollback 123456789-1   # riattiva una release già conservata sul VPS
@@ -92,6 +94,8 @@ just deploy --rollback 123456789-1   # riattiva una release già conservata sul 
 `--check` convalida run, artifact, digest, configurazione e prerequisiti, scarica le immagini ed estrae il bundle in una directory temporanea poi rimossa. Non avvia servizi e non modifica `current`/`previous`. Ogni comando prende un lock non bloccante: una seconda operazione concorrente fallisce. Alla prima installazione il template incompleto causa il fallimento prima dell’attivazione.
 
 Il deploy scarica il digest e verifica la label del commit, conserva il bundle in `releases/`, risolve Compose senza mostrare segreti, controlla immagine, assenza di build, volumi e binding loopback, incluso il mount in sola lettura del Caddyfile della release quando è presente il gateway, scarica le dipendenze e avvia con `--no-build --pull never --wait --wait-timeout 300`. Il nome progetto è sempre **`lumi`**, quindi i volumi rimangono **`lumi_lumi-data`** e **`lumi_keycloak-db`** anche cambiando directory. Un’installazione con un nome progetto diverso richiede una migrazione pianificata prima di usare questi comandi.
+
+Ogni attivazione ferma prima il Watchtower del progetto e attende la fine dell’eventuale scansione, poi registra l’immagine realmente in esecuzione. I comandi senza `--auto-update`, inclusi `--run` e `--rollback`, lasciano Watchtower fermo e Lumi sul digest selezionato. `--check` non ferma Watchtower. Se un’attivazione manuale fallisce, il ripristino usa l’immagine che girava prima dell’operazione, anche se Watchtower l’aveva già aggiornata oltre la versione del bundle; dopo un ripristino riuscito viene riavviato l’updater precedente, se era attivo.
 
 Prima di spostare atomicamente `current`, controlla `/healthz` privato, discovery Keycloak privata e pubblica con issuer corretto, risposte anonime `401` della sessione privata, del gateway HTTP loopback e dell’origine HTTPS pubblica, redirect di `/auth/login` al realm Lumi e `404` pubblici per salute, amministrazione e realm master. La salute interna di PostgreSQL, Keycloak e del gateway è verificata da Compose. I file e le immagini sono conservati; nessun volume viene cancellato. Anche un aggiornamento può comportare una breve indisponibilità durante la ricreazione dei container.
 
@@ -111,6 +115,50 @@ docker compose -p lumi --env-file "$HOME/lumi/config/.env" -f compose.yaml -f co
 ```
 
 L’import del realm avviene soltanto alla prima creazione. Gli avvii successivi non sovrascrivono utenti o configurazione Keycloak. `keycloak-init` configura l’URL privato del realm master ed eventualmente Google; Lumi non riceve credenziali di amministrazione Keycloak.
+
+## Aggiornamenti automatici dell’applicazione
+
+Usiamo il fork [nicholas-fedor/watchtower](https://github.com/nicholas-fedor/watchtower), versione `1.23.2` fissata per digest. L’overlay `compose.watchtower.yaml` viaggia nel bundle dell’immagine ed è attivato soltanto da `--auto-update`. Watchtower controlla GHCR ogni **300 secondi** e aggiorna soltanto Lumi, selezionato tramite label e scope `lumi-app`. Keycloak, PostgreSQL, gateway e Watchtower stesso non vengono aggiornati automaticamente. Non vengono pubblicate porte aggiuntive e il socket montato è quello del contesto Docker effettivo di serviceman, anche rootless.
+
+Per preparare l’accesso al registry, entra nella shell **serviceman** come per il deploy iniziale:
+
+```sh
+install -d -m 700 "$HOME/lumi/config/watchtower"
+DOCKER_CONFIG="$HOME/lumi/config/watchtower" docker login ghcr.io --username lucax88x
+chmod 600 "$HOME/lumi/config/watchtower/config.json"
+```
+
+Inserisci al prompt un PAT classic con `read:packages`. Questa configurazione dedicata deve contenere l’autenticazione GHCR e non dipendere da credential helper dell’host; il deploy verifica proprietario e permessi privati, senza stampare le credenziali. Watchtower monta l’intera directory in sola lettura, così una successiva rotazione tramite `docker login` resta visibile. Un accesso Docker già configurato altrove non sostituisce questo passaggio.
+
+Questo passaggio serve anche sui server già configurati prima dell’introduzione di Watchtower: poter scaricare l’immagine Lumi non implica che la directory dedicata esista. Se manca la directory o `config.json`, il deploy automatico si ferma prima di scaricare immagini e mostra i comandi da eseguire. Le credenziali non vengono create o copiate automaticamente.
+
+Dopo aver pubblicato il codice aggiornato, dal computer:
+
+`just deploy` non carica il checkout locale e non avvia una pubblicazione: seleziona una release già prodotta da GitHub Actions. Prima del primo `--auto-update`, includi nel commit e nel push su `main` anche `compose.watchtower.yaml`, il Dockerfile, il workflow Publish e `scripts/promote-image.py`, quindi attendi il completamento riuscito di Publish. Rilanciare il workflow su un commit precedente alle modifiche non aggiunge Watchtower a quell’immagine. Anche le correzioni del tema Keycloak richiedono commit, push e nuova pubblicazione prima del deploy.
+
+```sh
+just deploy --check --auto-update
+just deploy --auto-update
+```
+
+Il comando verifica che il tag `main` e l’artifact selezionato identifichino la stessa immagine, esegue i controlli del deploy completo e avvia Watchtower soltanto alla fine. Se nel frattempo il tag è cambiato, termina senza attivare la release: ripeti il comando. `--auto-update` non è combinabile con `--run` o `--rollback`.
+
+Gli aggiornamenti successivi ricreano il solo container Lumi mantenendo ambiente, porte, mount e volumi, con un breve riavvio. L’healthcheck è conservato; Watchtower attende lo stato healthy ma **non esegue il rollback automatico** di un’immagine non sana. Per ripristinare una release conservata usa `just deploy --rollback RUN_ID-ATTEMPT`; l’updater resterà fermo. Le migrazioni database non vengono annullate. Un nuovo `just deploy --auto-update` riabilita gli aggiornamenti dopo un deploy completo.
+
+I file di Keycloak, compreso il tema, Compose e la configurazione del gateway rimangono quelli dell’ultimo deploy completo. Aggiornali con `just deploy --auto-update` per mantenere l’automazione, oppure con `just deploy` per tornare alla modalità manuale. Dopo un aggiornamento automatico, `current/release.json` descrive il **bundle**, mentre l’immagine dell’app può essere più recente; `current` e `previous` vengono aggiornati soltanto dal deploy completo.
+
+Per vedere l’immagine effettiva e i log dell’updater, nella shell serviceman:
+
+```sh
+app=$(docker ps -q --filter label=com.docker.compose.project=lumi --filter label=com.docker.compose.service=lumi)
+docker inspect --format 'reference={{.Config.Image}} image_id={{.Image}}' "$app"
+docker image inspect "$(docker inspect --format '{{.Image}}' "$app")" --format '{{json .Config.Labels}}'
+docker ps -a --filter label=com.docker.compose.project=lumi --filter label=com.docker.compose.service=watchtower
+# Usa l’ID mostrato, anche se il container è fermo:
+docker logs --tail 100 ID_WATCHTOWER
+```
+
+La prova opt-in `just test-watchtower` usa un registry e container isolati con nomi casuali. Verifica cambio versione, filtri, persistenza, gateway, digest invariato, indisponibilità del registry e ritorno a un’immagine precisa; non usa credenziali di produzione né pubblica immagini esternamente.
 
 ## Amministrazione solo tramite SSH
 
@@ -150,6 +198,8 @@ In locale usa il progetto `lumi-local`, sostituisci `compose.prod.yaml` con `com
 La riuscita dei test con password non dimostra il funzionamento del client Google. Verifica un consenso reale prima di dichiarare pronto quel metodo.
 
 ## Dati, aggiornamenti e backup
+
+La migrazione `005_dictionary.sql` aggiunge le schede delle parole ai messaggi e un dizionario indipendente in ogni database di famiglia. Si applica automaticamente all’avvio, senza importare le conversazioni precedenti. Le nuove spiegazioni completate aggiornano il dizionario; eliminare una conversazione non elimina le parole. I genitori possono eliminare singole parole o svuotare il dizionario dall’angolo del genitore. Includi questi database nei normali backup.
 
 Il volume `lumi-data` contiene `portal/control.db` per sessioni, famiglie e inviti, `chatgpt.json` per l’unico grant ChatGPT, `lumi.db` per il modello condiviso e `families/ID/` con SQLite, cronologia e preferenze di ciascuna famiglia. Un grant globale già presente viene conservato; in assenza di questo, un singolo grant collegato per famiglia viene promosso insieme al modello. Con più grant preesistenti, Admin deve collegare l’account scelto. I vecchi file delle famiglie restano conservati ma non vengono più caricati: evita avvii paralleli o rollback che riutilizzino copie obsolete dei refresh token. `keycloak-db` contiene il database PostgreSQL. Directory e database Lumi hanno permessi privati. I backup contengono credenziali e token: conservali cifrati e fuori dal VPS.
 

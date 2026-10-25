@@ -102,13 +102,14 @@ func (e SendMessageAction) Valid() bool {
 
 // Defines values for StreamEventType.
 const (
-	StreamEventTypeCompleted   StreamEventType = "completed"
-	StreamEventTypeDelta       StreamEventType = "delta"
-	StreamEventTypeFailed      StreamEventType = "failed"
-	StreamEventTypeImages      StreamEventType = "images"
-	StreamEventTypeSentenceMap StreamEventType = "sentence_map"
-	StreamEventTypeStarted     StreamEventType = "started"
-	StreamEventTypeTopicMap    StreamEventType = "topic_map"
+	StreamEventTypeCompleted       StreamEventType = "completed"
+	StreamEventTypeDelta           StreamEventType = "delta"
+	StreamEventTypeFailed          StreamEventType = "failed"
+	StreamEventTypeImages          StreamEventType = "images"
+	StreamEventTypeSentenceMap     StreamEventType = "sentence_map"
+	StreamEventTypeStarted         StreamEventType = "started"
+	StreamEventTypeTopicMap        StreamEventType = "topic_map"
+	StreamEventTypeWordExplanation StreamEventType = "word_explanation"
 )
 
 // Valid indicates whether the value is a known member of the StreamEventType enum.
@@ -127,6 +128,8 @@ func (e StreamEventType) Valid() bool {
 	case StreamEventTypeStarted:
 		return true
 	case StreamEventTypeTopicMap:
+		return true
+	case StreamEventTypeWordExplanation:
 		return true
 	default:
 		return false
@@ -153,6 +156,16 @@ type Conversation struct {
 type ConversationDetail struct {
 	Conversation Conversation `json:"conversation"`
 	Messages     []Message    `json:"messages"`
+}
+
+// DictionaryEntry defines model for DictionaryEntry.
+type DictionaryEntry struct {
+	Example      string    `json:"example"`
+	FirstAskedAt time.Time `json:"firstAskedAt"`
+	Id           string    `json:"id"`
+	LastAskedAt  time.Time `json:"lastAskedAt"`
+	Meaning      string    `json:"meaning"`
+	Word         string    `json:"word"`
 }
 
 // Error defines model for Error.
@@ -219,15 +232,16 @@ type MemberRoleRole string
 
 // Message defines model for Message.
 type Message struct {
-	ConversationId string       `json:"conversationId"`
-	CreatedAt      time.Time    `json:"createdAt"`
-	Id             string       `json:"id"`
-	Images         *[]WordImage `json:"images,omitempty"`
-	Role           string       `json:"role"`
-	SentenceMap    *SentenceMap `json:"sentenceMap,omitempty"`
-	Status         string       `json:"status"`
-	Text           string       `json:"text"`
-	TopicMap       *TopicMap    `json:"topicMap,omitempty"`
+	ConversationId  string           `json:"conversationId"`
+	CreatedAt       time.Time        `json:"createdAt"`
+	Id              string           `json:"id"`
+	Images          *[]WordImage     `json:"images,omitempty"`
+	Role            string           `json:"role"`
+	SentenceMap     *SentenceMap     `json:"sentenceMap,omitempty"`
+	Status          string           `json:"status"`
+	Text            string           `json:"text"`
+	TopicMap        *TopicMap        `json:"topicMap,omitempty"`
+	WordExplanation *WordExplanation `json:"wordExplanation,omitempty"`
 }
 
 // ModelChoice defines model for ModelChoice.
@@ -344,6 +358,13 @@ type Transcription struct {
 	Text string `json:"text"`
 }
 
+// WordExplanation defines model for WordExplanation.
+type WordExplanation struct {
+	Example string `json:"example"`
+	Meaning string `json:"meaning"`
+	Word    string `json:"word"`
+}
+
 // WordImage defines model for WordImage.
 type WordImage struct {
 	CreditUrl string `json:"creditUrl"`
@@ -431,6 +452,12 @@ type ServerInterface interface {
 	// (DELETE /api/v1/families/{familyId}/admin/conversations/{conversationId})
 	DeleteConversation(w http.ResponseWriter, r *http.Request, familyId string, conversationId string)
 
+	// (DELETE /api/v1/families/{familyId}/admin/dictionary)
+	ClearDictionary(w http.ResponseWriter, r *http.Request, familyId string)
+
+	// (DELETE /api/v1/families/{familyId}/admin/dictionary/{entryId})
+	DeleteDictionaryWord(w http.ResponseWriter, r *http.Request, familyId string, entryId string)
+
 	// (POST /api/v1/families/{familyId}/admin/preview)
 	PreviewPrompt(w http.ResponseWriter, r *http.Request, familyId string)
 
@@ -451,6 +478,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/families/{familyId}/conversations/{conversationId}/messages)
 	SendMessage(w http.ResponseWriter, r *http.Request, familyId string, conversationId string)
+
+	// (GET /api/v1/families/{familyId}/dictionary)
+	ListDictionaryWords(w http.ResponseWriter, r *http.Request, familyId string)
 
 	// (GET /api/v1/families/{familyId}/invitations)
 	ListInvitations(w http.ResponseWriter, r *http.Request, familyId string)
@@ -685,6 +715,67 @@ func (siw *ServerInterfaceWrapper) DeleteConversation(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ClearDictionary operation middleware
+func (siw *ServerInterfaceWrapper) ClearDictionary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "familyId" -------------
+	var familyId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "familyId", r.PathValue("familyId"), &familyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "familyId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClearDictionary(w, r, familyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteDictionaryWord operation middleware
+func (siw *ServerInterfaceWrapper) DeleteDictionaryWord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "familyId" -------------
+	var familyId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "familyId", r.PathValue("familyId"), &familyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "familyId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "entryId" -------------
+	var entryId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "entryId", r.PathValue("entryId"), &entryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "entryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteDictionaryWord(w, r, familyId, entryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PreviewPrompt operation middleware
 func (siw *ServerInterfaceWrapper) PreviewPrompt(w http.ResponseWriter, r *http.Request) {
 
@@ -876,6 +967,32 @@ func (siw *ServerInterfaceWrapper) SendMessage(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SendMessage(w, r, familyId, conversationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDictionaryWords operation middleware
+func (siw *ServerInterfaceWrapper) ListDictionaryWords(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "familyId" -------------
+	var familyId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "familyId", r.PathValue("familyId"), &familyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "familyId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDictionaryWords(w, r, familyId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1335,6 +1452,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/families", wrapper.CreateFamily)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/families/{familyId}/admin/conversations", wrapper.ClearConversations)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/families/{familyId}/admin/conversations/{conversationId}", wrapper.DeleteConversation)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/families/{familyId}/admin/dictionary", wrapper.ClearDictionary)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/families/{familyId}/admin/dictionary/{entryId}", wrapper.DeleteDictionaryWord)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/families/{familyId}/admin/preview", wrapper.PreviewPrompt)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/families/{familyId}/admin/settings", wrapper.GetSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/families/{familyId}/admin/settings", wrapper.UpdateSettings)
@@ -1342,6 +1461,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/families/{familyId}/conversations", wrapper.CreateConversation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/families/{familyId}/conversations/{conversationId}", wrapper.GetConversation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/families/{familyId}/conversations/{conversationId}/messages", wrapper.SendMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/families/{familyId}/dictionary", wrapper.ListDictionaryWords)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/families/{familyId}/invitations", wrapper.ListInvitations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/families/{familyId}/invitations", wrapper.CreateInvitation)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/families/{familyId}/invitations/{invitationId}", wrapper.RevokeInvitation)
@@ -1363,49 +1483,53 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"BwAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -177,7 +177,11 @@ def main():
     mode.add_argument('--check', action='store_true')
     mode.add_argument('--rollback', metavar='RELEASE_ID')
     parser.add_argument('--run', metavar='RUN_ID')
+    parser.add_argument('--auto-update', action='store_true',
+                        help='Enable Watchtower for the application on the main image tag')
     args = parser.parse_args()
+    if args.auto_update and (args.setup or args.run or args.rollback):
+        parser.error('--auto-update can be combined only with the latest deployment or --check')
     if args.run and (args.setup or args.rollback):
         parser.error('--run can be combined only with --check or deployment')
     if args.run and not re.fullmatch(r'[1-9][0-9]*', args.run):
@@ -191,7 +195,10 @@ def main():
     else:
         release = resolve_release(GitHub(), args.run)
         print(f"Release {release['release_id']} ({release['commit']}): {release['image']}", flush=True)
-        run_remote('check' if args.check else 'deploy', json.dumps(release, separators=(',', ':')))
+        action = 'check' if args.check else 'deploy'
+        if args.auto_update:
+            action += '-auto'
+        run_remote(action, json.dumps(release, separators=(',', ':')))
 
 
 if __name__ == '__main__':

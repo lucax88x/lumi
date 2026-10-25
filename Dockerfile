@@ -24,7 +24,7 @@ WORKDIR /app
 COPY --from=backend /lumi /usr/local/bin/lumi
 COPY --from=frontend --chown=10001:10001 /src/web/dist /app/web
 # Deployment configuration travels with the exact application image it describes.
-COPY compose.yaml compose.prod.yaml .env.example /opt/lumi-deploy/
+COPY compose.yaml compose.prod.yaml compose.watchtower.yaml .env.example /opt/lumi-deploy/
 COPY deploy/Caddyfile.prod /opt/lumi-deploy/deploy/Caddyfile.prod
 COPY deploy/keycloak/ /opt/lumi-deploy/deploy/keycloak/
 ENV DATA_DIR=/data WEB_DIR=/app/web LISTEN_ADDR=:8080

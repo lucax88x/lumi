@@ -1,0 +1,38 @@
+# Opt-in production overlay. The deploy runner supplies the verified runtime
+# image, socket and credentials directory from serviceman's environment.
+services:
+  lumi:
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      com.centurylinklabs.watchtower.scope: lumi-app
+  watchtower:
+    image: ghcr.io/nicholas-fedor/watchtower:1.23.2@sha256:62fb91130ddb493f869cad7e198fa260dd16c5da293ed092cbd5d8781566f7a6
+    profiles: [watchtower]
+    restart: unless-stopped
+    environment:
+      WATCHTOWER_POLL_INTERVAL: "300"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_SCOPE: lumi-app
+      WATCHTOWER_USE_COMPOSE_DEPENDS_ON: "false"
+      WATCHTOWER_ROLLING_RESTART: "true"
+      WATCHTOWER_TIMEOUT: 15s
+      DOCKER_CONFIG: /registry
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+      com.centurylinklabs.watchtower.scope: lumi-app
+    volumes:
+      - type: bind
+        source: ${LUMI_DOCKER_SOCKET:?Supply serviceman's Docker socket}
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${LUMI_WATCHTOWER_CONFIG:?Supply the registry credentials directory}
+        target: /registry
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]

@@ -75,7 +75,7 @@ def main():
             assert command('docker', 'inspect', '--format', '{{.State.Status}}', container, capture=True).stdout.strip() == 'created'
         finally:
             command('docker', 'rm', container)
-        expected = ['compose.yaml', 'compose.prod.yaml', '.env.example', 'deploy/Caddyfile.prod']
+        expected = ['compose.yaml', 'compose.prod.yaml', 'compose.watchtower.yaml', '.env.example', 'deploy/Caddyfile.prod']
         expected += [str(p.relative_to(ROOT)) for p in (ROOT / 'deploy/keycloak').rglob('*') if p.is_file()]
         actual = sorted(str(p.relative_to(directory)) for p in directory.rglob('*') if p.is_file())
         assert actual == sorted(expected), 'Unexpected deployment bundle contents (including private files)'

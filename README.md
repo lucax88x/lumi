@@ -67,6 +67,8 @@ I vocali usano invece `OPENAI_API_KEY` da `.env` in produzione (`.env.local` nel
 
 - Le risposte arrivano in streaming. Il testo parziale resta salvato quando una risposta si interrompe; le generazioni non vengono ripetute automaticamente.
 - Le mappe di frasi e argomenti vengono conservate insieme alla risposta. Le immagini vengono cercate su Wikipedia solo quando richieste, con attribuzioni Wikimedia.
+- Per una singola parola, Lumi mostra significato ed esempio in due schede. Quando possibile usa un sinonimo facile come significato.
+- **Il mio dizionario** conserva le nuove parole spiegate nella famiglia, con ricerca, ascolto e ripasso tramite schede. I risultati del ripasso valgono solo per la sessione corrente. Le parole restano anche dopo l’eliminazione delle chat; i genitori possono gestirle separatamente dal loro angolo.
 - La lettura usa la voce italiana del dispositivo. La preferenza vocale resta sul dispositivo, non contiene dati di autenticazione.
 - Chat e impostazioni rimangono nella famiglia fino alla loro eliminazione. Audio, testo e contesto necessari vengono inviati a OpenAI; evita dati personali nelle domande.
 - Il service worker conserva soltanto asset generici. HTML autenticato, API e conversazioni non vengono memorizzati nella cache offline.
@@ -104,3 +106,5 @@ La [guida operativa](docs/deployment.md) descrive Docker Compose, Caddy sull’h
 Il Caddy host inoltra `ciaolumi.fyi` al gateway su `127.0.0.1:18081`. Il container Lumi serve insieme React e API Go; le porte private `18080` (Lumi) e `19090` (Keycloak) restano disponibili. Configura il blocco host da `deploy/Caddyfile.example` e `PUBLIC_ORIGIN=https://ciaolumi.fyi` sul server prima del primo deploy.
 
 Per le immagini private GHCR, `just deploy-setup` prepara l’ambiente di serviceman, `just deploy --check` verifica l’ultima pubblicazione riuscita su `main` e `just deploy` la attiva. `--run RUN_ID` seleziona un’altra pubblicazione e `--rollback RUN_ID-ATTEMPT` riattiva una release conservata. `just ssh` apre `lumi-server`. Repository pubblico, autenticazione GHCR sul VPS e configurazione iniziale sono descritti nella guida; questi comandi non caricano gli ambienti del computer sul server.
+
+`just deploy --auto-update` esegue il deploy completo e abilita il fork `nicholas-fedor/watchtower`: ogni 5 minuti aggiorna solo l’app Lumi dal tag GHCR `main`. Tema Keycloak e configurazioni richiedono ancora un deploy completo. I deploy senza questa opzione e i rollback sospendono l’automazione. La [guida operativa](docs/deployment.md#aggiornamenti-automatici-dellapplicazione) descrive le credenziali dedicate, i controlli con `--check --auto-update` e i log. `just test-watchtower` esegue una prova Docker isolata.

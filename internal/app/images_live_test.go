@@ -49,6 +49,9 @@ func TestLiveImageConversation(t *testing.T) {
 	answer := api.Message{Role: "assistant", Status: "completed"}
 	err = g.Stream(ctx, settings, history, func(e GenerationEvent) error {
 		answer.Text += e.Text
+		if e.WordExplanation != nil {
+			answer.WordExplanation = e.WordExplanation
+		}
 		if len(e.Images) > 0 {
 			t.Error("unsolicited images for definition")
 		}

@@ -41,20 +41,42 @@ func (p *Portal) beginLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, p.oauth.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier), oauth2.SetAuthURLParam("ui_locales", "it")), http.StatusSeeOther)
 }
 func (p *Portal) finishLogin(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	logFailure := func(reason string, extra ...any) {
+		attrs := []any{"stage", "callback", "reason", reason,
+			"state_present", query.Get("state") != "", "code_present", query.Get("code") != "",
+			"provider_error_present", query.Get("error") != ""}
+		slog.Warn("OIDC login validation failed", append(attrs, extra...)...)
+	}
 	cookie, err := r.Cookie("lumi_login")
 	if err != nil || len(cookie.Value) > 100 {
+		if err != nil {
+			logFailure("missing_cookie")
+		} else {
+			logFailure("oversized_cookie")
+		}
 		problem(w, 400, "invalid_login", "Il collegamento di accesso è scaduto. Riprova.")
 		return
 	}
 	var state, nonce, verifier, target string
 	err = p.db.QueryRow(`DELETE FROM login_attempts WHERE token_hash=? AND expires_at>? RETURNING state,nonce,verifier,return_to`, digest(cookie.Value), time.Now().Unix()).Scan(&state, &nonce, &verifier, &target)
 	p.cookie(w, "lumi_login", "", -1)
-	if err != nil || !equal(state, r.URL.Query().Get("state")) || r.URL.Query().Get("code") == "" {
+	if err != nil || !equal(state, query.Get("state")) || query.Get("code") == "" {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			logFailure("attempt_missing_or_expired")
+		case err != nil:
+			logFailure("database_error", "error", err)
+		case !equal(state, query.Get("state")):
+			logFailure("state_mismatch")
+		default:
+			logFailure("missing_code")
+		}
 		problem(w, 400, "invalid_login", "Il collegamento di accesso non è valido. Riprova.")
 		return
 	}
 	ctx := oidc.ClientContext(r.Context(), p.client)
-	token, err := p.oauth.Exchange(ctx, r.URL.Query().Get("code"), oauth2.VerifierOption(verifier))
+	token, err := p.oauth.Exchange(ctx, query.Get("code"), oauth2.VerifierOption(verifier))
 	if err != nil {
 		problem(w, 502, "login_failed", "Non riesco a completare l’accesso. Riprova.")
 		return

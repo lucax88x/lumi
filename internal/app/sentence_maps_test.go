@@ -77,7 +77,7 @@ func TestMapAndImageToolsShareATurn(t *testing.T) {
 				t.Error("missing map instructions")
 			}
 			tools := body["tools"].([]any)[0].(map[string]any)["tools"].([]any)
-			if len(tools) != 3 || tools[1].(map[string]any)["strict"] != true {
+			if len(tools) != 4 || tools[1].(map[string]any)["strict"] != true {
 				t.Fatal("missing strict map tool")
 			}
 			call := toolCall("map", mapArguments(t, catMap))

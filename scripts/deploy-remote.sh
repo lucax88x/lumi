@@ -9,6 +9,11 @@ fail() { printf 'Deploy: %s\n' "$*" >&2; exit 1; }
 root="$HOME/lumi"
 mode=${1:-}
 argument=${2:-}
+automatic=0
+case $mode in
+    check-auto) mode=check; automatic=1 ;;
+    deploy-auto) mode=deploy; automatic=1 ;;
+esac
 [[ $mode == setup || $mode == check || $mode == deploy || $mode == rollback ]] || fail 'Unknown operation.'
 for tool in docker flock curl python3 systemctl loginctl; do
     command -v "$tool" >/dev/null || fail "Missing prerequisite: $tool (no packages were installed)."
@@ -36,6 +41,15 @@ model=''
 activating=0
 preceding=''
 gateway_directory=''
+runtime_image=''
+use_watchtower=0
+docker_socket=''
+preceding_image=''
+preceding_automatic=0
+watchtower_ids=()
+watchtower_stopped=0
+watchtower_start_attempted=0
+watchtower_config="$root/config/watchtower"
 cleanup() {
     status=$?
     trap - EXIT HUP INT TERM
@@ -45,15 +59,37 @@ cleanup() {
     [[ -z $model ]] || rm -f -- "$model"
     model=''
     if (( status != 0 && activating )); then
+        if (( watchtower_start_attempted )); then
+            compose "$directory" stop --timeout 600 watchtower >/dev/null || printf 'Could not stop the new Watchtower instance.\n' >&2
+        fi
         if [[ -n $preceding ]]; then
             printf 'Activation failed; restoring %s. Database migrations are not reversed.\n' "$preceding" >&2
-            if activate "$root/$preceding" && atomic_link "$preceding" current; then
+            runtime_image=$preceding_image
+            use_watchtower=$preceding_automatic
+            restored=1
+            if (( preceding_automatic )); then
+                # Restore the actual running image, which may be newer than the
+                # retained bundle following a Watchtower update.
+                docker tag "$preceding_image" ghcr.io/lucax88x/lumi:main || restored=0
+                runtime_image=ghcr.io/lucax88x/lumi:main
+            fi
+            if (( restored )) && activate "$root/$preceding" && atomic_link "$preceding" current; then
                 printf 'Preceding release restored; deployment still failed.\n' >&2
             else
                 printf 'RESTORATION FAILED. Inspect services and restore a compatible backup if needed.\n' >&2
+                watchtower_stopped=0
             fi
         else
             printf 'Activation failed; no preceding release exists. Inspect partially started services.\n' >&2
+        fi
+    fi
+    if (( status != 0 && watchtower_stopped )); then
+        # A failed start may have recreated the updater. Restore its old bundle
+        # configuration rather than relying on a removed container's ID.
+        if (( activating && preceding_automatic )); then
+            compose "$root/$preceding" up -d --no-deps --no-build --pull never watchtower >/dev/null || printf 'Could not restart Watchtower.\n' >&2
+        else
+            docker start "${watchtower_ids[@]}" >/dev/null || printf 'Could not restart Watchtower.\n' >&2
         fi
     fi
     [[ -z $container ]] || docker rm "$container" >/dev/null 2>&1
@@ -73,6 +109,7 @@ docker_prerequisites() {
     # DOCKER_HOST overrides a context unless DOCKER_CONTEXT is supplied.
     if [[ -n ${DOCKER_HOST:-} && -z ${DOCKER_CONTEXT:-} ]]; then endpoint=$DOCKER_HOST; fi
     [[ $endpoint == unix:///* ]] || { printf 'Docker must use a local Unix socket.\n' >&2; return 1; }
+    docker_socket=${endpoint#unix://}
     printf 'Serviceman Docker context: %s (%s)\n' "$context" "$endpoint"
     if ! docker info >/dev/null 2>&1; then
         if [[ $mode == setup && $endpoint == "unix:///run/user/$(id -u)/docker.sock" ]]; then
@@ -98,7 +135,45 @@ docker_prerequisites() {
     docker compose up --help | grep -q -- '--wait-timeout' || { printf 'Compose needs --wait and --wait-timeout support.\n' >&2; return 1; }
 }
 
+validate_watchtower_credentials() {
+    python3 -I - "$watchtower_config" <<'PY'
+import json, os, pathlib, stat, sys
+directory = pathlib.Path(sys.argv[1])
+
+def fail(message):
+    sys.exit('Deploy: ' + message)
+
+def missing_credentials():
+    fail('Watchtower registry credentials are missing. In the serviceman shell run:\n'
+         '  install -d -m 700 "$HOME/lumi/config/watchtower"\n'
+         '  DOCKER_CONFIG="$HOME/lumi/config/watchtower" docker login ghcr.io --username lucax88x\n'
+         '  chmod 600 "$HOME/lumi/config/watchtower/config.json"\n'
+         'Then retry just deploy --auto-update from your computer.')
+
+for path, kind in ((directory, stat.S_ISDIR), (directory / 'config.json', stat.S_ISREG)):
+    try:
+        s = path.lstat()
+    except FileNotFoundError:
+        missing_credentials()
+    except OSError:
+        fail('Cannot read Watchtower credentials; check access in the serviceman shell.')
+    if not kind(s.st_mode) or s.st_uid != os.getuid() or s.st_mode & 0o077:
+        fail('Watchtower credentials must belong to serviceman, with directory mode 0700 and file mode 0600; symlinks are not allowed.')
+try:
+    config = json.loads((directory / 'config.json').read_text())
+    auth = config.get('auths', {}).get('ghcr.io', {}).get('auth')
+    helpers = config.get('credsStore') or config.get('credHelpers')
+except (OSError, ValueError, AttributeError):
+    fail('Cannot read a valid Watchtower Docker config.json; repeat the dedicated docker login.')
+if helpers:
+    fail('Dedicated Watchtower credentials must not depend on host helpers; use a separate Docker config directory.')
+if not auth:
+    missing_credentials()
+PY
+}
+
 if [[ $mode == setup ]]; then
+    install -d -m 700 "$watchtower_config"
     # Public template only. Never overwrite server configuration.
     if [[ ! -e $root/config/.env ]]; then
         (set -o noclobber; cat >"$root/config/.env" <<'ENV'
@@ -142,6 +217,7 @@ s = os.lstat(sys.argv[1])
 if not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_mode & 0o077:
     sys.exit('config/.env must be a private regular file owned by serviceman (0600).')
 PY
+if (( automatic )); then validate_watchtower_credentials; fi
 
 if [[ $mode == rollback ]]; then
     [[ $argument =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]] || fail 'Invalid release ID.'
@@ -173,18 +249,25 @@ commit=${release_fields[2]}
 compose() {
     local directory=$1
     shift
-    LUMI_IMAGE="$selected_image" docker compose --project-name lumi --project-directory "$directory" \
-        --env-file "$root/config/.env" -f "$directory/compose.yaml" -f "$directory/compose.prod.yaml" "$@"
+    local files=(-f "$directory/compose.yaml" -f "$directory/compose.prod.yaml")
+    if (( use_watchtower )); then files+=(-f "$directory/compose.watchtower.yaml"); fi
+    LUMI_IMAGE="$selected_image" LUMI_DOCKER_SOCKET="$docker_socket" LUMI_WATCHTOWER_CONFIG="$watchtower_config" \
+        docker compose --project-name lumi --project-directory "$directory" \
+        --env-file "$root/config/.env" "${files[@]}" "$@"
 }
 
 validate_configuration() {
-    local directory=$1 values
-    selected_image=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$directory/release.json") || return
-    [[ $selected_image =~ ^ghcr\.io/lucax88x/lumi@sha256:[0-9a-f]{64}$ ]] || return 1
+    local directory=$1 values bundled_image
+    bundled_image=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$directory/release.json") || return
+    [[ $bundled_image =~ ^ghcr\.io/lucax88x/lumi@sha256:[0-9a-f]{64}$ ]] || return 1
+    selected_image=${runtime_image:-$bundled_image}
+    if (( use_watchtower )); then
+        [[ -f $directory/compose.watchtower.yaml && ! -L $directory/compose.watchtower.yaml ]] || { printf 'Release does not support Watchtower.\n' >&2; return 1; }
+    fi
     model=$(mktemp "$root/.compose.XXXXXXXX") || return
     # Resolved configuration contains secrets: keep it private and never print it.
-    compose "$directory" config --format json >"$model" || return
-    values=$(python3 -I - "$model" "$selected_image" "$directory" <<'PY'
+    compose "$directory" --profile watchtower config --format json >"$model" || return
+    values=$(python3 -I - "$model" "$selected_image" "$directory" "$use_watchtower" "$docker_socket" "$watchtower_config" <<'PY'
 import json, pathlib, sys, urllib.parse
 c = json.load(open(sys.argv[1])); services = c['services']
 assert c['name'] == 'lumi'
@@ -193,6 +276,27 @@ assert services['lumi']['image'] == sys.argv[2], 'Unexpected application image'
 assert c['volumes']['lumi-data']['name'] == 'lumi_lumi-data'
 assert c['volumes']['keycloak-db']['name'] == 'lumi_keycloak-db'
 assert not services['keycloak-db'].get('ports'), 'Database must stay private'
+enabled = sys.argv[4] == '1'
+label = 'com.centurylinklabs.watchtower.'
+for name, service in services.items():
+    if service.get('labels', {}).get(label + 'enable') == 'true':
+        assert enabled and name == 'lumi', 'Only Lumi may be automatically updated'
+if enabled:
+    assert services['lumi']['labels'][label + 'enable'] == 'true'
+    assert services['lumi']['labels'][label + 'scope'] == 'lumi-app'
+    watcher = services['watchtower']
+    assert watcher['image'] == 'ghcr.io/nicholas-fedor/watchtower:1.23.2@sha256:62fb91130ddb493f869cad7e198fa260dd16c5da293ed092cbd5d8781566f7a6'
+    assert not watcher.get('ports'), 'Watchtower must not publish ports'
+    assert watcher['profiles'] == ['watchtower']
+    env = watcher['environment']
+    for key, value in {'WATCHTOWER_POLL_INTERVAL': '300', 'WATCHTOWER_LABEL_ENABLE': 'true',
+                       'WATCHTOWER_SCOPE': 'lumi-app', 'WATCHTOWER_USE_COMPOSE_DEPENDS_ON': 'false',
+                       'WATCHTOWER_ROLLING_RESTART': 'true', 'DOCKER_CONFIG': '/registry'}.items():
+        assert env[key] == value, 'Unexpected Watchtower configuration'
+    for target, source in [('/var/run/docker.sock', sys.argv[5]), ('/registry', sys.argv[6])]:
+        mounts = [v for v in watcher['volumes'] if v['target'] == target]
+        assert len(mounts) == 1 and mounts[0]['type'] == 'bind' and mounts[0]['source'] == source
+        if target == '/registry': assert mounts[0].get('read_only')
 ports = []
 names = ['lumi', 'keycloak']
 if 'gateway' in services:
@@ -267,6 +371,48 @@ activate() {
     verify_health || return
 }
 
+verify_channel() {
+    local expected actual
+    expected=$(docker image inspect "$image" --format '{{.Id}}') || return
+    actual=$(docker image inspect ghcr.io/lucax88x/lumi:main --format '{{.Id}}') || return
+    [[ $actual == "$expected" ]] || { printf 'The main image tag differs from the selected publication; retry the deployment.\n' >&2; return 1; }
+}
+
+require_watchtower_bundle() {
+    local directory=$1
+    [[ -f $directory/compose.watchtower.yaml && ! -L $directory/compose.watchtower.yaml ]] || \
+        fail "Release $release_id ($commit) does not contain compose.watchtower.yaml. Publish the Watchtower changes on main, wait for Publish to succeed, then retry just deploy --auto-update."
+}
+
+stop_watchtower() {
+    local ids id
+    ids=$(docker ps --filter label=com.docker.compose.project=lumi --filter label=com.docker.compose.service=watchtower --format '{{.ID}}') || return
+    while IFS= read -r id; do
+        [[ -z $id ]] || watchtower_ids+=("$id")
+    done <<<"$ids"
+    if (( ${#watchtower_ids[@]} )); then
+        watchtower_stopped=1
+        # Wait for any in-flight scan before capturing the running application.
+        docker stop --time 600 "${watchtower_ids[@]}" >/dev/null || return
+    fi
+}
+
+snapshot_application() {
+    local ids id fields
+    [[ -n $preceding ]] || return 0
+    ids=$(docker ps -a --filter label=com.docker.compose.project=lumi --filter label=com.docker.compose.service=lumi \
+        --filter label=com.docker.compose.oneoff=False --format '{{.ID}}') || return
+    # Recovery must also work when the application has stopped or was removed.
+    # With no container to snapshot, use the retained bundle for restoration.
+    [[ -n $ids ]] || return 0
+    [[ $ids != *$'\n'* ]] || { printf 'Expected at most one Lumi service container before deployment.\n' >&2; return 1; }
+    id=$ids
+    fields=$(docker inspect "$id" --format '{{.Image}} {{index .Config.Labels "com.centurylinklabs.watchtower.enable"}}') || return
+    read -r preceding_image enabled <<<"$fields"
+    [[ $preceding_image =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
+    if [[ $enabled == true ]]; then preceding_automatic=1; fi
+}
+
 atomic_link() {
     local target=$1 name=$2
     python3 -I - "$root" "$target" "$name" <<'PY'
@@ -309,6 +455,7 @@ if [[ $mode != rollback ]]; then
         [[ -f $stage/$file && ! -L $stage/$file ]] || fail "Missing deployment file in image: $file"
     done
     [[ -d $stage/deploy/keycloak/themes/lumi ]] || fail 'Image is missing Keycloak theme.'
+    if (( automatic )); then require_watchtower_bundle "$stage"; fi
     printf '%s\n' "$metadata" >"$stage/release.json"
     if [[ $mode == check ]]; then
         directory=$stage
@@ -323,15 +470,31 @@ if [[ $mode != rollback ]]; then
 fi
 
 validate_configuration "$directory"
+if (( automatic )); then
+    use_watchtower=1
+    runtime_image=ghcr.io/lucax88x/lumi:main
+    validate_configuration "$directory"
+    compose "$directory" pull watchtower
+fi
 if [[ $mode == check ]]; then
     compose "$directory" pull
+    if (( automatic )); then verify_channel; fi
     printf 'Release %s and prerequisites checked; services and current release were not changed.\n' "$release_id"
     exit 0
 fi
 if [[ $mode != rollback ]]; then compose "$directory" pull; fi
+if (( automatic )); then verify_channel; fi
+stop_watchtower
+snapshot_application
+if (( automatic )); then verify_channel; fi
 activating=1
 activate "$directory"
+if (( automatic )); then
+    watchtower_start_attempted=1
+    compose "$directory" up -d --no-deps --no-build --pull never watchtower
+fi
 if [[ -n $preceding && $preceding != "releases/$release_id" ]]; then atomic_link "$preceding" previous; fi
 atomic_link "releases/$release_id" current
 activating=0
-printf 'Active release: %s\n' "$release_id"
+watchtower_stopped=0
+printf 'Active bundle: %s (automatic application updates: %s)\n' "$release_id" "$automatic"

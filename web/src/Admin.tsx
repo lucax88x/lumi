@@ -6,14 +6,15 @@ import { Tabs } from '@base-ui/react/tabs';
 import { Switch } from '@base-ui/react/switch';
 import { Dialog } from '@base-ui/react/dialog';
 import { ArrowLeft, Check, ChevronRight, Eye, FileText, LoaderCircle, RefreshCw, Save, Settings2, ShieldCheck, Trash2, Volume2, X } from 'lucide-react';
-import { getSettingsOptions, getSettingsQueryKey, listConversationsOptions, listConversationsQueryKey, getConversationOptions } from './api/@tanstack/react-query.gen';
-import { updateSettings, deleteConversation, clearConversations } from './api/sdk.gen';
-import type { Settings, WordImage, SentenceMap as SentenceMapData, TopicMap as TopicMapData } from './api/types.gen';
+import { getSettingsOptions, getSettingsQueryKey, listDictionaryWordsOptions, listDictionaryWordsQueryKey, listConversationsOptions, listConversationsQueryKey, getConversationOptions } from './api/@tanstack/react-query.gen';
+import { updateSettings, deleteConversation, clearConversations, deleteDictionaryWord, clearDictionary } from './api/sdk.gen';
+import type { Settings, WordImage, SentenceMap as SentenceMapData, TopicMap as TopicMapData, WordExplanation as WordExplanationData } from './api/types.gen';
 import { errorMessage, readStream, shortDate } from './lib';
 import { useSpeech } from './speech';
 import { WordImages } from './WordImages';
 import { SentenceMap } from './SentenceMap';
 import { TopicMap } from './TopicMap';
+import { WordExplanation } from './WordExplanation';
 
 export function AdminPage() {
   const familyId = familyID();
@@ -38,7 +39,7 @@ function AdminPanel() {
         {settings.isError && <p className="error-text">{errorMessage(settings.error)}</p>}
       </Tabs.Panel>
       <Tabs.Panel value="prompt">{settings.data && <PromptEditor initial={settings.data}/>}</Tabs.Panel>
-      <Tabs.Panel value="history"><HistoryPanel/></Tabs.Panel>
+      <Tabs.Panel value="history"><HistoryPanel/><DictionaryPanel/></Tabs.Panel>
     </Tabs.Root>
   </>;
 }
@@ -64,16 +65,16 @@ function Preferences({ initial }: { initial: Settings }) {
 
 function PromptEditor({ initial }: { initial: Settings }) {
   const familyId = familyID();
-  const qc = useQueryClient(); const [prompt, setPrompt] = useState(initial.prompt); const [sample, setSample] = useState('La gatta si accoccolò sul tappeto.'); const [preview, setPreview] = useState(''); const [previewImages, setPreviewImages] = useState<WordImage[]>([]); const [previewMap, setPreviewMap] = useState<SentenceMapData>(); const [previewTopicMap, setPreviewTopicMap] = useState<TopicMapData>(); const [busy, setBusy] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const [saved, setSaved] = useState(false);
+  const qc = useQueryClient(); const [prompt, setPrompt] = useState(initial.prompt); const [sample, setSample] = useState('La gatta si accoccolò sul tappeto.'); const [preview, setPreview] = useState(''); const [previewImages, setPreviewImages] = useState<WordImage[]>([]); const [previewMap, setPreviewMap] = useState<SentenceMapData>(); const [previewTopicMap, setPreviewTopicMap] = useState<TopicMapData>(); const [previewWord, setPreviewWord] = useState<WordExplanationData>(); const [busy, setBusy] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const [saved, setSaved] = useState(false);
   const controller = useRef<AbortController | null>(null); useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => { setPrompt(initial.prompt); }, [initial.prompt]);
   async function test() {
-    setBusy(true); setPreview(''); setPreviewImages([]); setPreviewMap(undefined); setPreviewTopicMap(undefined); setError(''); controller.current = new AbortController();
-    try { await readStream(familyPath('/admin/preview', familyId), { text: sample, prompt, model: initial.model }, e => { if (e.type === 'delta') setPreview(p => p + (e.delta ?? '')); if (e.message) { setPreview(e.message.text); setPreviewImages(e.message.images ?? []); setPreviewMap(e.message.sentenceMap); setPreviewTopicMap(e.message.topicMap); } if (e.error) setError(e.error.message); }, controller.current.signal); }
+    setBusy(true); setPreview(''); setPreviewImages([]); setPreviewMap(undefined); setPreviewTopicMap(undefined); setPreviewWord(undefined); setError(''); controller.current = new AbortController();
+    try { await readStream(familyPath('/admin/preview', familyId), { text: sample, prompt, model: initial.model }, e => { if (e.type === 'delta') setPreview(p => p + (e.delta ?? '')); if (e.message) { setPreview(e.message.text); setPreviewImages(e.message.images ?? []); setPreviewMap(e.message.sentenceMap); setPreviewTopicMap(e.message.topicMap); setPreviewWord(e.message.wordExplanation); } if (e.error) setError(e.error.message); }, controller.current.signal); }
     catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
   return <section className="admin-card"><h2>Come Lumi accompagna le scoperte</h2><p>Queste istruzioni guidano il tono e il metodo. Le modifiche salvate valgono dai prossimi messaggi, anche nelle chat già aperte.</p><label htmlFor="prompt">Istruzioni per Lumi</label><textarea className="prompt-input" id="prompt" rows={18} maxLength={20000} value={prompt} onChange={e => { setPrompt(e.target.value); setSaved(false); }}/><div className="button-row"><button className="text-button" onClick={() => setPrompt(initial.defaultPrompt)}><RefreshCw size={16}/>Ripristina il testo iniziale</button><button className="primary-button" disabled={saving || !prompt.trim()} onClick={async () => { setSaving(true); setError(''); try { await updateSettings({ path: { familyId: familyId }, body: { ...initial, prompt }, throwOnError: true }); setSaved(true); await qc.invalidateQueries({ queryKey: getSettingsQueryKey({ path: { familyId: familyId } }) }); } catch (e) { setError(errorMessage(e)); } finally { setSaving(false); } }}><Save size={17}/>Salva istruzioni</button></div>{saved && <p className="success-text" role="status">Istruzioni salvate.</p>}
-    <div className="preview-section"><h3>Una piccola prova</h3><p className="field-hint">Usa le istruzioni qui sopra senza salvarle. Consuma il piano ChatGPT e non entra nella cronologia.</p><label htmlFor="sample">Parola o frase di prova</label><input id="sample" value={sample} onChange={e => setSample(e.target.value)} maxLength={4000}/><button className="soft-button" disabled={busy || !initial.model || !sample.trim() || !prompt.trim()} onClick={() => void test()}>{busy ? <LoaderCircle className="spin" size={17}/> : <Eye size={17}/>}Prova le istruzioni</button>{(preview || previewImages.length > 0 || previewMap || previewTopicMap) && <div className="preview-result"><span className="eyebrow">LUMI RISPONDE</span><p>{preview}</p><SentenceMap map={previewMap}/><TopicMap map={previewTopicMap}/><WordImages images={previewImages}/></div>}</div>{error && <p className="error-text" role="alert">{error}</p>}
+    <div className="preview-section"><h3>Una piccola prova</h3><p className="field-hint">Usa le istruzioni qui sopra senza salvarle. Consuma il piano ChatGPT e non entra nella cronologia.</p><label htmlFor="sample">Parola o frase di prova</label><input id="sample" value={sample} onChange={e => setSample(e.target.value)} maxLength={4000}/><button className="soft-button" disabled={busy || !initial.model || !sample.trim() || !prompt.trim()} onClick={() => void test()}>{busy ? <LoaderCircle className="spin" size={17}/> : <Eye size={17}/>}Prova le istruzioni</button>{(preview || previewImages.length > 0 || previewMap || previewTopicMap || previewWord) && <div className="preview-result"><span className="eyebrow">LUMI RISPONDE</span><p>{preview}</p><SentenceMap map={previewMap}/><TopicMap map={previewTopicMap}/><WordExplanation explanation={previewWord}/><WordImages images={previewImages}/></div>}</div>{error && <p className="error-text" role="alert">{error}</p>}
   </section>;
 }
 
@@ -84,8 +85,8 @@ function HistoryPanel() {
   return <section className="admin-card"><div className="section-heading"><div><h2>Le sue scoperte</h2><p>Rileggi le conversazioni e gestisci ciò che viene conservato.</p></div><button className="text-button danger-text" disabled={!chats.data?.length} onClick={() => setRemove('all')}><Trash2 size={16}/>Elimina tutto</button></div>
     {chats.data?.length === 0 && <div className="empty-state"><FileText size={30}/><p>Le prime domande compariranno qui.</p></div>}{chats.isError && <p className="error-text">{errorMessage(chats.error)}</p>}
     <div className="history-table">{chats.data?.map(c => <div className="history-row" key={c.id}><button onClick={() => setSelected(c.id)}><span>{c.title}</span><small>{shortDate(c.createdAt)}</small></button><button className="icon-button danger-text" aria-label={`Elimina ${c.title}`} onClick={() => setRemove(c.id)}><Trash2 size={17}/></button></div>)}</div>
-    <Dialog.Root open={Boolean(selected)} onOpenChange={open => { if (!open) setSelected(null); }}><Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="dialog-panel history-dialog"><Dialog.Close className="icon-button close-dialog" aria-label="Chiudi conversazione"><X size={20}/></Dialog.Close><Dialog.Title>{detail.data?.conversation.title ?? 'Conversazione'}</Dialog.Title><Dialog.Description>La cronologia della domanda.</Dialog.Description>{detail.isPending && <p>Caricamento…</p>}{detail.isError && <p className="error-text">{errorMessage(detail.error)}</p>}{detail.data?.messages.map(m => <article key={m.id} className={`message ${m.role}`}><strong>{m.role === 'user' ? 'Domanda' : 'Lumi'}</strong><p>{m.text}</p><SentenceMap map={m.sentenceMap}/><TopicMap map={m.topicMap}/><WordImages images={m.images}/>{m.status !== 'completed' && <small>{m.status === 'streaming' ? 'In corso' : 'Risposta non completata'}</small>}</article>)}</Dialog.Popup></Dialog.Portal></Dialog.Root>
-    <Confirm open={remove !== null} onClose={() => setRemove(null)} title={remove === 'all' ? 'Eliminare tutte le scoperte?' : 'Eliminare questa conversazione?'} description="La conversazione e i suoi messaggi verranno eliminati dal server. Questa operazione non si può annullare." action="Elimina" onConfirm={async () => { if (remove === 'all') await clearConversations({ path: { familyId: familyId }, throwOnError: true }); else if (remove) await deleteConversation({ path: { familyId: familyId, conversationId: remove }, throwOnError: true }); qc.removeQueries({ predicate: q => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'object' && q.queryKey[0]?._id === 'getConversation' }); await qc.invalidateQueries({ queryKey: listConversationsQueryKey({ path: { familyId: familyId } }) }); }}/>
+    <Dialog.Root open={Boolean(selected)} onOpenChange={open => { if (!open) setSelected(null); }}><Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="dialog-panel history-dialog"><Dialog.Close className="icon-button close-dialog" aria-label="Chiudi conversazione"><X size={20}/></Dialog.Close><Dialog.Title>{detail.data?.conversation.title ?? 'Conversazione'}</Dialog.Title><Dialog.Description>La cronologia della domanda.</Dialog.Description>{detail.isPending && <p>Caricamento…</p>}{detail.isError && <p className="error-text">{errorMessage(detail.error)}</p>}{detail.data?.messages.map(m => <article key={m.id} className={`message ${m.role}`}><strong>{m.role === 'user' ? 'Domanda' : 'Lumi'}</strong><p>{m.text}</p><SentenceMap map={m.sentenceMap}/><TopicMap map={m.topicMap}/><WordExplanation explanation={m.wordExplanation}/><WordImages images={m.images}/>{m.status !== 'completed' && <small>{m.status === 'streaming' ? 'In corso' : 'Risposta non completata'}</small>}</article>)}</Dialog.Popup></Dialog.Portal></Dialog.Root>
+    <Confirm open={remove !== null} onClose={() => setRemove(null)} title={remove === 'all' ? 'Eliminare tutte le scoperte?' : 'Eliminare questa conversazione?'} description="La conversazione e i suoi messaggi verranno eliminati dal server. Le parole nel dizionario restano disponibili. Questa operazione non si può annullare." action="Elimina" onConfirm={async () => { if (remove === 'all') await clearConversations({ path: { familyId: familyId }, throwOnError: true }); else if (remove) await deleteConversation({ path: { familyId: familyId, conversationId: remove }, throwOnError: true }); qc.removeQueries({ predicate: q => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'object' && q.queryKey[0]?._id === 'getConversation' }); await qc.invalidateQueries({ queryKey: listConversationsQueryKey({ path: { familyId: familyId } }) }); }}/>
   </section>;
 }
 
@@ -93,4 +94,23 @@ function Confirm({ open, onClose, title, description, action, onConfirm }: { ope
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   useEffect(() => { if (open) setError(''); }, [open]);
   return <Dialog.Root open={open} onOpenChange={value => { if (!value && !busy) onClose(); }}><Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="dialog-panel"><Dialog.Title>{title}</Dialog.Title><Dialog.Description>{description}</Dialog.Description>{error && <p className="error-text" role="alert">{error}</p>}<div className="button-row"><button className="soft-button" disabled={busy} onClick={onClose}>Annulla</button><button className="danger-button" disabled={busy} onClick={async () => { setBusy(true); setError(''); try { await onConfirm(); onClose(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); } }}>{busy ? 'Un attimo…' : action}</button></div></Dialog.Popup></Dialog.Portal></Dialog.Root>;
+}
+
+function DictionaryPanel() {
+  const familyId = familyID();
+  const qc = useQueryClient();
+  const words = useQuery(listDictionaryWordsOptions({ path: { familyId } }));
+  const [remove, setRemove] = useState<{ id: string; word: string } | 'all' | null>(null);
+  return <section className="admin-card">
+    <div className="section-heading"><div><h2>Il dizionario</h2><p>Le parole restano qui anche quando elimini le conversazioni.</p></div><button className="text-button danger-text" disabled={!words.data?.length} onClick={() => setRemove('all')}><Trash2 size={16}/>Svuota il dizionario</button></div>
+    {words.isPending && <p role="status">Caricamento delle parole…</p>}
+    {words.isError && <p role="alert" className="error-text">{errorMessage(words.error)} <button className="text-button" onClick={() => void words.refetch()}>Riprova</button></p>}
+    {words.data?.length === 0 && <p>Non ci sono ancora parole salvate.</p>}
+    <div className="history-table">{words.data?.map(word => <div className="history-row" key={word.id}><span>{word.word}</span><button className="icon-button danger-text" aria-label={`Elimina la parola ${word.word}`} onClick={() => setRemove({ id: word.id, word: word.word })}><Trash2 size={17}/></button></div>)}</div>
+    <Confirm open={remove !== null} onClose={() => setRemove(null)} title={remove === 'all' ? 'Svuotare il dizionario?' : `Eliminare la parola «${remove?.word ?? ''}»?`} description="Le schede selezionate verranno eliminate dal dizionario. Le conversazioni restano disponibili. Questa operazione non si può annullare." action="Elimina" onConfirm={async () => {
+      if (remove === 'all') await clearDictionary({ path: { familyId }, throwOnError: true });
+      else if (remove) await deleteDictionaryWord({ path: { familyId, entryId: remove.id }, throwOnError: true });
+      await qc.invalidateQueries({ queryKey: listDictionaryWordsQueryKey({ path: { familyId } }) });
+    }}/>
+  </section>;
 }

@@ -121,6 +121,54 @@ button svg, a svg { flex-shrink: 0; }
 .message { padding: 22px 25px; border-radius: 18px; max-width: 94%; background: white; border: 1px solid #e9e1ef; overflow-wrap: anywhere; }
 .message.user { align-self: flex-end; background: #ede7f3; border-color: #e6dced; border-bottom-right-radius: 5px; }
 .message.assistant { border-bottom-left-radius: 5px; }
+.message > p:empty { display: none; }
+.message:has(.word-explanation) { width: 100%; }
+.word-explanation { margin: 20px 0 8px; min-width: 0; }
+.word-heading { margin: 0 0 16px; font-size: 25px; color: #705289; overflow-wrap: anywhere; }
+.word-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.word-card { min-width: 0; padding: 20px; border: 1px solid #c7d6be; border-radius: 14px; background: #edf2e9; overflow-wrap: anywhere; }
+.word-card h4 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #506d45; }
+.word-card-example { background: #fbede4; border-color: #e8cbb7; }
+.word-card-example h4 { color: #8b5839; }
+.word-card p, .message .word-card p { margin: 0; font-size: 20px; line-height: 1.7; white-space: pre-wrap; }
+.word-card .listen-button { margin-top: 18px; min-height: 44px; }
+.dictionary-heading { display: flex; align-items: center; gap: 18px; margin: 28px 0; }
+.dictionary-heading > svg { color: #9070aa; flex-shrink: 0; }
+.dictionary-heading h1 { margin: 0 0 8px; font-size: 30px; }
+.dictionary-heading p, .dictionary-count { color: #796784; line-height: 1.6; }
+.dictionary-heading p { margin: 0; }
+.dictionary-toolbar { display: flex; align-items: end; gap: 18px; margin: 28px 0 18px; }
+.dictionary-search { flex: 1; min-width: 0; }
+.dictionary-search label { display: block; margin-bottom: 10px; color: #705289; }
+.dictionary-search input { width: 100%; min-height: 48px; border: 1px solid #d9cbe4; border-radius: 12px; background: white; padding: 12px 16px; }
+.dictionary-list { list-style: none; padding: 0; display: grid; gap: 14px; }
+.dictionary-list > li { min-width: 0; background: #fffefc; border: 1px solid #e7dfeb; border-radius: 16px; overflow-wrap: anywhere; }
+.dictionary-list > li > button { background: transparent; color: #514459; width: 100%; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; text-align: left; padding: 18px 22px; border-radius: 16px; }
+.dictionary-list strong { font-size: 20px; }
+.dictionary-list > li > button > span { font-size: 12px; color: #796784; flex-shrink: 0; }
+.dictionary-detail { padding: 0 22px 22px; }
+.dictionary-detail .word-heading, .practice .word-heading { display: none; }
+.practice { background: #fffefc; border: 1px solid #e7dfeb; border-radius: 18px; padding: 28px; }
+.practice-progress { color: #796784; margin: 24px 0; }
+.practice-question { padding: 24px; text-align: center; border-radius: 14px; background: #f3edf8; margin-bottom: 24px; }
+.practice-question h2 { font-size: 32px; color: #705289; overflow-wrap: anywhere; }
+.practice-question p { font-size: 18px; line-height: 1.6; }
+.practice-question .listen-button { margin: 0 auto; }
+.practice-actions { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 24px; }
+.practice-complete { text-align: center; padding: 32px 0 12px; }
+.practice-complete > svg { color: #9070aa; margin: 0 auto 18px; }
+.practice-complete .primary-button, .practice-complete .soft-button { margin: 14px auto 0; }
+@media (max-width: 700px) {
+  .word-cards { grid-template-columns: minmax(0, 1fr); }
+  .word-card { padding: 18px; }
+  .dictionary-heading h1 { font-size: 25px; }
+  .dictionary-toolbar { align-items: stretch; flex-direction: column; }
+  .dictionary-toolbar > button { justify-content: center; }
+  .dictionary-list > li > button { align-items: start; flex-direction: column; gap: 6px; }
+  .dictionary-detail { padding: 0 16px 16px; }
+  .practice { padding: 18px; }
+  .practice-actions > button { flex: 1; min-height: 48px; justify-content: center; }
+}
 .message p { font-size: 18px; line-height: 1.85; white-space: pre-wrap; margin: 10px 0 0; color: #514459; }
 .message-label { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #a48ab4; }
 .you-dot { width: 7px; height: 7px; border-radius: 50%; background: #b69bca; }

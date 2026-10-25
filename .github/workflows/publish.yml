@@ -15,7 +15,11 @@ jobs:
     needs: checks
     if: github.repository == 'lucax88x/lumi' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: lumi-publish-main
+      cancel-in-progress: false
     permissions:
+      actions: read
       contents: read
       packages: write
     steps:
@@ -62,3 +66,7 @@ jobs:
           path: release.json
           if-no-files-found: error
           retention-days: 90
+      - name: Promote the current main image for Watchtower
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/promote-image.py

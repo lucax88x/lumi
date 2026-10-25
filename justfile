@@ -93,10 +93,25 @@ test-deploy:
 test-deploy-compose *args:
     python3 scripts/test-deploy-compose.py "$@"
 
+# Opt-in Watchtower smoke test with a disposable local registry and app.
+[group('development')]
+test-watchtower:
+    python3 scripts/test-watchtower-compose.py
+
 # Open the existing SSH host alias.
 [group('deployment')]
 ssh:
     ssh lumi-server
+
+# Forward Keycloak admin to http://localhost:19090/keycloak/admin/.
+[group('deployment')]
+ssh-keycloak-admin:
+    ssh -N -L 19090:127.0.0.1:19090 lumi-server
+
+# Print the server's Keycloak admin username/password; sudo may prompt.
+[group('deployment')]
+ssh-keycloak-admin-credentials:
+    ssh -t lumi-server 'sudo grep -E "^(KEYCLOAK_ADMIN_USER|KEYCLOAK_ADMIN_PASSWORD)=" /home/serviceman/lumi/config/.env'
 
 # Prepare serviceman's private deployment directories and verify Docker.
 [group('deployment')]

@@ -4,6 +4,14 @@ import type { StreamEvent } from './api/types.gen';
 
 afterEach(() => { vi.unstubAllGlobals(); setCSRF(''); });
 describe('streaming without retries', () => {
+  it('keeps word cards when their continuation is interrupted', async () => {
+    const message = { id: 'word', conversationId: 'chat', role: 'assistant', status: 'streaming', text: '', createdAt: '', wordExplanation: { word: 'vigoroso', meaning: 'forte', example: 'Un calcio vigoroso.' } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(`data: ${JSON.stringify({ type: 'word_explanation', message })}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } })));
+    const events: StreamEvent[] = [];
+    await expect(readStream('/test', {}, e => events.push(e), new AbortController().signal)).rejects.toThrow('interrotta');
+    expect(events[0].message?.wordExplanation).toEqual(message.wordExplanation);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
   it('decodes fragmented UTF-8 and waits for a terminal event', async () => {
     const bytes = new TextEncoder().encode(': keepalive\n\ndata: {"type":"delta","delta":"È una sorpresa!"}\n\ndata: {"type":"completed"}\n\n');
     const stream = new ReadableStream({ start(controller) { for (let i = 0; i < bytes.length; i++) controller.enqueue(bytes.slice(i, i + 1)); controller.close(); } });

@@ -7,6 +7,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -55,6 +56,20 @@ class FakeGitHub:
 
 
 class PublicationTests(unittest.TestCase):
+    def test_auto_update_cli_dispatch_and_incompatible_options(self):
+        for check, action in [(False, 'deploy-auto'), (True, 'check-auto')]:
+            argv = ['deploy.py', '--auto-update'] + (['--check'] if check else [])
+            with patch.object(sys, 'argv', argv), patch.object(deploy, 'GitHub'), \
+                    patch.object(deploy, 'resolve_release', return_value=release()), \
+                    patch.object(deploy, 'run_remote') as remote, patch('sys.stdout', new_callable=io.StringIO):
+                deploy.main()
+                self.assertEqual(remote.call_args.args[0], action)
+        for options in [['--run', '101'], ['--rollback', '101-1'], ['--setup']]:
+            with patch.object(sys, 'argv', ['deploy.py', '--auto-update', *options]), \
+                    patch('sys.stderr', new_callable=io.StringIO), self.assertRaises(SystemExit) as error:
+                deploy.main()
+            self.assertEqual(error.exception.code, 2)
+
     def test_latest_successful_main_publication(self):
         api = FakeGitHub([run(100), run(), run(102, conclusion='failure'), run(103, head_branch='feature')])
         self.assertEqual(deploy.resolve_release(api), release())
@@ -120,7 +135,7 @@ class RemoteTests(unittest.TestCase):
             (self.bin / name).symlink_to(tool)
         self.bundle = self.home / 'bundle'
         self.bundle.mkdir()
-        for file in ('compose.yaml', 'compose.prod.yaml', '.env.example'):
+        for file in ('compose.yaml', 'compose.prod.yaml', 'compose.watchtower.yaml', '.env.example'):
             shutil.copyfile(ROOT / file, self.bundle / file)
         shutil.copytree(ROOT / 'deploy/keycloak', self.bundle / 'deploy/keycloak')
         shutil.copyfile(ROOT / 'deploy/Caddyfile.prod', self.bundle / 'deploy/Caddyfile.prod')
@@ -147,6 +162,152 @@ class RemoteTests(unittest.TestCase):
 
     def events(self):
         return [json.loads(line) for line in (self.state / 'events').read_text().splitlines()]
+
+    def watcher_credentials(self):
+        path = self.root / 'config/watchtower/config.json'
+        path.write_text(json.dumps({'auths': {'ghcr.io': {'auth': 'PRIVATE_TEST_SECRET'}}}))
+        path.chmod(0o600)
+
+    def test_auto_check_verifies_channel_without_stopping_updater(self):
+        self.setup()
+        self.watcher_credentials()
+        (self.state / 'watchtower').touch()
+        result = self.invoke('check-auto', release())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNoActivation()
+        self.assertTrue((self.state / 'watchtower').exists())
+        self.assertFalse(any(name == 'docker' and args[0] == 'stop' for name, args in self.events()))
+        self.assertNotIn('PRIVATE_TEST_SECRET', result.stdout + result.stderr)
+
+    def test_old_publication_reports_that_watchtower_changes_must_be_published(self):
+        self.setup()
+        self.watcher_credentials()
+        (self.bundle / 'compose.watchtower.yaml').unlink()
+        for mode in ('check-auto', 'deploy-auto'):
+            with self.subTest(mode=mode):
+                result = self.invoke(mode, release())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Release 101-1', result.stderr)
+                self.assertIn('does not contain compose.watchtower.yaml', result.stderr)
+                self.assertIn('Publish the Watchtower changes on main', result.stderr)
+                self.assertIn('wait for Publish to succeed', result.stderr)
+                self.assertNoActivation()
+                self.assertFalse(list((self.root / 'releases').iterdir()))
+
+    def test_auto_deployment_and_manual_pin_suspend_updates(self):
+        self.setup()
+        self.watcher_credentials()
+        result = self.invoke('deploy-auto', release())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.state / 'watchtower').exists())
+        self.assertEqual((self.state / 'active-auto').read_text(), 'true')
+        result = self.invoke('deploy', release())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.state / 'watchtower').exists())
+        self.assertEqual((self.state / 'active-auto').read_text(), 'false')
+
+    def test_rollback_of_auto_deployment_stays_on_retained_digest(self):
+        self.setup()
+        self.watcher_credentials()
+        self.assertEqual(self.invoke('deploy', release(100, digest='2')).returncode, 0)
+        self.assertEqual(self.invoke('deploy-auto', release()).returncode, 0)
+        result = self.invoke('rollback', '100-1', DENY_REGISTRY='1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.state / 'watchtower').exists())
+        self.assertEqual((self.state / 'active-image').read_text(), 'sha256:' + '2' * 64)
+
+    def test_missing_credentials_and_changed_channel_leave_current_running(self):
+        self.setup()
+        self.assertEqual(self.invoke('deploy', release(100, digest='2')).returncode, 0)
+        result = self.invoke('deploy-auto', release())
+        self.assertNotEqual(result.returncode, 0)
+        self.watcher_credentials()
+        (self.state / 'watchtower').touch()
+        for failure in ({'CHANNEL_DIGEST': '9'}, {'INVALID_WATCHTOWER_SCOPE': '1'}):
+            result = self.invoke('deploy-auto', release(), **failure)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertTrue((self.state / 'watchtower').exists())
+            self.assertEqual((self.state / 'active').read_text(), '100-1')
+        self.assertNotIn('PRIVATE_TEST_SECRET', result.stdout + result.stderr)
+
+    def test_credentials_must_be_private_and_independent_of_host_helpers(self):
+        self.setup()
+        self.watcher_credentials()
+        path = self.root / 'config/watchtower/config.json'
+        path.chmod(0o644)
+        self.assertNotEqual(self.invoke('check-auto', release()).returncode, 0)
+        path.chmod(0o600)
+        path.write_text(json.dumps({'credsStore': 'host-helper', 'auths': {'ghcr.io': {'auth': 'PRIVATE_TEST_SECRET'}}}))
+        result = self.invoke('check-auto', release())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('PRIVATE_TEST_SECRET', result.stdout + result.stderr)
+
+    def test_missing_watchtower_setup_reports_login_steps_before_pulling_images(self):
+        self.setup()
+        directory = self.root / 'config/watchtower'
+        directory.rmdir()  # Existing installations predate the Watchtower setup.
+        for mode in ('deploy-auto', 'check-auto'):
+            for missing in ('directory', 'file'):
+                with self.subTest(mode=mode, missing=missing):
+                    if missing == 'file': directory.mkdir(mode=0o700)
+                    count = len(self.events())
+                    result = self.invoke(mode, release())
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('Watchtower registry credentials are missing', result.stderr)
+                    self.assertIn('docker login ghcr.io --username lucax88x', result.stderr)
+                    self.assertNotIn('Traceback', result.stderr)
+                    self.assertNoActivation()
+                    self.assertFalse(any(name == 'docker' and args[0] in ('pull', 'create', 'stop')
+                                         for name, args in self.events()[count:]))
+                    self.assertFalse((directory / 'config.json').exists())
+                    if missing == 'file': directory.rmdir()
+
+    def test_invalid_watchtower_credentials_do_not_print_config_contents(self):
+        self.setup()
+        self.watcher_credentials()
+        path = self.root / 'config/watchtower/config.json'
+        for content in ('{PRIVATE_TEST_SECRET', '[]', '{"auths": []}'):
+            with self.subTest(content=content):
+                path.write_text(content)
+                result = self.invoke('check-auto', release())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('repeat the dedicated docker login', result.stderr)
+                self.assertNotIn('Traceback', result.stderr)
+                self.assertNotIn('PRIVATE_TEST_SECRET', result.stdout + result.stderr)
+
+    def test_failed_manual_activation_restores_actual_auto_updated_image_and_mode(self):
+        self.setup()
+        self.watcher_credentials()
+        self.assertEqual(self.invoke('deploy-auto', release(100, digest='2'), CHANNEL_DIGEST='2').returncode, 0)
+        # Watchtower has independently updated Lumi beyond the retained bundle.
+        actual = 'sha256:' + '7' * 64
+        (self.state / 'active-image').write_text(actual)
+        result = self.invoke('deploy', release(), FAIL_HEALTH='101-1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Preceding release restored', result.stderr)
+        self.assertEqual((self.state / 'active-image').read_text(), actual)
+        self.assertEqual((self.state / 'active-auto').read_text(), 'true')
+        self.assertTrue((self.state / 'watchtower').exists())
+        self.assertEqual(os.readlink(self.root / 'current'), 'releases/100-1')
+
+    def test_updater_start_failure_does_not_promote_bundle(self):
+        self.setup()
+        self.watcher_credentials()
+        self.assertEqual(self.invoke('deploy', release(100, digest='2')).returncode, 0)
+        result = self.invoke('deploy-auto', release(), FAIL_WATCHTOWER_START='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Preceding release restored', result.stderr)
+        self.assertEqual(os.readlink(self.root / 'current'), 'releases/100-1')
+        self.assertEqual((self.state / 'active-image').read_text(), 'sha256:' + '2' * 64)
+        self.assertFalse((self.state / 'watchtower').exists())
+
+    def test_rollback_can_recover_a_removed_application(self):
+        self.setup()
+        self.assertEqual(self.invoke('deploy', release(100, digest='2')).returncode, 0)
+        (self.state / 'active').unlink()
+        result = self.invoke('rollback', '100-1', DENY_REGISTRY='1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.state / 'active-image').read_text(), 'sha256:' + '2' * 64)
 
     def assertNoActivation(self):
         self.assertFalse((self.state / 'active').exists())
@@ -272,8 +433,7 @@ class RemoteTests(unittest.TestCase):
 
     def test_failed_restoration_is_reported_without_changing_current(self):
         self.setup()
-        self.seed(release(100, digest='2'))
-        (self.root / 'current').symlink_to('releases/100-1')
+        self.assertEqual(self.invoke('deploy', release(100, digest='2')).returncode, 0)
         result = self.invoke('deploy', release(), FAIL_UP_ALL='1')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('RESTORATION FAILED', result.stderr)

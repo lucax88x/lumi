@@ -1,10 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Message, WordImage, SentenceMap } from '../src/api/types.gen';
+import type { Message, WordImage, SentenceMap, DictionaryEntry } from '../src/api/types.gen';
 import spaceMap from './fixtures/space-map.json' with { type: 'json' };
 
 const spaceQuestion = 'mi fai la mappa mentale con tutti i pianeti e i nomi stellari? tipo meteorite, asteroide, etc';
 
 const rockImages: WordImage[] = [{ title: 'Roccia', imageUrl: 'https://upload.wikimedia.org/test.jpg', sourceUrl: 'https://it.wikipedia.org/wiki/Roccia', creditUrl: 'https://it.wikipedia.org/wiki/File:Rock.jpg' }];
+const vigorousWord = { word: 'vigoroso', meaning: 'forte', example: 'Il bambino dà un calcio vigoroso al pallone.' };
 const catMap: SentenceMap = { sentence: 'La gatta si accoccolò sul tappeto.', parts: [
   { text: 'La gatta', question: 'Chi?', explanation: 'Si parla di una gatta.' },
   { text: 'si accoccolò', question: 'Che cosa fa?', explanation: 'Si mise comoda, tutta raccolta.' },
@@ -14,17 +15,31 @@ const catMap: SentenceMap = { sentence: 'La gatta si accoccolò sul tappeto.', p
 async function mockAPI(page: Page, autoRead = false) {
   const chats: { id: string; title: string; createdAt: string; updatedAt: string }[] = [];
   const messages = new Map<string, Message[]>();
+  const dictionary: DictionaryEntry[] = [];
   let authenticated = true;
   const settings = { model: 'test-model', prompt: 'Spiega una parola alla volta.', defaultPrompt: 'Spiega una parola alla volta.', autoRead, speechRate: 0.9 };
   await page.route('**/api/v1/**', async route => {
     const request = route.request(); const path = new URL(request.url()).pathname.replace(/^\/api\/v1(?:\/families\/test)?/, ''); const method = request.method();
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path === '/dictionary') return json(dictionary);
     if (path === '/word-images') return json([]);
     if (path === '/status') return json({ ready: true, autoRead, speechRate: 0.9 });
     if (path === '/session') return json({ authenticated, portalAccess: authenticated, admin: true, email: 'user@example.test', csrfToken: 'csrf-test', families: [{ id: 'test', name: 'La nostra famiglia', role: 'parent' }] });
     if (path === '/logout') { authenticated = false; return route.fulfill({ status: 204 }); }
     if (path.startsWith('/admin/') && !authenticated) return json({ message: 'Accedi' }, 401);
     if (path.startsWith('/admin/') && !['GET'].includes(method)) expect(request.headers()['x-csrf-token']).toBe('csrf-test');
+    if (path.startsWith('/admin/dictionary') && method === 'DELETE') {
+      const id = path.split('/')[3];
+      if (id) { const index = dictionary.findIndex(word => word.id === id); if (index >= 0) dictionary.splice(index, 1); }
+      else dictionary.splice(0);
+      return route.fulfill({ status: 204 });
+    }
+    if (path.startsWith('/admin/conversations') && method === 'DELETE') {
+      const id = path.split('/')[3];
+      if (id) { const index = chats.findIndex(chat => chat.id === id); if (index >= 0) chats.splice(index, 1); messages.delete(id); }
+      else { chats.splice(0); messages.clear(); }
+      return route.fulfill({ status: 204 });
+    }
     if (path === '/admin/preview') {
       const message: Message = { id: 'preview', conversationId: '', role: 'assistant', status: 'completed', text: 'Ecco una roccia!', images: rockImages, createdAt: new Date().toISOString() };
       if (request.postDataJSON().text === catMap.sentence) {
@@ -32,6 +47,9 @@ async function mockAPI(page: Page, autoRead = false) {
       }
       if (request.postDataJSON().text === spaceQuestion) {
         message.text = 'Tocca un ramo per esplorare lo spazio.'; message.images = []; message.topicMap = spaceMap;
+      }
+      if (request.postDataJSON().text === 'vigoroso') {
+        message.text = ''; message.images = []; message.wordExplanation = vigorousWord;
       }
       return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'images', message: { ...message, text: '', status: 'streaming' } })}\n\ndata: ${JSON.stringify({ type: 'completed', message })}\n\n` });
     }
@@ -53,18 +71,108 @@ async function mockAPI(page: Page, autoRead = false) {
       if (body.text === 'Me ne mostri una?') { answer.images = rockImages; answer.text = 'Ecco una roccia!'; }
       if (body.text === catMap.sentence) { answer.sentenceMap = catMap; answer.text = 'La gatta si mette comoda sul tappeto. Partiamo da «La gatta»: ci dice di chi parliamo.'; }
       if (body.text === spaceQuestion) { answer.topicMap = spaceMap; answer.text = 'Tocca un ramo per esplorare lo spazio.'; }
+      if (body.text?.toLowerCase() === 'vigoroso' || body.text === 'Cosa significa vigoroso?' || (['simplify', 'example'].includes(body.action) && history.some(m => m.wordExplanation))) {
+        answer.text = ''; answer.wordExplanation = { ...vigorousWord, example: body.action === 'example' ? 'Un albero vigoroso cresce in giardino.' : vigorousWord.example };
+        const previous = dictionary.find(word => word.word === 'vigoroso');
+        if (previous) Object.assign(previous, answer.wordExplanation, { lastAskedAt: date });
+        else dictionary.unshift({ id: 'word-vigoroso', ...answer.wordExplanation, firstAskedAt: date, lastAskedAt: date });
+      }
       history.push(user, answer);
-      return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'started', message: { ...answer, topicMap: undefined, sentenceMap: undefined, images: [], text: '', status: 'streaming' } })}\n\n${answer.topicMap ? `data: ${JSON.stringify({ type: 'topic_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.sentenceMap ? `data: ${JSON.stringify({ type: 'sentence_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.images ? `data: ${JSON.stringify({ type: 'images', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}data: ${JSON.stringify({ type: 'delta', delta: answer.text })}\n\ndata: ${JSON.stringify({ type: 'completed', message: answer })}\n\n` });
+      return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'started', message: { ...answer, wordExplanation: undefined, topicMap: undefined, sentenceMap: undefined, images: [], text: '', status: 'streaming' } })}\n\n${answer.wordExplanation ? `data: ${JSON.stringify({ type: 'word_explanation', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.topicMap ? `data: ${JSON.stringify({ type: 'topic_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.sentenceMap ? `data: ${JSON.stringify({ type: 'sentence_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.images ? `data: ${JSON.stringify({ type: 'images', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}data: ${JSON.stringify({ type: 'delta', delta: answer.text })}\n\ndata: ${JSON.stringify({ type: 'completed', message: answer })}\n\n` });
     }
     return json({ message: 'Not found' }, 404);
   });
-  return { chats, messages };
+  return { chats, messages, dictionary };
 }
 
 async function openNavigation(page: Page) {
   const menu = page.getByRole('button', { name: 'Apri menu' });
   if (await menu.isVisible()) await menu.click();
 }
+
+test('word cards survive reload, save one dictionary entry, and support practice', async ({ page }, testInfo) => {
+  const api = await mockAPI(page);
+  await page.goto('/famiglie/test');
+  await page.getByLabel('Scrivi una parola o una frase').fill('Cosa significa vigoroso?');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  const answer = page.locator('.message.assistant').last();
+  await expect(answer.getByRole('region', { name: 'Significato', exact: true })).toHaveText(/Significato.*forte/);
+  await expect(answer.getByRole('region', { name: 'Esempio', exact: true })).toContainText(vigorousWord.example);
+  await expect(answer.getByRole('region', { name: 'Significato', exact: true })).toBeVisible();
+  await expect(answer.getByRole('region', { name: 'Esempio', exact: true })).toBeVisible();
+  await expect(answer.getByText('La risposta non è arrivata. Puoi riprovare.')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: `test-results/word-cards-${testInfo.project.name}.png`, fullPage: true });
+  await page.reload();
+  await expect(answer.getByText('forte', { exact: true })).toBeVisible();
+  await page.getByLabel('Scrivi una parola o una frase').fill('VIGOROSO');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.locator('.message.assistant')).toHaveCount(2);
+  expect(api.dictionary).toHaveLength(1);
+  await openNavigation(page);
+  await page.getByRole('link', { name: 'Il mio dizionario', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Il mio dizionario' })).toBeVisible();
+  await page.getByRole('button', { name: /vigoroso.*Scoperta/ }).click();
+  await expect(page.getByText(vigorousWord.example)).toBeVisible();
+  await page.screenshot({ path: `test-results/dictionary-${testInfo.project.name}.png`, fullPage: true });
+  await page.getByRole('button', { name: 'Ripassiamo', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'vigoroso', exact: true })).toBeVisible();
+  await expect(page.getByText('forte', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mostra il significato' }).click();
+  await expect(page.getByText('forte', { exact: true })).toBeVisible();
+  await page.screenshot({ path: `test-results/practice-${testInfo.project.name}.png`, fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Da ripassare', exact: true }).click();
+  await page.getByRole('button', { name: 'Ripassa ancora (1)' }).click();
+  await expect(page.getByText('Parola 1 di 1')).toBeVisible();
+  await page.getByRole('button', { name: 'Mostra il significato' }).click();
+  await page.getByRole('button', { name: 'La ricordo', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Un bel momento di ripasso!' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Ripassiamo', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ripassa ancora (1)' })).toHaveCount(0);
+});
+
+test('dictionary loading, retry, empty state, and search do not require generation', async ({ page }) => {
+  await mockAPI(page);
+  let ready = false;
+  await page.route('**/api/v1/families/test/dictionary', async route => {
+    if (!ready) return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Non riesco a leggere le parole.' }) });
+    return route.fulfill({ contentType: 'application/json', body: '[]' });
+  });
+  await page.goto('/famiglie/test/dizionario');
+  await expect(page.getByRole('alert')).toContainText('Non riesco a leggere le parole.');
+  ready = true;
+  await page.getByRole('button', { name: 'Riprova', exact: true }).click();
+  await expect(page.getByText('Le parole che chiedi a Lumi compariranno qui.')).toBeVisible();
+  await page.route('**/api/v1/families/test/status', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ready: false, autoRead: false, speechRate: 0.7 }) }));
+  await page.reload();
+  await expect(page.getByText('Le parole che chiedi a Lumi compariranno qui.')).toBeVisible();
+});
+
+test('parents can remove dictionary words independently from chats and previews', async ({ page }) => {
+  const api = await mockAPI(page);
+  await page.goto('/famiglie/test');
+  await page.getByLabel('Scrivi una parola o una frase').fill('vigoroso');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.locator('.message.assistant .word-explanation')).toBeVisible();
+  await page.goto('/famiglie/test/genitore');
+  await page.getByRole('tab', { name: 'Come insegna' }).click();
+  await page.getByLabel('Parola o frase di prova').fill('vigoroso');
+  await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
+  await expect(page.locator('.preview-result').getByText('forte', { exact: true })).toBeVisible();
+  expect(api.dictionary).toHaveLength(1);
+  await page.getByRole('tab', { name: 'Le sue scoperte' }).click();
+  await page.getByRole('button', { name: 'Elimina tutto', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('Le parole nel dizionario restano disponibili.');
+  await page.getByRole('dialog').getByRole('button', { name: 'Elimina', exact: true }).click();
+  await expect(page.getByText('Le prime domande compariranno qui.')).toBeVisible();
+  expect(api.dictionary).toHaveLength(1);
+  await page.getByRole('button', { name: 'Elimina la parola vigoroso' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Elimina', exact: true }).click();
+  await expect(page.getByText('Non ci sono ancora parole salvate.')).toBeVisible();
+  expect(api.dictionary).toHaveLength(0);
+});
 
 for (const role of ['parent', 'member'] as const) {
   test(`an unconfigured family hides chat until Lumi is ready (${role})`, async ({ page }, testInfo) => {

@@ -138,15 +138,15 @@ func (s *Store) Conversation(id string) (api.ConversationDetail, error) {
 	}
 	d.Conversation.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	d.Conversation.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
-	rows, err := s.db.Query(`SELECT id,role,text,status,created_at,images,sentence_map,topic_map FROM messages WHERE conversation_id=? ORDER BY seq`, id)
+	rows, err := s.db.Query(`SELECT id,role,text,status,created_at,images,sentence_map,topic_map,word_explanation FROM messages WHERE conversation_id=? ORDER BY seq`, id)
 	if err != nil {
 		return d, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		m := api.Message{ConversationId: id}
-		var stamp, images, sentenceMap, topicMap string
-		if err = rows.Scan(&m.Id, &m.Role, &m.Text, &m.Status, &stamp, &images, &sentenceMap, &topicMap); err != nil {
+		var stamp, images, sentenceMap, topicMap, wordExplanation string
+		if err = rows.Scan(&m.Id, &m.Role, &m.Text, &m.Status, &stamp, &images, &sentenceMap, &topicMap, &wordExplanation); err != nil {
 			return d, err
 		}
 		if err = json.Unmarshal([]byte(images), &m.Images); err != nil {
@@ -158,6 +158,9 @@ func (s *Store) Conversation(id string) (api.ConversationDetail, error) {
 		if err = json.Unmarshal([]byte(topicMap), &m.TopicMap); err != nil {
 			return d, err
 		}
+		if err = json.Unmarshal([]byte(wordExplanation), &m.WordExplanation); err != nil {
+			return d, err
+		}
 		m.CreatedAt, _ = time.Parse(time.RFC3339Nano, stamp)
 		d.Messages = append(d.Messages, m)
 	}
@@ -165,8 +168,8 @@ func (s *Store) Conversation(id string) (api.ConversationDetail, error) {
 }
 func (s *Store) StartTurn(cid, rid, text string) (api.Message, bool, error) {
 	var existing api.Message
-	var stamp, storedText, images, sentenceMap, topicMap string
-	err := s.db.QueryRow(`SELECT m.id,m.role,m.text,m.status,m.created_at,u.text,m.images,m.sentence_map,m.topic_map FROM messages m JOIN messages u ON u.request_id=m.request_id AND u.conversation_id=m.conversation_id AND u.role='user' WHERE m.conversation_id=? AND m.request_id=? AND m.role='assistant'`, cid, rid).Scan(&existing.Id, &existing.Role, &existing.Text, &existing.Status, &stamp, &storedText, &images, &sentenceMap, &topicMap)
+	var stamp, storedText, images, sentenceMap, topicMap, wordExplanation string
+	err := s.db.QueryRow(`SELECT m.id,m.role,m.text,m.status,m.created_at,u.text,m.images,m.sentence_map,m.topic_map,m.word_explanation FROM messages m JOIN messages u ON u.request_id=m.request_id AND u.conversation_id=m.conversation_id AND u.role='user' WHERE m.conversation_id=? AND m.request_id=? AND m.role='assistant'`, cid, rid).Scan(&existing.Id, &existing.Role, &existing.Text, &existing.Status, &stamp, &storedText, &images, &sentenceMap, &topicMap, &wordExplanation)
 	if err == nil {
 		if storedText != text {
 			return existing, false, fmt.Errorf("request id reused")
@@ -178,6 +181,9 @@ func (s *Store) StartTurn(cid, rid, text string) (api.Message, bool, error) {
 			return existing, false, err
 		}
 		if err = json.Unmarshal([]byte(topicMap), &existing.TopicMap); err != nil {
+			return existing, false, err
+		}
+		if err = json.Unmarshal([]byte(wordExplanation), &existing.WordExplanation); err != nil {
 			return existing, false, err
 		}
 		existing.ConversationId = cid
@@ -223,8 +229,38 @@ func (s *Store) Finish(m api.Message) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(`UPDATE messages SET text=?,status=?,images=?,sentence_map=?,topic_map=? WHERE id=?`, m.Text, m.Status, string(encoded), string(encodedMap), string(encodedTopicMap), m.Id)
-	return err
+	encodedWord, err := json.Marshal(m.WordExplanation)
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updated, err := tx.Exec(`UPDATE messages SET text=?,status=?,images=?,sentence_map=?,topic_map=?,word_explanation=? WHERE id=? AND status!='completed'`, m.Text, m.Status, string(encoded), string(encodedMap), string(encodedTopicMap), string(encodedWord), m.Id)
+	if err != nil {
+		return err
+	}
+	n, err := updated.RowsAffected()
+	if err != nil {
+		return err
+	}
+	// Save only the first successful completion, never checkpoints or replays.
+	if n > 0 && m.Status == "completed" && m.WordExplanation != nil {
+		word := m.WordExplanation
+		stamp := m.CreatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z")
+		_, err = tx.Exec(`INSERT INTO dictionary_entries(id,word_key,word,meaning,example,first_asked_at,last_asked_at) VALUES(?,?,?,?,?,?,?)
+		 ON CONFLICT(word_key) DO UPDATE SET
+		 word=CASE WHEN excluded.last_asked_at >= last_asked_at THEN excluded.word ELSE word END,
+		 meaning=CASE WHEN excluded.last_asked_at >= last_asked_at THEN excluded.meaning ELSE meaning END,
+		 example=CASE WHEN excluded.last_asked_at >= last_asked_at THEN excluded.example ELSE example END,
+		 first_asked_at=min(first_asked_at,excluded.first_asked_at),last_asked_at=max(last_asked_at,excluded.last_asked_at)`, randomID(), wordKey(word.Word), word.Word, word.Meaning, word.Example, stamp, stamp)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 func (s *Store) Delete(id string) error {
 	if id == "" {

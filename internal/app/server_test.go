@@ -232,7 +232,7 @@ func TestOfficialSDKSubscriptionContract(t *testing.T) {
 		b, _ := io.ReadAll(r.Body)
 		var body map[string]any
 		_ = json.Unmarshal(b, &body)
-		if body["store"] != false || body["stream"] != true || body["instructions"] != "test prompt\n\n"+imageInstructions+"\n\n"+sentenceMapInstructions+"\n\n"+topicMapInstructions {
+		if body["store"] != false || body["stream"] != true || body["instructions"] != "test prompt\n\n"+imageInstructions+"\n\n"+sentenceMapInstructions+"\n\n"+topicMapInstructions+"\n\n"+wordExplanationInstructions {
 			t.Errorf("wrong params %s", b)
 		}
 		for _, field := range []string{"temperature", "max_output_tokens", "previous_response_id", "conversation", "safety_identifier"} {

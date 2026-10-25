@@ -26,6 +26,7 @@ export type Message = {
     images?: Array<WordImage>;
     sentenceMap?: SentenceMap;
     topicMap?: TopicMap;
+    wordExplanation?: WordExplanation;
 };
 
 export type ConversationDetail = {
@@ -99,7 +100,7 @@ export type PromptPreview = {
 };
 
 export type StreamEvent = {
-    type: 'started' | 'delta' | 'images' | 'sentence_map' | 'topic_map' | 'completed' | 'failed';
+    type: 'started' | 'delta' | 'images' | 'sentence_map' | 'topic_map' | 'word_explanation' | 'completed' | 'failed';
     message?: Message;
     delta?: string;
     error?: Error;
@@ -176,6 +177,21 @@ export type InviteEmail = {
 
 export type InvitationToken = {
     token: string;
+};
+
+export type WordExplanation = {
+    word: string;
+    meaning: string;
+    example: string;
+};
+
+export type DictionaryEntry = {
+    id: string;
+    word: string;
+    meaning: string;
+    example: string;
+    firstAskedAt: string;
+    lastAskedAt: string;
 };
 
 export type GetStatusData = {
@@ -1557,3 +1573,181 @@ export type UpdateAdminSettingsResponses = {
 };
 
 export type UpdateAdminSettingsResponse = UpdateAdminSettingsResponses[keyof UpdateAdminSettingsResponses];
+
+export type ListDictionaryWordsData = {
+    body?: never;
+    path: {
+        familyId: string;
+    };
+    query?: never;
+    url: '/api/v1/families/{familyId}/dictionary';
+};
+
+export type ListDictionaryWordsErrors = {
+    /**
+     * Error
+     */
+    400: Error;
+    /**
+     * Error
+     */
+    401: Error;
+    /**
+     * Error
+     */
+    403: Error;
+    /**
+     * Error
+     */
+    404: Error;
+    /**
+     * Error
+     */
+    409: Error;
+    /**
+     * Error
+     */
+    429: Error;
+    /**
+     * Error
+     */
+    500: Error;
+    /**
+     * Error
+     */
+    502: Error;
+    /**
+     * Error
+     */
+    503: Error;
+};
+
+export type ListDictionaryWordsError = ListDictionaryWordsErrors[keyof ListDictionaryWordsErrors];
+
+export type ListDictionaryWordsResponses = {
+    /**
+     * Success
+     */
+    200: Array<DictionaryEntry>;
+};
+
+export type ListDictionaryWordsResponse = ListDictionaryWordsResponses[keyof ListDictionaryWordsResponses];
+
+export type ClearDictionaryData = {
+    body?: never;
+    path: {
+        familyId: string;
+    };
+    query?: never;
+    url: '/api/v1/families/{familyId}/admin/dictionary';
+};
+
+export type ClearDictionaryErrors = {
+    /**
+     * Error
+     */
+    400: Error;
+    /**
+     * Error
+     */
+    401: Error;
+    /**
+     * Error
+     */
+    403: Error;
+    /**
+     * Error
+     */
+    404: Error;
+    /**
+     * Error
+     */
+    409: Error;
+    /**
+     * Error
+     */
+    429: Error;
+    /**
+     * Error
+     */
+    500: Error;
+    /**
+     * Error
+     */
+    502: Error;
+    /**
+     * Error
+     */
+    503: Error;
+};
+
+export type ClearDictionaryError = ClearDictionaryErrors[keyof ClearDictionaryErrors];
+
+export type ClearDictionaryResponses = {
+    /**
+     * Success
+     */
+    204: void;
+};
+
+export type ClearDictionaryResponse = ClearDictionaryResponses[keyof ClearDictionaryResponses];
+
+export type DeleteDictionaryWordData = {
+    body?: never;
+    path: {
+        familyId: string;
+        entryId: string;
+    };
+    query?: never;
+    url: '/api/v1/families/{familyId}/admin/dictionary/{entryId}';
+};
+
+export type DeleteDictionaryWordErrors = {
+    /**
+     * Error
+     */
+    400: Error;
+    /**
+     * Error
+     */
+    401: Error;
+    /**
+     * Error
+     */
+    403: Error;
+    /**
+     * Error
+     */
+    404: Error;
+    /**
+     * Error
+     */
+    409: Error;
+    /**
+     * Error
+     */
+    429: Error;
+    /**
+     * Error
+     */
+    500: Error;
+    /**
+     * Error
+     */
+    502: Error;
+    /**
+     * Error
+     */
+    503: Error;
+};
+
+export type DeleteDictionaryWordError = DeleteDictionaryWordErrors[keyof DeleteDictionaryWordErrors];
+
+export type DeleteDictionaryWordResponses = {
+    /**
+     * Success
+     */
+    204: void;
+};
+
+export type DeleteDictionaryWordResponse = DeleteDictionaryWordResponses[keyof DeleteDictionaryWordResponses];

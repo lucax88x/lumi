@@ -19,10 +19,11 @@ import (
 
 // GenerationEvent carries application-owned attachments separately from spoken text.
 type GenerationEvent struct {
-	Text        string
-	Images      []api.WordImage
-	SentenceMap *api.SentenceMap
-	TopicMap    *api.TopicMap
+	Text            string
+	Images          []api.WordImage
+	SentenceMap     *api.SentenceMap
+	TopicMap        *api.TopicMap
+	WordExplanation *api.WordExplanation
 }
 
 type Generator interface {
@@ -37,7 +38,7 @@ const imageInstructions = `CAPACITÀ IMMAGINI: puoi mostrare immagini usando lum
 
 func lumiTools(used map[string]bool) responses.ToolUnionParam {
 	tool := responses.ToolUnionParam{OfNamespace: &responses.NamespaceToolParam{
-		Name: "lumi", Description: "Immagini, mappe di frasi e mappe mentali su argomenti scolastici.",
+		Name: "lumi", Description: "Schede di parole, immagini e mappe su argomenti scolastici.",
 		Tools: []responses.NamespaceToolToolUnionParam{{OfFunction: &responses.NamespaceToolToolFunctionParam{
 			Name: "show_images", Description: openai.String("Cerca e mostra fino a tre immagini da Wikipedia, solo su richiesta esplicita dell'utente. Risolvi il soggetto usando la conversazione."), Strict: openai.Bool(true),
 			Parameters: map[string]any{"type": "object", "properties": map[string]any{"word": map[string]any{"type": "string", "description": "Il soggetto in italiano, massimo 80 caratteri", "minLength": 1, "maxLength": 80}}, "required": []string{"word"}, "additionalProperties": false},
@@ -46,10 +47,14 @@ func lumiTools(used map[string]bool) responses.ToolUnionParam {
 	if used["show_images"] {
 		tool.OfNamespace.Tools = nil
 	}
-	if !used["show_sentence_map"] && !used["show_topic_map"] {
-		tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, sentenceMapTool(), topicMapTool())
+	if !contentToolUsed(used) {
+		tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, sentenceMapTool(), topicMapTool(), wordExplanationTool())
 	}
 	return tool
+}
+
+func contentToolUsed(used map[string]bool) bool {
+	return used["show_sentence_map"] || used["show_topic_map"] || used["show_word_explanation"]
 }
 
 func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, history []api.Message, emit func(GenerationEvent) error) error {
@@ -59,7 +64,7 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 	}
 	input := responses.ResponseInputParam{}
 	for _, m := range history {
-		if m.Status != "completed" || (m.Text == "" && m.SentenceMap == nil && m.TopicMap == nil && m.Images == nil) {
+		if m.Status != "completed" || (m.Text == "" && m.SentenceMap == nil && m.TopicMap == nil && m.WordExplanation == nil && m.Images == nil) {
 			continue
 		}
 		text := m.Text
@@ -84,6 +89,13 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 			}
 			text += "\n[Mappa di argomenti già mostrata, dati: " + string(encoded) + "]"
 		}
+		if m.WordExplanation != nil {
+			encoded, err := json.Marshal(m.WordExplanation)
+			if err != nil {
+				return err
+			}
+			text += "\n[Scheda della parola già mostrata, dati: " + string(encoded) + "]"
+		}
 		item := responses.ResponseInputItemParamOfMessage(text, responses.EasyInputMessageRole(m.Role))
 		if m.Role == "assistant" {
 			item.OfMessage.Phase = responses.EasyInputMessagePhaseFinalAnswer
@@ -92,13 +104,14 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 	}
 	used := map[string]bool{}
 	params := responses.ResponseNewParams{
-		Model: settings.Model, Instructions: openai.String(settings.Prompt + "\n\n" + imageInstructions + "\n\n" + sentenceMapInstructions + "\n\n" + topicMapInstructions),
+		Model: settings.Model, Instructions: openai.String(settings.Prompt + "\n\n" + imageInstructions + "\n\n" + sentenceMapInstructions + "\n\n" + topicMapInstructions + "\n\n" + wordExplanationInstructions),
 		Input: responses.ResponseNewParamsInputUnion{OfInputItemList: input}, Store: openai.Bool(false),
 		Tools: []responses.ToolUnionParam{lumiTools(used)}, ParallelToolCalls: openai.Bool(false),
 		Include: []responses.ResponseIncludable{responses.ResponseIncludableReasoningEncryptedContent},
 	}
 	chars := 0
-	// At most one image search and one map, followed by a final text response.
+	hasWordExplanation := false
+	// At most one image search and one content card, followed by a final response.
 	for round := 0; round < 3; round++ {
 		if round > 0 && chars > 0 {
 			if err := emit(GenerationEvent{Text: "\n\n"}); err != nil {
@@ -133,7 +146,7 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 			input = append(input, next)
 		}
 		if len(calls) == 0 {
-			if chars == before {
+			if chars == before && !hasWordExplanation {
 				return errors.New("Non ho ricevuto una risposta completa. Riprova tra poco.")
 			}
 			return nil
@@ -144,14 +157,16 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 		for _, call := range calls {
 			output := imageToolResult{Images: []api.WordImage{}}
 			switch {
-			case call.Namespace != "lumi" || (call.Name != "show_images" && call.Name != "show_sentence_map" && call.Name != "show_topic_map"):
+			case call.Namespace != "lumi" || (call.Name != "show_images" && call.Name != "show_sentence_map" && call.Name != "show_topic_map" && call.Name != "show_word_explanation"):
 				output.Error = "Strumento non disponibile."
-			case used[call.Name] || (call.Name != "show_images" && (used["show_sentence_map"] || used["show_topic_map"])):
-				output.Error = "Sono disponibili una mappa e una ricerca di immagini per turno."
+			case used[call.Name] || (call.Name != "show_images" && contentToolUsed(used)):
+				output.Error = "Sono disponibili una scheda o una mappa e una ricerca di immagini per turno."
 			default:
 				used[call.Name] = true
 				if call.Name == "show_images" {
 					output = g.executeImageTool(ctx, call.Arguments)
+				} else if call.Name == "show_word_explanation" {
+					output.WordExplanation, output.Error = executeWordExplanationTool(call.Arguments, history)
 				} else if call.Name == "show_topic_map" {
 					output.TopicMap, output.Error = executeTopicMapTool(call.Arguments)
 				} else {
@@ -176,6 +191,12 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 					return err
 				}
 			}
+			if output.WordExplanation != nil {
+				if err := emit(GenerationEvent{WordExplanation: output.WordExplanation}); err != nil {
+					return err
+				}
+				hasWordExplanation = true
+			}
 			encoded, err := json.Marshal(output)
 			if err != nil {
 				return err
@@ -185,7 +206,7 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 			input = append(input, next)
 		}
 		params.Input.OfInputItemList = input
-		if round == 1 || (used["show_images"] && (used["show_sentence_map"] || used["show_topic_map"])) {
+		if round == 1 || (used["show_images"] && contentToolUsed(used)) {
 			params.ToolChoice.OfToolChoiceMode = openai.Opt(responses.ToolChoiceOptionsNone)
 		} else {
 			params.Tools = []responses.ToolUnionParam{lumiTools(used)}
@@ -195,10 +216,11 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 }
 
 type imageToolResult struct {
-	Images      []api.WordImage  `json:"images"`
-	Error       string           `json:"error,omitempty"`
-	SentenceMap *api.SentenceMap `json:"sentenceMap,omitempty"`
-	TopicMap    *api.TopicMap    `json:"topicMap,omitempty"`
+	Images          []api.WordImage      `json:"images"`
+	Error           string               `json:"error,omitempty"`
+	SentenceMap     *api.SentenceMap     `json:"sentenceMap,omitempty"`
+	TopicMap        *api.TopicMap        `json:"topicMap,omitempty"`
+	WordExplanation *api.WordExplanation `json:"wordExplanation,omitempty"`
 }
 
 func (g *OpenAIGenerator) executeImageTool(ctx context.Context, arguments string) imageToolResult {
@@ -382,7 +404,10 @@ loop:
 			if event.TopicMap != nil {
 				m.TopicMap = event.TopicMap
 			}
-			if persist && (event.Images != nil || event.SentenceMap != nil || event.TopicMap != nil || time.Since(checkpoint) > time.Second) {
+			if event.WordExplanation != nil {
+				m.WordExplanation = event.WordExplanation
+			}
+			if persist && (event.WordExplanation != nil || event.Images != nil || event.SentenceMap != nil || event.TopicMap != nil || time.Since(checkpoint) > time.Second) {
 				if err := s.store.Finish(m); err != nil {
 					failure = errors.New("Non riesco a salvare la risposta.")
 					break loop
@@ -398,6 +423,9 @@ loop:
 			}
 			if event.TopicMap != nil {
 				out = api.StreamEvent{Type: api.StreamEventTypeTopicMap, Message: &m}
+			}
+			if event.WordExplanation != nil {
+				out = api.StreamEvent{Type: api.StreamEventTypeWordExplanation, Message: &m}
 			}
 			if err := streamWrite(w, out); err != nil {
 				failure = err
@@ -421,7 +449,7 @@ loop:
 	cancel()
 	if failure == nil {
 		m.Status = "completed"
-	} else if m.Text != "" || m.SentenceMap != nil || m.TopicMap != nil || (m.Images != nil && len(*m.Images) > 0) {
+	} else if m.Text != "" || m.WordExplanation != nil || m.SentenceMap != nil || m.TopicMap != nil || (m.Images != nil && len(*m.Images) > 0) {
 		m.Status = "interrupted"
 	} else {
 		m.Status = "failed"
@@ -430,6 +458,9 @@ loop:
 		if err := s.store.Finish(m); err != nil {
 			failure = errors.New("Non riesco a salvare la risposta.")
 			m.Status = "interrupted"
+			// A dictionary failure rolls back completion; preserve an interrupted
+			// checkpoint so reloading does not leave the conversation busy.
+			_ = s.store.Finish(m)
 		}
 	}
 	if failure != nil {

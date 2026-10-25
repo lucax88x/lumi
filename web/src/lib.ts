@@ -1,5 +1,5 @@
 import { client } from './api/client.gen';
-import type { StreamEvent } from './api/types.gen';
+import type { Message, StreamEvent } from './api/types.gen';
 
 let csrf = '';
 export function setCSRF(value: string) { csrf = value; }
@@ -39,7 +39,7 @@ export async function readStream(path: string, body: unknown, onEvent: (event: S
         const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
         if (!data) continue;
         const event = JSON.parse(data) as StreamEvent;
-        if (!['started', 'delta', 'images', 'sentence_map', 'topic_map', 'completed', 'failed'].includes(event.type)) throw new Error('Evento del server non valido.');
+        if (!['started', 'delta', 'images', 'sentence_map', 'topic_map', 'word_explanation', 'completed', 'failed'].includes(event.type)) throw new Error('Evento del server non valido.');
         onEvent(event);
         if (event.type === 'completed' || event.type === 'failed') terminal = true;
       }
@@ -52,4 +52,9 @@ export async function readStream(path: string, body: unknown, onEvent: (event: S
 
 export function shortDate(value: string) {
   return new Intl.DateTimeFormat('it', { day: 'numeric', month: 'short' }).format(new Date(value));
+}
+
+export function messageSpeechText(message: Message): string {
+  const word = message.wordExplanation;
+  return word ? [message.text, `${word.word}. ${word.meaning}`, word.example].filter(Boolean).join('\n') : message.text;
 }

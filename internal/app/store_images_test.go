@@ -96,5 +96,9 @@ func TestImageMigrationPreservesOldMessages(t *testing.T) {
 	if len(detail.Messages) != 1 || detail.Messages[0].Text != "Cos’è una roccia?" || detail.Messages[0].Images == nil || len(*detail.Messages[0].Images) != 0 {
 		t.Fatalf("migration damaged history: %+v", detail)
 	}
+	entries, err := store.Dictionary()
+	if err != nil || len(entries) != 0 || detail.Messages[0].WordExplanation != nil {
+		t.Fatalf("migration should not backfill legacy word lookups: entries=%+v error=%v", entries, err)
+	}
 
 }

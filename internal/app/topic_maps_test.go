@@ -93,7 +93,7 @@ func TestTopicMapToolStreamsAndPreservesHistory(t *testing.T) {
 				t.Fatal("lost previous map context")
 			}
 			tools := body["tools"].([]any)[0].(map[string]any)["tools"].([]any)
-			if len(tools) != 3 || tools[2].(map[string]any)["name"] != "show_topic_map" || tools[2].(map[string]any)["strict"] != true {
+			if len(tools) != 4 || tools[2].(map[string]any)["name"] != "show_topic_map" || tools[2].(map[string]any)["strict"] != true {
 				t.Fatal("missing strict topic tool")
 			}
 			call := toolCall("map", topicArguments(t, m))

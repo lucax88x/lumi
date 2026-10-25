@@ -1,4 +1,27 @@
-:root { --pf-v5-global--primary-color--100: #79599c; --pf-v5-global--primary-color--200: #604878; --pf-v5-global--FontFamily--text: 'Trebuchet MS', 'Segoe UI', sans-serif; --pf-v5-global--FontFamily--heading: 'Trebuchet MS', 'Segoe UI', sans-serif; }
+:root {
+  color-scheme: light;
+  --keycloak-card-top-color: #c7afe2;
+  --pf-v5-global--primary-color--100: #79599c;
+  --pf-v5-global--primary-color--200: #604878;
+  --pf-v5-global--primary-color--dark-100: #79599c;
+  --pf-v5-global--primary-color--dark-200: #604878;
+  --pf-v5-global--active-color--100: #79599c;
+  --pf-v5-global--link--Color: #79599c;
+  --pf-v5-global--link--Color--hover: #604878;
+  --pf-v5-global--link--Color--dark: #79599c;
+  --pf-v5-global--link--Color--dark--hover: #604878;
+  --pf-v5-global--Color--dark-100: #3b3444;
+  --pf-v5-global--Color--dark-200: #796f81;
+  --pf-v5-global--BackgroundColor--100: #fffdfb;
+  --pf-v5-global--BackgroundColor--200: #f9f7f2;
+  --pf-v5-global--BackgroundColor--light-100: #fffdfb;
+  --pf-v5-global--BorderColor--100: #e8e0ed;
+  --pf-v5-global--BorderColor--200: #9778b8;
+  --pf-v5-global--BorderColor--300: #d6c6e7;
+  --pf-v5-global--BorderColor--dark-100: #e8e0ed;
+  --pf-v5-global--FontFamily--text: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  --pf-v5-global--FontFamily--heading: 'Trebuchet MS', 'Segoe UI', sans-serif;
+}
 html, body, .login-pf, .login-pf body { min-height: 100%; background: #f9f7f2 !important; color: #3b3444; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; }
 .pf-v5-c-login { background: radial-gradient(ellipse at 20% 15%, #eee7f6, transparent 55%), #f9f7f2; }
 .pf-v5-c-login__container { max-width: 500px; margin: 30px auto; }
@@ -9,8 +32,17 @@ html, body, .login-pf, .login-pf body { min-height: 100%; background: #f9f7f2 !i
 .pf-v5-c-login__main-header { text-align: center; padding-top: 30px; }
 .pf-v5-c-title { color: #604878; font-size: 24px; line-height: 1.4; }
 .pf-v5-c-button { border-radius: 12px; min-height: 46px; font-weight: 600; }
-.pf-v5-c-button.pf-m-primary { background: #79599c; color: white; }
-.pf-v5-c-button.pf-m-primary:hover { background: #604878; }
+.pf-v5-c-button.pf-m-primary { --pf-v5-c-button--m-primary--BackgroundColor: #79599c; }
+.pf-v5-c-button.pf-m-control {
+  --pf-v5-c-button--m-control--BackgroundColor: #eee7f6;
+  --pf-v5-c-button--m-control--Color: #604878;
+  --pf-v5-c-button--m-control--hover--BackgroundColor: #e8def3;
+  --pf-v5-c-button--m-control--hover--Color: #604878;
+  --pf-v5-c-button--m-control--focus--BackgroundColor: #e8def3;
+  --pf-v5-c-button--m-control--focus--Color: #604878;
+  --pf-v5-c-button--m-control--active--BackgroundColor: #e8def3;
+  --pf-v5-c-button--m-control--active--Color: #604878;
+}
 .pf-v5-c-form-control { border-radius: 10px; background: #fffdfb; min-height: 46px; }
 a { color: #79599c; }
 a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #9778b8 !important; outline-offset: 3px; }
@@ -19,11 +51,20 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 .pf-v5-c-login__main-footer-band { border-top: 0; }
 .pf-v5-c-login__main-footer-band-item { padding-top: 16px; padding-bottom: 16px; }
 .pf-v5-c-login__main-footer:empty { display: none; }
-#social-google { border-radius: 12px; background: #fffdfb; border: 1px solid #d6c6e7; min-height: 48px; }
+#kc-social-providers .pf-v5-c-button.pf-m-tertiary {
+  --pf-v5-c-button--after--BorderRadius: 12px;
+  --pf-v5-c-button--m-tertiary--Color: #604878;
+  --pf-v5-c-button--m-tertiary--BackgroundColor: #fffdfb;
+  --pf-v5-c-button--m-tertiary--after--BorderColor: #d6c6e7;
+  min-height: 48px;
+}
+#kc-social-providers .pf-v5-c-button.pf-m-tertiary:is(:hover, :focus, :active):not([aria-disabled='true']) {
+  --pf-v5-c-button--m-tertiary--BackgroundColor: #eee7f6;
+  --pf-v5-c-button--after--BorderColor: #9778b8;
+}
+.kc-login-divider { color: #796f81; }
+.kc-login-divider::before,
+.kc-login-divider::after { border-bottom-color: #e8e0ed; }
 @media(max-width: 600px) { .pf-v5-c-login__container { margin: 16px; width: auto; }.pf-v5-c-login__header::before { width: 100px; height: 100px; }.pf-v5-c-login__main { border-radius: 18px; } }
 #kc-header-wrapper { color: #79599c !important; text-transform: none !important; }
 body, .pf-v5-c-title, .pf-v5-c-button, input, label { font-family: 'Trebuchet MS', 'Segoe UI', sans-serif !important; }
-.pf-v5-c-login__main { --pf-v5-c-login__main--BorderTopColor: #c7afe2; --pf-v5-c-login__main--BorderTopWidth: 0; }
-.pf-v5-c-login__main::before { background-color: #c7afe2 !important; }
-.pf-v5-c-login__main::before { border-top-color: #d6c6e7 !important; }
-.pf-v5-c-form-control::after { border-bottom-color: #9778b8 !important; }
