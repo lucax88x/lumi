@@ -15,6 +15,7 @@ import { WordImages } from './WordImages';
 import { SentenceMap } from './SentenceMap';
 import { TopicMap } from './TopicMap';
 import { WordExplanation } from './WordExplanation';
+import { LoadingSkeleton } from './LoadingSkeleton';
 
 export function AdminPage() {
   const familyId = familyID();
@@ -35,10 +36,11 @@ function AdminPanel() {
     <Tabs.Root defaultValue="settings" className="admin-tabs"><Tabs.List className="tab-list"><Tabs.Tab value="settings"><Settings2 size={17}/>Impostazioni</Tabs.Tab><Tabs.Tab value="prompt"><FileText size={17}/>Come insegna</Tabs.Tab><Tabs.Tab value="history"><Eye size={17}/>Le sue scoperte</Tabs.Tab></Tabs.List>
       <Tabs.Panel value="settings">
         <section className="admin-card"><h2>Un piano condiviso</h2><p>Il collegamento ChatGPT e il modello sono gestiti dall’amministratore per tutte le famiglie.</p>{session.admin && <Link className="text-button" to="/admin" search={{ family: familyId }}>Apri Admin</Link>}</section>
+        {settings.isPending && <section className="admin-card"><LoadingSkeleton label="Caricamento delle impostazioni"/></section>}
         {settings.data && <Preferences initial={settings.data}/>}
         {settings.isError && <p className="error-text">{errorMessage(settings.error)}</p>}
       </Tabs.Panel>
-      <Tabs.Panel value="prompt">{settings.data && <PromptEditor initial={settings.data}/>}</Tabs.Panel>
+      <Tabs.Panel value="prompt">{settings.isPending && <section className="admin-card"><LoadingSkeleton label="Caricamento delle istruzioni" variant="messages" rows={1}/></section>}{settings.data && <PromptEditor initial={settings.data}/>}</Tabs.Panel>
       <Tabs.Panel value="history"><HistoryPanel/><DictionaryPanel/></Tabs.Panel>
     </Tabs.Root>
   </>;
@@ -83,9 +85,10 @@ function HistoryPanel() {
   const qc = useQueryClient(); const chats = useQuery(listConversationsOptions({ path: { familyId: familyId } })); const [selected, setSelected] = useState<string | null>(null); const [remove, setRemove] = useState<string | null>(null);
   const detail = useQuery({ ...getConversationOptions({ path: { familyId: familyId, conversationId: selected ?? '' } }), enabled: Boolean(selected) });
   return <section className="admin-card"><div className="section-heading"><div><h2>Le sue scoperte</h2><p>Rileggi le conversazioni e gestisci ciò che viene conservato.</p></div><button className="text-button danger-text" disabled={!chats.data?.length} onClick={() => setRemove('all')}><Trash2 size={16}/>Elimina tutto</button></div>
+    {chats.isPending && <LoadingSkeleton label="Caricamento delle conversazioni"/>}
     {chats.data?.length === 0 && <div className="empty-state"><FileText size={30}/><p>Le prime domande compariranno qui.</p></div>}{chats.isError && <p className="error-text">{errorMessage(chats.error)}</p>}
     <div className="history-table">{chats.data?.map(c => <div className="history-row" key={c.id}><button onClick={() => setSelected(c.id)}><span>{c.title}</span><small>{shortDate(c.createdAt)}</small></button><button className="icon-button danger-text" aria-label={`Elimina ${c.title}`} onClick={() => setRemove(c.id)}><Trash2 size={17}/></button></div>)}</div>
-    <Dialog.Root open={Boolean(selected)} onOpenChange={open => { if (!open) setSelected(null); }}><Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="dialog-panel history-dialog"><Dialog.Close className="icon-button close-dialog" aria-label="Chiudi conversazione"><X size={20}/></Dialog.Close><Dialog.Title>{detail.data?.conversation.title ?? 'Conversazione'}</Dialog.Title><Dialog.Description>La cronologia della domanda.</Dialog.Description>{detail.isPending && <p>Caricamento…</p>}{detail.isError && <p className="error-text">{errorMessage(detail.error)}</p>}{detail.data?.messages.map(m => <article key={m.id} className={`message ${m.role}`}><strong>{m.role === 'user' ? 'Domanda' : 'Lumi'}</strong><p>{m.text}</p><SentenceMap map={m.sentenceMap}/><TopicMap map={m.topicMap}/><WordExplanation explanation={m.wordExplanation}/><WordImages images={m.images}/>{m.status !== 'completed' && <small>{m.status === 'streaming' ? 'In corso' : 'Risposta non completata'}</small>}</article>)}</Dialog.Popup></Dialog.Portal></Dialog.Root>
+    <Dialog.Root open={Boolean(selected)} onOpenChange={open => { if (!open) setSelected(null); }}><Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="dialog-panel history-dialog"><Dialog.Close className="icon-button close-dialog" aria-label="Chiudi conversazione"><X size={20}/></Dialog.Close><Dialog.Title>{detail.data?.conversation.title ?? 'Conversazione'}</Dialog.Title><Dialog.Description>La cronologia della domanda.</Dialog.Description>{detail.isPending && <LoadingSkeleton label="Caricamento della conversazione" variant="messages" rows={2}/>}{detail.isError && <p className="error-text">{errorMessage(detail.error)}</p>}{detail.data?.messages.map(m => <article key={m.id} className={`message ${m.role}`}><strong>{m.role === 'user' ? 'Domanda' : 'Lumi'}</strong><p>{m.text}</p><SentenceMap map={m.sentenceMap}/><TopicMap map={m.topicMap}/><WordExplanation explanation={m.wordExplanation}/><WordImages images={m.images}/>{m.status !== 'completed' && <small>{m.status === 'streaming' ? 'In corso' : 'Risposta non completata'}</small>}</article>)}</Dialog.Popup></Dialog.Portal></Dialog.Root>
     <Confirm open={remove !== null} onClose={() => setRemove(null)} title={remove === 'all' ? 'Eliminare tutte le scoperte?' : 'Eliminare questa conversazione?'} description="La conversazione e i suoi messaggi verranno eliminati dal server. Le parole nel dizionario restano disponibili. Questa operazione non si può annullare." action="Elimina" onConfirm={async () => { if (remove === 'all') await clearConversations({ path: { familyId: familyId }, throwOnError: true }); else if (remove) await deleteConversation({ path: { familyId: familyId, conversationId: remove }, throwOnError: true }); qc.removeQueries({ predicate: q => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'object' && q.queryKey[0]?._id === 'getConversation' }); await qc.invalidateQueries({ queryKey: listConversationsQueryKey({ path: { familyId: familyId } }) }); }}/>
   </section>;
 }
@@ -103,7 +106,7 @@ function DictionaryPanel() {
   const [remove, setRemove] = useState<{ id: string; word: string } | 'all' | null>(null);
   return <section className="admin-card">
     <div className="section-heading"><div><h2>Il dizionario</h2><p>Le parole restano qui anche quando elimini le conversazioni.</p></div><button className="text-button danger-text" disabled={!words.data?.length} onClick={() => setRemove('all')}><Trash2 size={16}/>Svuota il dizionario</button></div>
-    {words.isPending && <p role="status">Caricamento delle parole…</p>}
+    {words.isPending && <LoadingSkeleton label="Caricamento delle parole"/>}
     {words.isError && <p role="alert" className="error-text">{errorMessage(words.error)} <button className="text-button" onClick={() => void words.refetch()}>Riprova</button></p>}
     {words.data?.length === 0 && <p>Non ci sono ancora parole salvate.</p>}
     <div className="history-table">{words.data?.map(word => <div className="history-row" key={word.id}><span>{word.word}</span><button className="icon-button danger-text" aria-label={`Elimina la parola ${word.word}`} onClick={() => setRemove({ id: word.id, word: word.word })}><Trash2 size={17}/></button></div>)}</div>

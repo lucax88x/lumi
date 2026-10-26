@@ -8,6 +8,7 @@ import { familyID } from './portal-state';
 import { errorMessage, shortDate } from './lib';
 import { useSpeech } from './speech';
 import { WordExplanation } from './WordExplanation';
+import { LoadingSkeleton } from './LoadingSkeleton';
 
 export function DictionaryPage() {
   const familyId = familyID();
@@ -16,7 +17,7 @@ export function DictionaryPage() {
   return <div className="child-page dictionary-page">
     <Link to="/famiglie/$familyId" params={{ familyId }} className="back-link"><ArrowLeft size={16}/>Il mio angolino</Link>
     <div className="dictionary-heading"><BookOpen size={30} aria-hidden="true"/><div><h1>Il mio dizionario</h1><p>Le parole che hai scoperto, da ritrovare e ripassare.</p></div></div>
-    {words.isPending && <p role="status">Cerco le tue parole…</p>}
+    {words.isPending && <LoadingSkeleton variant="dictionary" label="Caricamento del dizionario" rows={4}/>}
     {words.isError && <p className="notice error-notice" role="alert">{errorMessage(words.error)} <button className="text-button" onClick={() => void words.refetch()}>Riprova</button></p>}
     {words.data && <Dictionary words={words.data} speechRate={status.data?.speechRate}/>}
   </div>;

@@ -1,11 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider, type Query } from '@tanstack/react-query';
-import { createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router';
-import { AppShell, ChatPage } from './pages';
+import { createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from '@tanstack/react-router';
+import { ChatPage } from './pages';
 import { AdminPage } from './Admin';
 import { DictionaryPage } from './Dictionary';
 import { GlobalAdminPage } from './GlobalAdmin';
+import { AdminFamiliesPage } from './AdminFamilies';
 import './lib';
 import { PortalRoot, FamilyHub, FamilyMembers, InvitationPage } from './Portal';
 import { familyID, useSession } from './portal-state';
@@ -20,16 +21,16 @@ function FamilyLayout() {
     const filter = { predicate: (query: Query) => (query.queryKey[0] as { path?: { familyId?: string } } | undefined)?.path?.familyId === id || (query.queryKey[0] === 'pending-question' && query.queryKey[1] === id) };
     return () => { void qc.cancelQueries(filter); qc.removeQueries(filter); };
   }, [id, qc]);
-  if (!session.families.some(f => f.id === id)) return <main className="portal-card"><h1>Famiglia non disponibile</h1><a href="/">Torna alle tue famiglie</a></main>;
-  if (session.families.find(f => f.id === id)?.accessEnabled === false) return <main className="portal-card"><h1>Accesso sospeso</h1><p>L’accesso a questa famiglia è sospeso. Contatta un amministratore.</p><a href="/">Torna alle tue famiglie</a></main>;
-  return <AppShell key={id}/>;
+  if (!session.families.some(f => f.id === id)) return <section className="portal-card"><h1>Famiglia non disponibile</h1><a href="/">Torna alle tue famiglie</a></section>;
+  if (session.families.find(f => f.id === id)?.accessEnabled === false) return <section className="portal-card"><h1>Accesso sospeso</h1><p>L’accesso a questa famiglia è sospeso. Contatta un amministratore.</p><a href="/">Torna alle tue famiglie</a></section>;
+  return <Outlet key={id}/>;
 }
 function GlobalAdminLayout() {
   const session = useSession();
   const { family: requestedFamily } = globalAdmin.useSearch();
   const available = session.families.filter(f => f.accessEnabled !== false);
   const id = available.find(f => f.id === requestedFamily)?.id ?? available[0]?.id ?? '';
-  return <AppShell familyId={id} checkConnection={false}><GlobalAdminPage familyId={id}/></AppShell>;
+  return <GlobalAdminPage familyId={id}/>;
 }
 const root = createRootRoute({ component: PortalRoot, notFoundComponent: () => <div className="empty-state"><h1>Questa pagina si è nascosta!</h1><a href="/">Torniamo da Lumi</a></div> });
 const home = createRoute({ getParentRoute: () => root, path: '/', component: FamilyHub });
@@ -40,13 +41,19 @@ const globalAdmin = createRoute({
   validateSearch: (search: Record<string, unknown>): { family?: string } => typeof search.family === 'string' ? { family: search.family } : {},
   component: GlobalAdminLayout,
 });
+const adminFamilies = createRoute({
+  getParentRoute: () => root,
+  path: '/admin/famiglie',
+  validateSearch: (search: Record<string, unknown>): { family?: string } => typeof search.family === 'string' ? { family: search.family } : {},
+  component: AdminFamiliesPage,
+});
 const family = createRoute({ getParentRoute: () => root, path: '/famiglie/$familyId', component: FamilyLayout });
 const familyHome = createRoute({ getParentRoute: () => family, path: '/', component: () => <ChatPage/> });
 const chat = createRoute({ getParentRoute: () => family, path: '/domande/$id', component: () => { const { id } = chat.useParams(); return <ChatPage key={id} id={id}/>; } });
 const dictionary = createRoute({ getParentRoute: () => family, path: '/dizionario', component: DictionaryPage });
 const admin = createRoute({ getParentRoute: () => family, path: '/genitore', component: AdminPage });
 const members = createRoute({ getParentRoute: () => family, path: '/membri', component: FamilyMembers });
-const router = createRouter({ routeTree: root.addChildren([home, invitation, globalAdmin, family.addChildren([familyHome, chat, dictionary, admin, members])]), defaultPreload: 'intent' });
+const router = createRouter({ routeTree: root.addChildren([home, invitation, globalAdmin, adminFamilies, family.addChildren([familyHome, chat, dictionary, admin, members])]), defaultPreload: 'intent' });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }
 export const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 15_000, refetchOnWindowFocus: true }, mutations: { retry: false } } });
 

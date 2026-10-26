@@ -8,6 +8,8 @@ import { AccountContext, SessionContext, familyID, useSession } from './portal-s
 import { errorMessage, setCSRF } from './lib';
 import { Avatar, type Mood } from './Avatar';
 import type { Family } from './api/types.gen';
+import { LoadingSkeleton } from './LoadingSkeleton';
+import { AppShell } from './pages';
 
 function login() { window.location.assign(`/auth/login?return=${encodeURIComponent(window.location.pathname + window.location.hash)}`); }
 
@@ -27,6 +29,7 @@ function PortalStatus({ title, description, children, footer, mood = 'idle', loa
 export function PortalRoot() {
   const qc = useQueryClient();
   const pathname = useRouterState({ select: s => s.location.pathname });
+  const requestedFamily = useRouterState({ select: s => s.location.search.family });
   const [expired, setExpired] = useState(false); const [error, setError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
   const session = useQuery({ ...getSessionOptions(), enabled: !expired && !signingOut, retry: false, staleTime: 0, refetchInterval: 60_000 });
@@ -59,10 +62,12 @@ export function PortalRoot() {
   if (expired) return <PortalStatus title="A presto!" description="La sessione è terminata. Accedi per tornare nel tuo angolino.">{error && <p className="notice error-notice" role="alert">{error}</p>}<button className="primary-button" onClick={login}>Accedi a Lumi</button></PortalStatus>;
   if (session.isPending) return <PortalStatus title="Controllo l’accesso…" description="Un attimo, il tuo angolino ti aspetta." mood="thinking" loading/>;
   if (!session.data) return <PortalStatus title="Accedi a Lumi" description={errorMessage(session.error)}><button className="primary-button" onClick={login}>Accedi a Lumi</button><button className="text-button" onClick={() => void session.refetch()}>Riprova</button></PortalStatus>;
+  const available = session.data.families.filter(f => f.accessEnabled !== false);
+  const shellFamilyId = inFamily ? familyID() : (pathname === '/admin' || pathname.startsWith('/admin/')) ? (available.find(f => f.id === requestedFamily) ?? available[0])?.id ?? '' : '';
   const account = <footer className="portal-account"><span>{session.data.email}</span><button className="text-button" disabled={signingOut} onClick={() => void signout()}>Esci</button></footer>;
   return <SessionContext.Provider value={session.data}>
     <AccountContext.Provider value={{ signout, signingOut }}>
-      {!session.data.portalAccess ? <PortalStatus title="Il tuo angolino ti aspetta" description="Accesso in attesa di approvazione. Un amministratore deve abilitare il tuo account prima di entrare." footer={account}><button className="primary-button" disabled={session.isFetching} onClick={login}>Controlla l’accesso</button></PortalStatus> : <><Outlet/>{!inFamily && pathname !== '/admin' && account}</>}
+      {!session.data.portalAccess ? <PortalStatus title="Il tuo angolino ti aspetta" description="Accesso in attesa di approvazione. Un amministratore deve abilitare il tuo account prima di entrare." footer={account}><button className="primary-button" disabled={session.isFetching} onClick={login}>Controlla l’accesso</button></PortalStatus> : <AppShell familyId={shellFamilyId} checkConnection={Boolean(inFamily)}><Outlet/></AppShell>}
     </AccountContext.Provider>
   </SessionContext.Provider>;
 }
@@ -74,7 +79,7 @@ export function FamilyHub() {
     try { const { data } = await createFamily({ body: { name }, throwOnError: true }); await qc.invalidateQueries({ queryKey: getSessionQueryKey() }); await navigate({ to: '/famiglie/$familyId', params: { familyId: data.id } }); }
     catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
-  return <main className="portal-card"><img src="/lumi.svg" alt="Lumi"/><h1>Le tue famiglie</h1>{session.admin && <Link className="soft-button" to="/admin">Admin</Link>}<p>Ogni famiglia ha le proprie scoperte. Lumi usa un unico piano condiviso.</p><div className="family-list">{session.families.map(f => f.accessEnabled === false ? <div className="soft-button suspended-family" key={f.id}>{f.name}<small>Accesso sospeso</small></div> : <Link className="soft-button" key={f.id} to="/famiglie/$familyId" params={{ familyId: f.id }}>{f.name}<small>{f.role === 'parent' ? 'Genitore' : 'Membro'}</small></Link>)}</div><form onSubmit={create}><label htmlFor="family-name">Crea una famiglia</label><input id="family-name" value={name} onChange={e => setName(e.target.value)} maxLength={80} required placeholder="Il nome della famiglia"/><button className="primary-button" disabled={busy || !name.trim()}>Crea famiglia</button></form>{error && <p role="alert">{error}</p>}</main>;
+  return <section className="portal-card"><img src="/lumi.svg" alt="Lumi"/><h1>Le tue famiglie</h1><p>Ogni famiglia ha le proprie scoperte. Lumi usa un unico piano condiviso.</p><div className="family-list">{session.families.map(f => f.accessEnabled === false ? <div className="soft-button suspended-family" key={f.id}>{f.name}<small>Accesso sospeso</small></div> : <Link className="soft-button" key={f.id} to="/famiglie/$familyId" params={{ familyId: f.id }}>{f.name}<small>{f.role === 'parent' ? 'Genitore' : 'Membro'}</small></Link>)}</div><form onSubmit={create}><label htmlFor="family-name">Crea una famiglia</label><input id="family-name" value={name} onChange={e => setName(e.target.value)} maxLength={80} required placeholder="Il nome della famiglia"/><button className="primary-button" disabled={busy || !name.trim()}>Crea famiglia</button></form>{error && <p role="alert">{error}</p>}</section>;
 }
 export function InvitationPage() {
   const [token] = useState(() => window.location.hash.slice(1)); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
@@ -84,7 +89,7 @@ export function InvitationPage() {
     try { const { data } = await acceptInvitation({ body: { token }, throwOnError: true }); window.history.replaceState(null, '', '/invito'); await qc.invalidateQueries({ queryKey: getSessionQueryKey() }); await navigate({ to: '/famiglie/$familyId', params: { familyId: data.id } }); }
     catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
-  return <main className="portal-card"><h1>Un invito per te</h1><p>Entra nella famiglia con l’indirizzo email verificato a cui è destinato l’invito.</p><button className="primary-button" disabled={busy || !token} onClick={() => void accept()}>Accetta invito</button>{!token && <p>Questo invito non è completo.</p>}{error && <p role="alert">{error}</p>}</main>;
+  return <section className="portal-card"><h1>Un invito per te</h1><p>Entra nella famiglia con l’indirizzo email verificato a cui è destinato l’invito.</p><button className="primary-button" disabled={busy || !token} onClick={() => void accept()}>Accetta invito</button>{!token && <p>Questo invito non è completo.</p>}{error && <p role="alert">{error}</p>}</section>;
 }
 export function FamilyMembers() {
   const session = useSession(); const family = session.families.find(f => f.id === familyID());
@@ -110,7 +115,7 @@ export function FamilyAccessManager({ family, variant = 'embedded' }: { family: 
     {error && <p className="notice error-notice" role="alert">{error}</p>}
     <section className={page ? 'admin-card' : undefined}>
       <div className={page ? 'section-heading' : undefined}>{page && <span className="section-icon lilac"><UsersRound size={22}/></span>}<div><Heading>I membri</Heading>{page && <p>Scegli il ruolo di ogni persona e gestisci gli accessi alla famiglia.</p>}</div></div>
-      {members.isPending && <p role="status">Carico i membri…</p>}
+      {members.isPending && <LoadingSkeleton label="Caricamento dei membri" rows={2}/>}
       {members.isError && <p role="alert">{errorMessage(members.error)}</p>}
       {members.data?.map(m => <div className="member-row" key={m.userId}>
         <span>{m.email}</span>
@@ -129,6 +134,7 @@ export function FamilyAccessManager({ family, variant = 'embedded' }: { family: 
     </section>
     <section className={page ? 'admin-card' : undefined}>
       <div className={page ? 'section-heading' : undefined}>{page && <span className="section-icon mint"><Mail size={22}/></span>}<div><Heading>Inviti in attesa</Heading>{page && <p>Controlla gli inviti ancora validi e revoca quelli che non servono più.</p>}</div></div>
+      {invitations.isPending && <LoadingSkeleton label="Caricamento degli inviti" rows={2}/>}
       {invitations.data?.length === 0 && <p>Nessun invito in attesa.</p>}
       {invitations.isError && <p role="alert">{errorMessage(invitations.error)}</p>}
       {invitations.data?.map(i => <div className="member-row" key={i.id}><span>{i.email}<small>Scade il {new Date(i.expiresAt).toLocaleDateString('it')}</small></span><button className="text-button" disabled={busy} onClick={() => void run(async () => { await revokeInvitation({ path: { ...path, invitationId: i.id }, throwOnError: true }); setUrl(''); })}>Revoca</button></div>)}

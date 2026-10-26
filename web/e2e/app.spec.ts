@@ -285,8 +285,9 @@ test('global Admin connects ChatGPT and family parents keep teaching preferences
   const globalRequests: string[] = [];
   page.on('request', request => { if (new URL(request.url()).pathname.includes('/connection')) globalRequests.push(new URL(request.url()).pathname); });
   await expect(page.getByText('parent@example.test')).toBeVisible();
-  await page.screenshot({ path: `test-results/global-admin-${testInfo.project.name}.png`, fullPage: true });
-  await page.getByRole('button', { name: 'Continue with ChatGPT' }).click();
+  await expect(page.getByRole('button', { name: 'Ricollega ChatGPT', exact: true })).toBeEnabled();
+  await page.screenshot({ path: `test-results/global-admin-${testInfo.project.name}.png`, fullPage: true, animations: 'disabled' });
+  await page.getByRole('button', { name: /(?:Collega|Ricollega) ChatGPT/ }).click();
   await expect(page.getByRole('link', { name: 'Apri il consenso ChatGPT' })).toBeVisible();
   await page.getByLabel('URL finale di ritorno').fill('http://127.0.0.1:1455/auth/callback?code=test&state=test');
   await page.getByRole('button', { name: 'Completa collegamento', exact: true }).click();
@@ -298,7 +299,7 @@ test('global Admin connects ChatGPT and family parents keep teaching preferences
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
   await page.goto('/famiglie/test/genitore');
-  await expect(page.getByRole('button', { name: 'Continue with ChatGPT' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /(?:Collega|Ricollega) ChatGPT/ })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Come insegna' }).click();
   await page.getByLabel('Istruzioni per Lumi').fill('Un esempio alla volta, con parole semplici.');
   await page.getByRole('button', { name: 'Salva istruzioni' }).click();
@@ -315,7 +316,7 @@ test('family parents cannot open shared Admin controls', async ({ page }) => {
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/v1/admin/')) requests.push(request.url()); });
   await page.goto('/admin');
   await expect(page.getByRole('alert')).toHaveText('Questa parte è riservata agli amministratori.');
-  await expect(page.getByRole('button', { name: 'Continue with ChatGPT' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /(?:Collega|Ricollega) ChatGPT/ })).toHaveCount(0);
   expect(requests).toHaveLength(0);
 });
 
@@ -353,9 +354,10 @@ test('Admin navigation works without a family and makes no family requests', asy
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/v1/families/')) familyRequests.push(request.url()); });
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue with ChatGPT' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /(?:Collega|Ricollega) ChatGPT/ })).toBeVisible();
   await openNavigation(page);
-  await expect(page.getByRole('link', { name: 'Il mio angolino' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: 'Le tue famiglie' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: 'Il mio angolino' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Angolo del genitore', exact: true })).toHaveCount(0);
   expect(familyRequests).toHaveLength(0);
 });
@@ -377,7 +379,10 @@ test('home preserves its layout and account actions live in the sidebar', async 
   await page.locator('.sidebar-bottom').last().screenshot({ path: `test-results/sidebar-account-${testInfo.project.name}.png` });
   await account.getByRole('link', { name: 'Cambia famiglia' }).click();
   await expect(page.getByRole('heading', { name: 'Le tue famiglie' })).toBeVisible();
+  await openNavigation(page);
   await expect(page.getByRole('button', { name: 'Esci', exact: true })).toBeVisible();
+  const closeMenu = page.getByRole('button', { name: 'Chiudi menu', exact: true });
+  if (await closeMenu.isVisible()) await closeMenu.click();
   await page.getByRole('link', { name: /La nostra famiglia/ }).click();
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);

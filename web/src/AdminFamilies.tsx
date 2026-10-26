@@ -1,17 +1,30 @@
 import { useState } from 'react';
+import { Link, useRouterState } from '@tanstack/react-router';
+import { Drawer } from '@base-ui/react/drawer';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Users } from 'lucide-react';
+import { ArrowLeft, Users, UsersRound, X } from 'lucide-react';
 import { listAdminFamiliesOptions } from './api/@tanstack/react-query.gen';
 import { updateFamilyAccess } from './api/sdk.gen';
 import type { AdminFamily } from './api/types.gen';
 import { FamilyAccessManager } from './Portal';
 import { errorMessage } from './lib';
+import { LoadingSkeleton } from './LoadingSkeleton';
+import { useSession } from './portal-state';
 
-export function AdminFamilies() {
+export function AdminFamiliesPage() {
+  const session = useSession();
+  const search = useRouterState({ select: s => s.location.search });
+  return <div className="admin-page">
+    <Link className="back-link" to="/admin" search={search}><ArrowLeft size={16}/>Torna ad Admin</Link>
+    <div className="admin-heading"><span className="admin-badge"><UsersRound size={24}/></span><div><span className="eyebrow">AMMINISTRAZIONE</span><h1>Famiglie</h1><p>Gestisci gli accessi, i membri e gli inviti di tutte le famiglie.</p></div></div>
+    {session.admin ? <AdminFamilies/> : <p role="alert">Questa parte è riservata agli amministratori.</p>}
+  </div>;
+}
+
+function AdminFamilies() {
   const qc = useQueryClient();
   const families = useQuery({ ...listAdminFamiliesOptions(), refetchInterval: 30_000 });
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -28,15 +41,31 @@ export function AdminFamilies() {
   return <section className="admin-card" aria-labelledby="admin-families-title">
     <div className="section-heading"><span className="section-icon lilac"><Users size={22}/></span><div><h2 id="admin-families-title">Tutte le famiglie</h2><p>Abilita o sospendi l’accesso e gestisci membri e inviti di ogni famiglia.</p></div></div>
     <label htmlFor="family-search">Cerca una famiglia</label><input id="family-search" type="search" value={search} onChange={e => setSearch(e.target.value)}/>
-    {families.isPending && <p role="status">Carico le famiglie…</p>}
+    {families.isPending && <LoadingSkeleton label="Caricamento delle famiglie"/>}
     {families.isError && <div><p role="alert">{errorMessage(families.error)}</p><button className="text-button" onClick={() => void families.refetch()}>Riprova</button></div>}
     {error && <p className="notice error-notice" role="alert">{error}</p>}
     {notice && <p className="notice success-notice" role="status">{notice}</p>}
     {filtered?.length === 0 && <p>{families.data?.length ? 'Nessuna famiglia trovata.' : 'Non ci sono ancora famiglie.'}</p>}
     <div className="admin-family-list">{filtered?.map(f => <article key={f.id} className="admin-family" aria-label={f.name}>
       <div className="admin-family-heading"><div><h3>{f.name}</h3><p>{f.memberCount} {f.memberCount === 1 ? 'membro' : 'membri'}</p></div><span className={`connection-pill ${f.accessEnabled ? 'connected' : ''}`}>{f.accessEnabled ? 'Accesso attivo' : 'Accesso sospeso'}</span></div>
-      <div className="button-row"><button className="soft-button" aria-expanded={selected === f.id} aria-controls={`family-access-${f.id}`} onClick={() => setSelected(selected === f.id ? '' : f.id)}>{selected === f.id ? 'Chiudi gestione' : 'Gestisci membri e inviti'}</button><button className={`text-button ${f.accessEnabled ? 'danger-text' : ''}`} disabled={busy} onClick={() => void toggle(f)}>{f.accessEnabled ? 'Sospendi accesso' : 'Riattiva accesso'}</button></div>
-      {selected === f.id && <div id={`family-access-${f.id}`}><FamilyAccessManager key={f.id} family={f}/></div>}
+      <div className="button-row admin-family-actions">
+        <Drawer.Root swipeDirection="right">
+          <Drawer.Trigger className="soft-button">Gestisci membri e inviti</Drawer.Trigger>
+          <Drawer.Portal>
+            <Drawer.Backdrop className="dialog-backdrop family-drawer-backdrop"/>
+            <Drawer.Viewport className="family-drawer-viewport">
+              <Drawer.Popup className="family-drawer admin-card">
+                <header className="family-drawer-header">
+                  <div><span className="eyebrow">MEMBRI E INVITI</span><Drawer.Title>{f.name}</Drawer.Title><Drawer.Description>Gestisci le persone che possono accedere alla famiglia.</Drawer.Description></div>
+                  <Drawer.Close className="icon-button" aria-label="Chiudi gestione famiglia"><X size={20}/></Drawer.Close>
+                </header>
+                <Drawer.Content className="family-drawer-content"><FamilyAccessManager family={f}/></Drawer.Content>
+              </Drawer.Popup>
+            </Drawer.Viewport>
+          </Drawer.Portal>
+        </Drawer.Root>
+        <button className={`text-button ${f.accessEnabled ? 'danger-text' : ''}`} disabled={busy} onClick={() => void toggle(f)}>{f.accessEnabled ? 'Sospendi accesso' : 'Riattiva accesso'}</button>
+      </div>
     </article>)}</div>
   </section>;
 }

@@ -1,6 +1,6 @@
 import { familyID, familyPath, useAccount, useSession } from './portal-state';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog } from '@base-ui/react/dialog';
 import { ArrowRight, ArrowRightLeft, BookOpen, ChevronRight, Flower2, Heart, History, House, LockKeyhole, LogOut, Menu, MessageCircle, Send, Sparkles, Square, UsersRound, Volume2, WifiOff, X } from 'lucide-react';
@@ -13,6 +13,7 @@ import { WordImages } from './WordImages';
 import { SentenceMap } from './SentenceMap';
 import { TopicMap } from './TopicMap';
 import { WordExplanation } from './WordExplanation';
+import { LoadingSkeleton } from './LoadingSkeleton';
 import { useSpeech } from './speech';
 import { errorMessage, messageSpeechText, readStream, shortDate } from './lib';
 
@@ -27,26 +28,28 @@ function Navigation({ familyId, close }: { familyId: string; close?: () => void 
     <Link className="brand" {...homeLink} onClick={close}><span className="brand-symbol"><Sparkles size={24}/></span><span>lumi<span className="brand-dot">.</span></span></Link>
     <p className="brand-tagline">Una piccola luce per imparare</p>
     <nav aria-label="Navigazione principale" className="main-nav">
-      <Link className={`nav-item ${pathname === `/famiglie/${familyId}` ? 'selected' : ''}`} {...homeLink} onClick={close}><House size={20}/>Il mio angolino<span className="nav-dot"/></Link>
+      {familyId ? <Link className={`nav-item ${pathname === `/famiglie/${familyId}` ? 'selected' : ''}`} {...homeLink} onClick={close}><House size={20}/>Il mio angolino<span className="nav-dot"/></Link> : <Link to="/" onClick={close} className={`nav-item ${pathname === '/' ? 'selected' : ''}`}><UsersRound size={20}/>Le tue famiglie</Link>}
       {familyId && <Link to="/famiglie/$familyId/dizionario" params={{ familyId }} onClick={close} className={`nav-item ${pathname === `/famiglie/${familyId}/dizionario` ? 'selected' : ''}`}><BookOpen size={20}/>Il mio dizionario</Link>}
     </nav>
-    <div className="history-heading"><span>LE MIE SCOPERTE</span><History size={15}/></div>
+    {familyId && <><div className="history-heading"><span>LE MIE SCOPERTE</span><History size={15}/></div>
     <div className="sidebar-history">
-      {!familyId && <p className="history-empty">Scegli una famiglia per vedere le tue scoperte.</p>}
       {chats.data?.length === 0 && <p className="history-empty">Le tue domande saranno qui.<br/>Pronte da riscoprire!</p>}
       {chats.isError && <button className="text-button" onClick={() => void chats.refetch()}>Ricarica le mie domande</button>}
       {chats.data?.map(c => <Link key={c.id} to="/famiglie/$familyId/domande/$id" params={{ familyId: familyId, id: c.id }} onClick={close} className={`history-item ${pathname === `/famiglie/${familyId}/domande/${c.id}` ? 'active' : ''}`}><MessageCircle size={17}/><span>{c.title}<small>{shortDate(c.createdAt)}</small></span></Link>)}
-    </div>
+    </div></>}
     <div className="sidebar-bottom">
-      {familyId && <Link to="/famiglie/$familyId/genitore" params={{ familyId }} className="sidebar-action" onClick={close}><LockKeyhole size={17}/>Angolo del genitore</Link>}
-      {session.admin && <Link to="/admin" search={{ family: familyId || undefined }} className="sidebar-action" onClick={close}><LockKeyhole size={17}/>Admin</Link>}
+      {family?.role === 'parent' && <Link to="/famiglie/$familyId/genitore" params={{ familyId }} className="sidebar-action" onClick={close}><LockKeyhole size={17}/>Angolo del genitore</Link>}
+      {session.admin && <nav aria-label="Amministrazione">
+        <Link to="/admin" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin' ? 'selected' : ''}`} onClick={close}><LockKeyhole size={17}/>Admin</Link>
+        <Link to="/admin/famiglie" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin/famiglie' ? 'selected' : ''}`} onClick={close}><UsersRound size={17}/>Famiglie gestite</Link>
+      </nav>}
       <nav className="sidebar-account" aria-label="Account e famiglia">
         <div className="sidebar-identity">
           <UsersRound size={17} aria-hidden="true"/>
           <div><span className="sidebar-family" title={family?.name}>{family?.name ?? 'Lumi'}</span><span className="sidebar-email" title={session.email}>{session.email}</span></div>
         </div>
         <div className="sidebar-account-actions">
-          <Link to="/" className="sidebar-action" onClick={close}><ArrowRightLeft size={17}/>Cambia famiglia</Link>
+          {familyId && <Link to="/" className="sidebar-action" onClick={close}><ArrowRightLeft size={17}/>Cambia famiglia</Link>}
           <button type="button" className="sidebar-action" disabled={signingOut} onClick={() => void signout()}><LogOut size={17}/>Esci</button>
         </div>
       </nav>
@@ -54,7 +57,7 @@ function Navigation({ familyId, close }: { familyId: string; close?: () => void 
   </>;
 }
 
-export function AppShell({ familyId = familyID(), checkConnection = true, children }: { familyId?: string; checkConnection?: boolean; children?: ReactNode }) {
+export function AppShell({ familyId, checkConnection, children }: { familyId: string; checkConnection: boolean; children: ReactNode }) {
   const [menu, setMenu] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const status = useQuery({ ...getStatusOptions({ path: { familyId } }), enabled: checkConnection && Boolean(familyId) });
@@ -74,7 +77,7 @@ export function AppShell({ familyId = familyID(), checkConnection = true, childr
     window.addEventListener('online', on); window.addEventListener('offline', off);
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
-  useEffect(() => { window.speechSynthesis?.cancel(); }, [location]);
+  useEffect(() => { setMenu(false); window.speechSynthesis?.cancel(); }, [location, familyId]);
   useEffect(() => { if (connectionError) { setMenu(false); window.speechSynthesis?.cancel(); } }, [connectionError]);
   return <>
     {connectionError && <main className="connection-error-page" aria-labelledby="connection-error-title">
@@ -85,10 +88,10 @@ export function AppShell({ familyId = familyID(), checkConnection = true, childr
     <aside className="sidebar"><Navigation familyId={familyId}/></aside>
     <div className="main-shell">
       <header className="topbar"><button className="icon-button" aria-label="Apri menu" onClick={() => setMenu(true)}><Menu size={22}/></button><span className="topbar-brand">lumi.</span></header>
-      <main id="main">{children ?? <Outlet/>}</main>
+      <main id="main">{children}</main>
       <footer className="page-footer"><Heart size={13}/> Un piccolo aiuto, una scoperta alla volta.<span>Lumi è un assistente artificiale.</span></footer>
     </div>
-    <Dialog.Root open={menu && !connectionError} onOpenChange={setMenu}><Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="mobile-nav-panel"><Dialog.Title className="sr-only">Le tue domande</Dialog.Title><Dialog.Close className="icon-button close-dialog" aria-label="Chiudi menu"><X size={20}/></Dialog.Close><Navigation familyId={familyId} close={() => setMenu(false)}/></Dialog.Popup></Dialog.Portal></Dialog.Root>
+    <Dialog.Root open={menu && !connectionError} onOpenChange={setMenu}><Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="mobile-nav-panel"><Dialog.Title className="sr-only">Navigazione principale</Dialog.Title><Dialog.Close className="icon-button close-dialog" aria-label="Chiudi menu"><X size={20}/></Dialog.Close><Navigation familyId={familyId} close={() => setMenu(false)}/></Dialog.Popup></Dialog.Portal></Dialog.Root>
   </div></>;
 }
 
@@ -201,7 +204,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
     </> : <>
       <div className="conversation-heading"><Link to="/famiglie/$familyId" params={{ familyId: familyId }} className="back-link"><House size={16}/>Il mio angolino</Link><ChevronRight size={15}/><span>Una nuova scoperta</span></div>
       <div className="chat-title"><Avatar mood={mood}/><div><span className="eyebrow">SCOPRIAMO INSIEME</span><h1>{detail.data?.conversation.title ?? 'La tua domanda'}</h1><p>Non c’è fretta. Facciamo un pezzetto alla volta.</p></div></div>
-      {detail.isPending && <p role="status" className="loading-text">Cerco la tua domanda…</p>}
+      {detail.isPending && <LoadingSkeleton label="Caricamento della conversazione" variant="messages" rows={2}/>}
       {detail.isError && <p role="alert" className="notice error-notice">{errorMessage(detail.error)} <button className="text-button" onClick={() => void detail.refetch()}>Riprova</button></p>}
       <div className="messages" role="log" aria-label="Conversazione con Lumi" aria-live="off">
         {messages.map(m => <article key={m.id} className={`message ${m.role}`}><div className="message-label">{m.role === 'user' ? <><span className="you-dot"/>La tua domanda</> : <><Sparkles size={15}/>Lumi</>}</div><p>{m.text || (m.wordExplanation ? '' : m.status === 'streaming' ? 'Accendo una piccola idea…' : (m.images?.length || m.sentenceMap || m.topicMap) ? '' : 'La risposta non è arrivata. Puoi riprovare.')}</p><SentenceMap map={m.sentenceMap} onSelect={index => { speech.stop(); setMapFocus(index !== null && m.sentenceMap ? { kind: 'sentence', context: `Il pezzetto è «${m.sentenceMap.parts[index].text}», nella frase «${m.sentenceMap.sentence}».` } : null); }} readingPart={speech.activeMessageId?.startsWith(`${m.id}:part:`) ? Number(speech.activeMessageId.split(':').at(-1)) : undefined} onRead={m.status === 'completed' ? (text, index) => speech.activeMessageId === `${m.id}:part:${index}` ? speech.stop() : speech.speak(text, `${m.id}:part:${index}`) : undefined}/><TopicMap map={m.topicMap} onSelect={point => { speech.stop(); setMapFocus(point && m.topicMap ? { kind: 'topic', context: `Il punto è «${point.label}», nel ramo «${point.branch}» della mappa «${m.topicMap.title}».` } : null); }} readingNode={speech.activeMessageId?.startsWith(`${m.id}:topic:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, node) => speech.activeMessageId === `${m.id}:topic:${node}` ? speech.stop() : speech.speak(text, `${m.id}:topic:${node}`) : undefined}/><WordExplanation explanation={m.wordExplanation} readingPart={speech.activeMessageId?.startsWith(`${m.id}:word:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, part) => speech.activeMessageId === `${m.id}:word:${part}` ? speech.stop() : speech.speak(text, `${m.id}:word:${part}`) : undefined}/><WordImages images={m.images}/>{m.role === 'assistant' && <div className="message-tools">{m.status === 'completed' && <button className="listen-button" onClick={() => speech.activeMessageId === m.id ? speech.stop() : speech.speak(messageSpeechText(m), m.id)}>{speech.activeMessageId === m.id ? <><Square size={16}/>Ferma la voce</> : <><Volume2 size={16}/>Riascolta</>}</button>}{m.status === 'interrupted' && <span className="partial-label">La risposta si è interrotta</span>}{m.status === 'streaming' && <span className="thinking-dots" aria-label="Lumi sta pensando"><i/><i/><i/></span>}</div>}</article>)}
