@@ -58,3 +58,25 @@ export function messageSpeechText(message: Message): string {
   const word = message.wordExplanation;
   return word ? [message.text, `${word.word}. ${word.meaning}`, word.example].filter(Boolean).join('\n') : message.text;
 }
+
+// Keep language boundaries for automatic reading and replay.
+export function messageSpeechParts(message: Message): import('./speech').SpeechInput {
+  const word = message.wordExplanation;
+  if (!word?.exampleTranslation) {
+    const map = message.sentenceMap;
+    const part = map?.parts[0];
+    if (map?.language && part) return [
+      { text: message.text, language: 'it' },
+      { text: part.text, language: map.language },
+      ...(part.translation ? [{ text: part.translation, language: map.language === 'en' ? 'it' as const : 'en' as const }] : []),
+    ];
+    return messageSpeechText(message);
+  }
+  return [
+    { text: message.text, language: 'it' },
+    { text: word.word, language: 'en' },
+    { text: word.meaning, language: 'it' },
+    { text: word.example, language: 'en' },
+    { text: word.exampleTranslation, language: 'it' },
+  ];
+}

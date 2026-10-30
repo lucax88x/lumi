@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Store) Dictionary() ([]api.DictionaryEntry, error) {
-	rows, err := s.db.Query(`SELECT id,word,meaning,example,first_asked_at,last_asked_at FROM dictionary_entries ORDER BY last_asked_at DESC,id`)
+	rows, err := s.db.Query(`SELECT id,word,meaning,example,first_asked_at,last_asked_at,subject,example_translation FROM dictionary_entries ORDER BY last_asked_at DESC,id`)
 	if err != nil {
 		return nil, err
 	}
@@ -16,9 +16,12 @@ func (s *Store) Dictionary() ([]api.DictionaryEntry, error) {
 	entries := []api.DictionaryEntry{}
 	for rows.Next() {
 		var entry api.DictionaryEntry
-		var first, last string
-		if err := rows.Scan(&entry.Id, &entry.Word, &entry.Meaning, &entry.Example, &first, &last); err != nil {
+		var first, last, translation string
+		if err := rows.Scan(&entry.Id, &entry.Word, &entry.Meaning, &entry.Example, &first, &last, &entry.Subject, &translation); err != nil {
 			return nil, err
+		}
+		if translation != "" {
+			entry.ExampleTranslation = &translation
 		}
 		entry.FirstAskedAt, _ = time.Parse(time.RFC3339Nano, first)
 		entry.LastAskedAt, _ = time.Parse(time.RFC3339Nano, last)

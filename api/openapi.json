@@ -779,6 +779,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "subject",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Subject"
+            },
+            "description": "Materia della richiesta. Se assente usa italiano."
           }
         ]
       }
@@ -899,6 +908,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "subject",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Subject"
+            },
+            "description": "Materia della richiesta. Se assente usa italiano."
           }
         ]
       },
@@ -1027,6 +1045,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "subject",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Subject"
+            },
+            "description": "Materia della richiesta. Se assente usa italiano."
           }
         ]
       }
@@ -3110,13 +3137,17 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/Subject"
           }
         },
         "required": [
           "id",
           "title",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "subject"
         ],
         "additionalProperties": false
       },
@@ -3325,6 +3356,10 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 100
+          },
+          "subject": {
+            "$ref": "#/components/schemas/Subject",
+            "description": "Se assente usa italiano."
           }
         },
         "required": [
@@ -3419,6 +3454,10 @@
           },
           "model": {
             "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/Subject",
+            "description": "Se assente usa italiano."
           }
         },
         "required": [
@@ -3499,6 +3538,18 @@
             "items": {
               "$ref": "#/components/schemas/SentencePart"
             }
+          },
+          "translation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "it",
+              "en"
+            ]
           }
         },
         "required": [
@@ -3521,6 +3572,11 @@
             "maxLength": 60
           },
           "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "translation": {
             "type": "string",
             "minLength": 1,
             "maxLength": 240
@@ -3548,6 +3604,13 @@
             "items": {
               "$ref": "#/components/schemas/TopicBranch"
             }
+          },
+          "labelLanguage": {
+            "type": "string",
+            "enum": [
+              "it",
+              "en"
+            ]
           }
         },
         "required": [
@@ -3770,6 +3833,23 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 240
+          },
+          "sourceWord": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "sourceLanguage": {
+            "type": "string",
+            "enum": [
+              "it",
+              "en"
+            ]
+          },
+          "exampleTranslation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
           }
         },
         "required": [
@@ -3807,6 +3887,14 @@
           "lastAskedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/Subject"
+          },
+          "exampleTranslation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
           }
         },
         "required": [
@@ -3815,7 +3903,8 @@
           "meaning",
           "example",
           "firstAskedAt",
-          "lastAskedAt"
+          "lastAskedAt",
+          "subject"
         ]
       },
       "FamilyAccess": {
@@ -3851,6 +3940,13 @@
             "type": "integer"
           }
         }
+      },
+      "Subject": {
+        "type": "string",
+        "enum": [
+          "italian",
+          "english"
+        ]
       }
     },
     "securitySchemes": {

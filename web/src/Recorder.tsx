@@ -1,11 +1,12 @@
+import type { Subject } from './api/types.gen';
 import { familyID } from './portal-state';
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Square, LoaderCircle } from 'lucide-react';
 import { transcribe } from './api/sdk.gen';
 import { errorMessage } from './lib';
 
-export function Recorder({ onText, onStart, onState, disabled = false }: {
-  onText: (text: string) => void; onStart: () => void; onState?: (state: boolean) => void; disabled?: boolean;
+export function Recorder({ onText, onStart, onState, disabled = false, subject = 'italian' }: {
+  onText: (text: string) => void; onStart: () => void; onState?: (state: boolean) => void; disabled?: boolean; subject?: Subject;
 }) {
   const familyId = familyID();
   const [recording, setRecording] = useState(false);
@@ -44,7 +45,7 @@ export function Recorder({ onText, onStart, onState, disabled = false }: {
         controller.current = new AbortController();
         try {
           const blob = new Blob(chunks, { type: rec.mimeType });
-          const { data } = await transcribe({ path: { familyId: familyId }, body: { file: new File([blob], 'voce', { type: blob.type }) }, signal: controller.current.signal, throwOnError: true });
+          const { data } = await transcribe({ query: { subject }, path: { familyId: familyId }, body: { file: new File([blob], 'voce', { type: blob.type }) }, signal: controller.current.signal, throwOnError: true });
           if (alive.current) onText(data.text);
         } catch (e) { if (alive.current) setError(errorMessage(e)); }
         finally { if (alive.current) setBusy(false); }

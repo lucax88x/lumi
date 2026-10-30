@@ -45,13 +45,17 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-func transcribeAudio(s *Server, audio []byte) *httptest.ResponseRecorder {
+func transcribeAudio(s *Server, audio []byte, subject ...string) *httptest.ResponseRecorder {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	part, _ := writer.CreateFormFile("file", "voice.wav")
 	_, _ = part.Write(audio)
 	writer.Close()
-	r := httptest.NewRequest("POST", "/api/v1/transcriptions", &body)
+	path := "/api/v1/transcriptions"
+	if len(subject) > 0 {
+		path += "?subject=" + subject[0]
+	}
+	r := httptest.NewRequest("POST", path, &body)
 	r.Header.Set("Origin", s.config.Origin)
 	r.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
@@ -187,5 +191,29 @@ func TestMissingTranscriptionKey(t *testing.T) {
 func TestPCMQuietHandlesMalformedInput(t *testing.T) {
 	if !pcmQuiet([]byte("invalid")) || !pcmQuiet(sampleWAV(true)) || pcmQuiet(sampleWAV(false)) {
 		t.Fatal("invalid silence detection")
+	}
+}
+
+func TestEnglishTranscriptionPreservesBothLanguages(t *testing.T) {
+	s := testServer(t)
+	s.config.OpenAIAPIKey = "audio-test-key"
+	s.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if err := r.ParseMultipartForm(8 << 20); err != nil {
+			t.Fatal(err)
+		}
+		defer r.MultipartForm.RemoveAll()
+		if r.FormValue("languages[]") != "" || r.FormValue("language") != "" {
+			t.Fatal("English audio must allow automatic language detection")
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"text":"Come si dice dog in italiano?"}`))}, nil
+	})
+	response := transcribeAudio(s, sampleWAV(false), "english")
+	if response.Code != 200 || !strings.Contains(response.Body.String(), "Come si dice dog in italiano?") {
+		t.Fatal(response.Body.String())
+	}
+	var count int
+	s.store.db.QueryRow(`SELECT count(*) FROM messages`).Scan(&count)
+	if count != 0 {
+		t.Fatal("saved unconfirmed transcript")
 	}
 }

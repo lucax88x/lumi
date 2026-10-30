@@ -19,6 +19,14 @@ import (
 )
 
 func (s *Server) Transcribe(w http.ResponseWriter, r *http.Request) {
+	subject, ok := requestSubject(w, r)
+	if !ok {
+		return
+	}
+	languages := []string{"it"}
+	if subject == api.English {
+		languages = nil
+	}
 	if strings.TrimSpace(s.config.OpenAIAPIKey) == "" {
 		problem(w, 503, "transcription_not_configured", "Per i vocali serve la chiave OpenAI: chiedi a un genitore di configurarla. Intanto puoi scrivere.")
 		return
@@ -83,7 +91,7 @@ func (s *Server) Transcribe(w http.ResponseWriter, r *http.Request) {
 	result, err := client.Audio.Transcriptions.New(ctx, openai.AudioTranscriptionNewParams{
 		File:           openai.File(bytes.NewReader(wav), "question.wav", "audio/wav"),
 		Model:          openai.AudioModelGPTTranscribe,
-		Languages:      []string{"it"},
+		Languages:      languages,
 		ResponseFormat: openai.AudioResponseFormatJSON,
 	})
 	if err != nil {

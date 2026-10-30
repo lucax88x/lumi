@@ -14,6 +14,7 @@ export type Conversation = {
     title: string;
     createdAt: string;
     updatedAt: string;
+    subject: Subject;
 };
 
 export type Message = {
@@ -72,6 +73,7 @@ export type Session = {
 export type NewConversation = {
     id: string;
     title: string;
+    subject?: Subject;
 };
 
 export type SendMessage = {
@@ -97,6 +99,7 @@ export type PromptPreview = {
     text: string;
     prompt: string;
     model: string;
+    subject?: Subject;
 };
 
 export type StreamEvent = {
@@ -116,17 +119,21 @@ export type WordImage = {
 export type SentenceMap = {
     sentence: string;
     parts: Array<SentencePart>;
+    translation?: string;
+    language?: 'it' | 'en';
 };
 
 export type SentencePart = {
     text: string;
     question: string;
     explanation: string;
+    translation?: string;
 };
 
 export type TopicMap = {
     title: string;
     branches: Array<TopicBranch>;
+    labelLanguage?: 'it' | 'en';
 };
 
 export type TopicBranch = {
@@ -187,6 +194,9 @@ export type WordExplanation = {
     word: string;
     meaning: string;
     example: string;
+    sourceWord?: string;
+    sourceLanguage?: 'it' | 'en';
+    exampleTranslation?: string;
 };
 
 export type DictionaryEntry = {
@@ -196,6 +206,8 @@ export type DictionaryEntry = {
     example: string;
     firstAskedAt: string;
     lastAskedAt: string;
+    subject: Subject;
+    exampleTranslation?: string;
 };
 
 export type FamilyAccess = {
@@ -208,6 +220,8 @@ export type AdminFamily = {
     accessEnabled: boolean;
     memberCount: number;
 };
+
+export type Subject = 'italian' | 'english';
 
 export type GetStatusData = {
     body?: never;
@@ -513,7 +527,12 @@ export type TranscribeData = {
     path: {
         familyId: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Materia della richiesta. Se assente usa italiano.
+         */
+        subject?: Subject;
+    };
     url: '/api/v1/families/{familyId}/transcriptions';
 };
 
@@ -572,7 +591,12 @@ export type GetSettingsData = {
     path: {
         familyId: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Materia della richiesta. Se assente usa italiano.
+         */
+        subject?: Subject;
+    };
     url: '/api/v1/families/{familyId}/admin/settings';
 };
 
@@ -631,7 +655,12 @@ export type UpdateSettingsData = {
     path: {
         familyId: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Materia della richiesta. Se assente usa italiano.
+         */
+        subject?: Subject;
+    };
     url: '/api/v1/families/{familyId}/admin/settings';
 };
 

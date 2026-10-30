@@ -1,6 +1,6 @@
 # Lumi
 
-Una PWA per capire parole e frasi, pensata per prima e seconda elementare. Lumi è una lucciola: ascolta una domanda e accompagna la comprensione un pezzetto alla volta.
+Una PWA per capire parole e frasi in italiano e imparare l’inglese con spiegazioni in italiano, pensata per prima e seconda elementare. Lumi è una lucciola: ascolta una domanda e accompagna la comprensione un pezzetto alla volta.
 
 L’accesso è protetto da Keycloak. Un amministratore può creare gli account; con SMTP abilitato è disponibile anche la registrazione email/password. Google è opzionale. Un amministratore deve assegnare il ruolo `portal-access` prima di entrare. Il browser usa soltanto un cookie di sessione opaco: i token OIDC restano nel backend.
 
@@ -65,15 +65,16 @@ I vocali usano invece `OPENAI_API_KEY` da `.env` in produzione (`.env.local` nel
 
 ## Interfaccia e dati
 
+- Nella home si sceglie **Italiano** o **Inglese**. Ogni conversazione conserva la materia; nell’angolo del genitore le istruzioni e la prova sono separate per materia.
 - Le risposte arrivano in streaming. Il testo parziale resta salvato quando una risposta si interrompe; le generazioni non vengono ripetute automaticamente.
 - Le mappe di frasi e argomenti vengono conservate insieme alla risposta. Le immagini vengono cercate su Wikipedia solo quando richieste, con attribuzioni Wikimedia.
-- Per una singola parola, Lumi mostra significato ed esempio in due schede. Quando possibile usa un sinonimo facile come significato.
-- **Il mio dizionario** conserva le nuove parole spiegate nella famiglia, con ricerca, ascolto e ripasso tramite schede. I risultati del ripasso valgono solo per la sessione corrente. Le parole restano anche dopo l’eliminazione delle chat; i genitori possono gestirle separatamente dal loro angolo.
-- La lettura usa la voce italiana del dispositivo. La preferenza vocale resta sul dispositivo, non contiene dati di autenticazione.
+- Per una singola parola, Lumi mostra significato ed esempio in due schede. In Italiano, quando possibile usa un sinonimo facile come significato. In Inglese mostra la parola inglese, il significato italiano e un esempio inglese con traduzione, anche partendo da una domanda italiana.
+- **Il mio dizionario** conserva le nuove parole spiegate nella famiglia, in due sezioni, Italiano e Inglese, con ricerca, ascolto e ripasso tramite schede della materia scelta. I risultati del ripasso valgono solo per la sessione corrente. Le parole restano anche dopo l’eliminazione delle chat; i genitori possono gestirle separatamente dal loro angolo.
+- La lettura usa le voci italiana e inglese del dispositivo secondo la lingua del contenuto. Le due preferenze vocali restano sul dispositivo e non contengono dati di autenticazione. I vocali dell’assistente inglese accettano entrambe le lingue e si possono correggere prima dell’invio.
 - Chat e impostazioni rimangono nella famiglia fino alla loro eliminazione. Audio, testo e contesto necessari vengono inviati a OpenAI; evita dati personali nelle domande.
 - Il service worker conserva soltanto asset generici. HTML autenticato, API e conversazioni non vengono memorizzati nella cache offline.
 
-Prompt e valutazioni didattiche sono in `internal/app/prompt.txt` e [docs/pedagogy.md](docs/pedagogy.md).
+I prompt iniziali sono in `internal/app/prompt.txt` e `internal/app/prompt_english.txt`; le valutazioni didattiche sono in [docs/pedagogy.md](docs/pedagogy.md).
 
 ## Sviluppo e verifiche
 

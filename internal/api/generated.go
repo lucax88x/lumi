@@ -100,6 +100,24 @@ func (e SendMessageAction) Valid() bool {
 	}
 }
 
+// Defines values for SentenceMapLanguage.
+const (
+	SentenceMapLanguageEn SentenceMapLanguage = "en"
+	SentenceMapLanguageIt SentenceMapLanguage = "it"
+)
+
+// Valid indicates whether the value is a known member of the SentenceMapLanguage enum.
+func (e SentenceMapLanguage) Valid() bool {
+	switch e {
+	case SentenceMapLanguageEn:
+		return true
+	case SentenceMapLanguageIt:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StreamEventType.
 const (
 	StreamEventTypeCompleted       StreamEventType = "completed"
@@ -136,6 +154,60 @@ func (e StreamEventType) Valid() bool {
 	}
 }
 
+// Defines values for Subject.
+const (
+	English Subject = "english"
+	Italian Subject = "italian"
+)
+
+// Valid indicates whether the value is a known member of the Subject enum.
+func (e Subject) Valid() bool {
+	switch e {
+	case English:
+		return true
+	case Italian:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TopicMapLabelLanguage.
+const (
+	TopicMapLabelLanguageEn TopicMapLabelLanguage = "en"
+	TopicMapLabelLanguageIt TopicMapLabelLanguage = "it"
+)
+
+// Valid indicates whether the value is a known member of the TopicMapLabelLanguage enum.
+func (e TopicMapLabelLanguage) Valid() bool {
+	switch e {
+	case TopicMapLabelLanguageEn:
+		return true
+	case TopicMapLabelLanguageIt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WordExplanationSourceLanguage.
+const (
+	WordExplanationSourceLanguageEn WordExplanationSourceLanguage = "en"
+	WordExplanationSourceLanguageIt WordExplanationSourceLanguage = "it"
+)
+
+// Valid indicates whether the value is a known member of the WordExplanationSourceLanguage enum.
+func (e WordExplanationSourceLanguage) Valid() bool {
+	switch e {
+	case WordExplanationSourceLanguageEn:
+		return true
+	case WordExplanationSourceLanguageIt:
+		return true
+	default:
+		return false
+	}
+}
+
 // AdminFamily defines model for AdminFamily.
 type AdminFamily struct {
 	AccessEnabled bool   `json:"accessEnabled"`
@@ -156,6 +228,7 @@ type ConnectionStatus struct {
 type Conversation struct {
 	CreatedAt time.Time `json:"createdAt"`
 	Id        string    `json:"id"`
+	Subject   Subject   `json:"subject"`
 	Title     string    `json:"title"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -168,12 +241,14 @@ type ConversationDetail struct {
 
 // DictionaryEntry defines model for DictionaryEntry.
 type DictionaryEntry struct {
-	Example      string    `json:"example"`
-	FirstAskedAt time.Time `json:"firstAskedAt"`
-	Id           string    `json:"id"`
-	LastAskedAt  time.Time `json:"lastAskedAt"`
-	Meaning      string    `json:"meaning"`
-	Word         string    `json:"word"`
+	Example            string    `json:"example"`
+	ExampleTranslation *string   `json:"exampleTranslation,omitempty"`
+	FirstAskedAt       time.Time `json:"firstAskedAt"`
+	Id                 string    `json:"id"`
+	LastAskedAt        time.Time `json:"lastAskedAt"`
+	Meaning            string    `json:"meaning"`
+	Subject            Subject   `json:"subject"`
+	Word               string    `json:"word"`
 }
 
 // Error defines model for Error.
@@ -267,8 +342,9 @@ type ModelChoice struct {
 
 // NewConversation defines model for NewConversation.
 type NewConversation struct {
-	Id    string `json:"id"`
-	Title string `json:"title"`
+	Id      string   `json:"id"`
+	Subject *Subject `json:"subject,omitempty"`
+	Title   string   `json:"title"`
 }
 
 // OAuthComplete defines model for OAuthComplete.
@@ -284,9 +360,10 @@ type OAuthStart struct {
 
 // PromptPreview defines model for PromptPreview.
 type PromptPreview struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-	Text   string `json:"text"`
+	Model   string   `json:"model"`
+	Prompt  string   `json:"prompt"`
+	Subject *Subject `json:"subject,omitempty"`
+	Text    string   `json:"text"`
 }
 
 // PublicStatus defines model for PublicStatus.
@@ -308,15 +385,21 @@ type SendMessageAction string
 
 // SentenceMap defines model for SentenceMap.
 type SentenceMap struct {
-	Parts    []SentencePart `json:"parts"`
-	Sentence string         `json:"sentence"`
+	Language    *SentenceMapLanguage `json:"language,omitempty"`
+	Parts       []SentencePart       `json:"parts"`
+	Sentence    string               `json:"sentence"`
+	Translation *string              `json:"translation,omitempty"`
 }
+
+// SentenceMapLanguage defines model for SentenceMap.Language.
+type SentenceMapLanguage string
 
 // SentencePart defines model for SentencePart.
 type SentencePart struct {
-	Explanation string `json:"explanation"`
-	Question    string `json:"question"`
-	Text        string `json:"text"`
+	Explanation string  `json:"explanation"`
+	Question    string  `json:"question"`
+	Text        string  `json:"text"`
+	Translation *string `json:"translation,omitempty"`
 }
 
 // Session defines model for Session.
@@ -349,6 +432,9 @@ type StreamEvent struct {
 // StreamEventType defines model for StreamEvent.Type.
 type StreamEventType string
 
+// Subject defines model for Subject.
+type Subject string
+
 // TopicBranch defines model for TopicBranch.
 type TopicBranch struct {
 	Explanation string      `json:"explanation"`
@@ -364,9 +450,13 @@ type TopicItem struct {
 
 // TopicMap defines model for TopicMap.
 type TopicMap struct {
-	Branches []TopicBranch `json:"branches"`
-	Title    string        `json:"title"`
+	Branches      []TopicBranch          `json:"branches"`
+	LabelLanguage *TopicMapLabelLanguage `json:"labelLanguage,omitempty"`
+	Title         string                 `json:"title"`
 }
+
+// TopicMapLabelLanguage defines model for TopicMap.LabelLanguage.
+type TopicMapLabelLanguage string
 
 // Transcription defines model for Transcription.
 type Transcription struct {
@@ -375,10 +465,16 @@ type Transcription struct {
 
 // WordExplanation defines model for WordExplanation.
 type WordExplanation struct {
-	Example string `json:"example"`
-	Meaning string `json:"meaning"`
-	Word    string `json:"word"`
+	Example            string                         `json:"example"`
+	ExampleTranslation *string                        `json:"exampleTranslation,omitempty"`
+	Meaning            string                         `json:"meaning"`
+	SourceLanguage     *WordExplanationSourceLanguage `json:"sourceLanguage,omitempty"`
+	SourceWord         *string                        `json:"sourceWord,omitempty"`
+	Word               string                         `json:"word"`
 }
+
+// WordExplanationSourceLanguage defines model for WordExplanation.SourceLanguage.
+type WordExplanationSourceLanguage string
 
 // WordImage defines model for WordImage.
 type WordImage struct {
@@ -388,9 +484,27 @@ type WordImage struct {
 	Title     string `json:"title"`
 }
 
+// GetSettingsParams defines parameters for GetSettings.
+type GetSettingsParams struct {
+	// Subject Materia della richiesta. Se assente usa italiano.
+	Subject *Subject `form:"subject,omitempty" json:"subject,omitempty"`
+}
+
+// UpdateSettingsParams defines parameters for UpdateSettings.
+type UpdateSettingsParams struct {
+	// Subject Materia della richiesta. Se assente usa italiano.
+	Subject *Subject `form:"subject,omitempty" json:"subject,omitempty"`
+}
+
 // TranscribeMultipartBody defines parameters for Transcribe.
 type TranscribeMultipartBody struct {
 	File openapi_types.File `json:"file"`
+}
+
+// TranscribeParams defines parameters for Transcribe.
+type TranscribeParams struct {
+	// Subject Materia della richiesta. Se assente usa italiano.
+	Subject *Subject `form:"subject,omitempty" json:"subject,omitempty"`
 }
 
 // SearchWordImagesParams defines parameters for SearchWordImages.
@@ -486,10 +600,10 @@ type ServerInterface interface {
 	PreviewPrompt(w http.ResponseWriter, r *http.Request, familyId string)
 
 	// (GET /api/v1/families/{familyId}/admin/settings)
-	GetSettings(w http.ResponseWriter, r *http.Request, familyId string)
+	GetSettings(w http.ResponseWriter, r *http.Request, familyId string, params GetSettingsParams)
 
 	// (PUT /api/v1/families/{familyId}/admin/settings)
-	UpdateSettings(w http.ResponseWriter, r *http.Request, familyId string)
+	UpdateSettings(w http.ResponseWriter, r *http.Request, familyId string, params UpdateSettingsParams)
 
 	// (GET /api/v1/families/{familyId}/conversations)
 	ListConversations(w http.ResponseWriter, r *http.Request, familyId string)
@@ -528,7 +642,7 @@ type ServerInterface interface {
 	GetStatus(w http.ResponseWriter, r *http.Request, familyId string)
 
 	// (POST /api/v1/families/{familyId}/transcriptions)
-	Transcribe(w http.ResponseWriter, r *http.Request, familyId string)
+	Transcribe(w http.ResponseWriter, r *http.Request, familyId string, params TranscribeParams)
 
 	// (GET /api/v1/families/{familyId}/word-images)
 	SearchWordImages(w http.ResponseWriter, r *http.Request, familyId string, params SearchWordImagesParams)
@@ -881,8 +995,24 @@ func (siw *ServerInterfaceWrapper) GetSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSettingsParams
+
+	// ------------- Optional query parameter "subject" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subject", r.URL.Query(), &params.Subject, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subject"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subject", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetSettings(w, r, familyId)
+		siw.Handler.GetSettings(w, r, familyId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -907,8 +1037,24 @@ func (siw *ServerInterfaceWrapper) UpdateSettings(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateSettingsParams
+
+	// ------------- Optional query parameter "subject" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subject", r.URL.Query(), &params.Subject, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subject"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subject", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateSettings(w, r, familyId)
+		siw.Handler.UpdateSettings(w, r, familyId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1290,8 +1436,24 @@ func (siw *ServerInterfaceWrapper) Transcribe(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TranscribeParams
+
+	// ------------- Optional query parameter "subject" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subject", r.URL.Query(), &params.Subject, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subject"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subject", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.Transcribe(w, r, familyId)
+		siw.Handler.Transcribe(w, r, familyId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1549,58 +1711,60 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"7F1fb+M2Ev8qgu4eFdtJs0Xre0q96cG43TbYtMgBxaKgpbHNRiK1JOWNL/B3P4ikJMqibMuJlaTLtzgi",
-	"OX84/M1w+O/RD2mSUgJEcH/86PNwCQmSf15FCSY/owTH6/xnymgKTGCQH1EYAufXBM1iiPJ/iHUK/tif",
-	"URoDIv4m8LH5fy4YJov83wkkM2ATmhFhfMdEwAJYXoCgBCw1N4HP4EuGWU7vj7x1XTTYYqZO4nNQNERn",
-	"f0EocgoTSgiEAlNyK5DIlEBRhPP/oPjGEHSOYg7Bluyhqt4mNyQIxy2ic44WYP0mGCI8ZDjNmZhQMseL",
-	"jNlJbGmiYqegXVFqb7dFLytgHOVFu+qEARIQXck+nVOWIOGP/QgJOBNYdlJD4hb7EFjEdhVladSNhs1k",
-	"VPOBwbDZ8D6tvAehO7ebvdTU+k8Gc3/s/2NYDb2hHnfDWhdUJiPbwQISvq+Bj7rnN6UkiDG0tllNRcig",
-	"Y9PAeywHC2LrayLYuqP48ICSVHVpgh4+AFmIpT++uBwFfoJJ8fvcYiFzzLi44vfPYlcxOqKtBBDJ/+zO",
-	"+1fKoq1qP+yrZbNX2U7FSFCqc0s9dQFtvXjNGGWdTTeCjlDWsLMIDECyMVb5mA6cNRxQBCXM+WP/bgli",
-	"CcxTroB7CVp7qoonlph7c0lzUPX5fsfV4pcCn1Fl3UCyJBc5RQyIKP2QIfMBvkw2tu3S2rV2Jcsd4Z+3",
-	"WDiU3kclUkcEaPWI3VUX+BkHNo32W54uVzlFSaxdtF90/3YQrDCJJwxy2YSNqSlZYXGMK27XNjykmAF/",
-	"MpjazLdQckVjt1AT5X87yoZrStnlBw315TbD4gPkqKqoGrsl+I3eQ9e+EUUd05u8+76byahGWpmD66R7",
-	"jFIaTWkWZShpcnq5jzdVy8abQo5PesB3YO3J8No67j9WTuzIcG5qdxXPFw3jpFP0d0dZNE2s8V8Ftg0i",
-	"HIgAEsJHlO4jcGsUzWuW86dmHA8Pwv6Bpjg8gNRvRTkdTV0/pDEiBw3+u63iVsTa6sfS9UrGS9HMzrTa",
-	"EI0gniwpDrvaUYR5GqPS7TR7Jc4W+0FLlgpqjdnY/AW+PmF2h7dD2e8v9wbA5TzOqHY+OiYEVi3ZpPr1",
-	"KhPLCc3jYdF5GKM4nqHw/nflGkwXfv7jxT7GzNqtnN0KxETXuDYTS8rw/2Q3/c6eyZFvR3vbRPb57RtG",
-	"k1TcMFhh+NpRoiQfIVYxUtnqtjscjUb7p1cFuhgVL0ddrUuPdM1GoDm1yp/NYhwelS1CmaCfALUkixig",
-	"aG3/xFOAcPkJCRMeSCZ9XsPFyWaCilituk2iWyDRcf4PhQWCFB65yjYRjZ04SWM8XxvTVVskn0sAXEyP",
-	"QZe2/t8TCpQUS5zX4rToyPSLHXSUIiYO99oFnZscLjYy5Jqqeioy1D8umi698NzbCuw6Esp2As36LnXc",
-	"dEc1qPvujrkU2WfNqt8fBRMXR6JEyURQk8auKM67O1kUJZjYoSDHayACh6g16xxyNi9nJE2H0TonlIkQ",
-	"3CHE1NkaS3yZUiZQXGUk9qUcakJtVa8mlJVgBrOB1pZd+0JgsnhenI5gjrJY3JQeq5kRO8rNNaO+Guon",
-	"6AEnOcieD95Jq1W/Rvmv3R5BsWM4t7oEnVyFYICS6xWQrsM+glggu0EWychdpqYylvVsY6fcd+WieB6K",
-	"STNTPJUzqwpD/0xQ6uvpif47n3b8aY72QC6X5dFmJM0R17NlbQiSf7VpVk5xfmKIhMteAbUc6AeNeMll",
-	"7oPqvukH0zedN+EgRjOIn5gdU23UEbdgv1WhktU+1XkqSVsl7B6QzKSRQcdO16bZKSR5lnlfsUpXsm1V",
-	"hbm02TURZ89O2Fy/jfRdMx/Ry4rYi65HtS5FtWlIZaI6LyRHWLRNfCVot33kNGNh69e2deUWyyspme0G",
-	"BntNoWU8HmYMi/VtPoqUQFwFgxNK7zGoHLY/9kP1s1hV8uMswX/qotX0HaX4P7D2N3nTmMxpc51LRWMe",
-	"4hxzgYgYeFdx7KE0jfO4ClPi6SkP9zIOHk3Rlww8DmwF7IzjKP9bEvUUR3zgfcxUfpt7Wi9egkS4xGTh",
-	"/crwAhMPkcj779nk9tPPZzIyG3iajbwjt+uqBbglTv/lyZjNVgh5KqlrlB54v07fTzyZ6+YeYuARWAHz",
-	"4CGlHCJPUE8swZszmnvvaODdyPBR0cBcMCSoXveLMRdeXnmtl/2kAAkiaAHlf2TYGRgMcFmqWhPgA8/M",
-	"oMmvmmuuI85ihZELHMeFcLwm1G3GUyARRF4Ry0rZMoJWCMdoFkMuma4xKJNfY/9DlmDv6mbqB37Og+r9",
-	"88FoMMqNm6ZAUIr9sf/dYDT4Tk7jxFLa3xCleLg6H0rFDMNy64uOz3TirOyUfDLuv8dcF/Tz0cFTSriy",
-	"5ovRZdMIbzMVtG8C/3I00jlyUYSLlS0O/+KKrnIyB4Z/Gxl+m/TKuPBydN4rte96pXbZK7Uf+6R20Se1",
-	"d73a5LvRRa/U+rPJ3ImifF79RzH73gT+AkQTP/4Notpj14SQ5+uOxk4+C/cOnRw6OXT6FtFpE7RGP8PQ",
-	"WDVMKbeAWLGuuIVkMpr+iapVm2eRrL6KuanPSATLYOMQ1CGoQ1CHoK8KQXmxu8EOn3LzQz9RoLHZwqGX",
-	"Qy+HXg697OhlLnZbJ64fMBfVuTe10vwk2DporcU8adc8t9MQ+CqOy+yhsTbdp6Z5liSIrbXGPGRw5M0p",
-	"81JbMtZv75Dho8rDTqPNEFVHGhBDCQhgea/qxHmKxLJKmxe1/O2QOTBk3U74f5bZUbXkWu/+3+VBsNrJ",
-	"itOE/DUSB0X8lrSrqu7p02svbgnq8IhHmcdVkrtIh+cGodLvKq/t0bmHdOLdYhNy58LuIfpRFeljbJr7",
-	"ew8Ymy7YcMGGCzZcsIHJkBv70Nqy5NLzlxvWTjhFKmk4zHKY5TDLYZZevksz0RYGN7Hp+ePgOiz1l/V2",
-	"cOjg0MGhg8PWEO6gTFGvSaLD80MGgPWeEJDHQKyrqfIUrRbilEkVeQT2IHdy/syUX11fWOy5lmgrVnTK",
-	"TY1816bASQyITWqlgxOm6Ny2Q+eonaN2jvpAR70H2IaP9eseNju3P4Pe92PekHYipAusTTXvpnDQ6aDT",
-	"QaeDzl6gMyovfNwbEFZ3Q7po0EGagzQHab1BmoFSnXFt+AhEsPVBgWAFcXfqBGyvoaDm0wGmA0wHmA4w",
-	"+wXMtLrxzZ7W1VfClbfKnDICfP6Mcf1au6PWIAU8iCGsgIgzLu/J6bAIadyr49YhHT47fHZz9MPn6Ids",
-	"LzN2b/Q2NXebNBw4OnB04Pgie9Z6Ajy3Ec5hrMNYh7HfaADa2DLUukPuxbYLnWAD3vbTbO4omINPB58O",
-	"Piv4DJdIqAh1xxbYfrYVnShM3X5Gpv/LirZoO8h1kOsg95uH3C4Bq3Ur6I5rLP8em0BPA8L6PWQHxQ6K",
-	"HRQ7KH4yFA/N985b7pUzHi57Y4B8irRxpQy3fcE5AOcAnAN45Q6gfragNXNc33T71nPHlTTXRLC1Sx87",
-	"/HT46fDz+O25xrtEO2F0apR72xBaSfLG78AwBHlr6X/JOlwnZc6nvys2Kq0pLUZv7bYNY8QOH6sfe04g",
-	"fYIVve/FZOxTXpPRkx5BenX9pd9g230PrS7ztpFV3V6jZHn12HpYrw0fMw5s79hK6Aq03D2PK8Xe32xE",
-	"7blX+21p+vm9p5L/E43h6Cu/X/PQ4+r9oF3HEVSJN3kY4SabxTh0byS56bqbrrvp+uHpTmE+Ur5jWat4",
-	"zHwGLzQrTLJY4BQxMZxTlpxFSKC62jo84j3H6qntvCUk/LE/w/qGmN2Pb8t6loe1e91kVn9W3kG9g3oH",
-	"9Q7qD4D6r5RFZzgpti9Yo+BbQCxc3lEWTVXBk8+GvmQgkVe39VVdYdPeToIePgBZiKU//mEU+Akmxc/z",
-	"4GXyE6W2DklOTOM4kw9O4RV4qjO8OaOJd4fvcQoRRv3j9jc6RsyMJwpDSHe8Fnklv9fynCdLYMuKv9F7",
-	"6H3/+uu/JzqmC5rt6KcP6vtbylVw4Byr1tvvSVBFTnrQVpF4dX2/CXwOYcawWEv/o9U1ofQegz/+4/Pm",
-	"8+b/AQAA//8=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

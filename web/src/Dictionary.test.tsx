@@ -5,8 +5,8 @@ import { Dictionary } from './Dictionary';
 
 afterEach(cleanup);
 const words: DictionaryEntry[] = [
-  { id: 'one', word: 'vigoroso', meaning: 'forte', example: 'Un calcio vigoroso fa volare il pallone.', firstAskedAt: '2026-10-25T12:00:00Z', lastAskedAt: '2026-10-25T12:00:00Z' },
-  { id: 'two', word: 'arcobaleno', meaning: 'Un arco di colori nel cielo.', example: 'Dopo la pioggia appare un arcobaleno.', firstAskedAt: '2026-10-24T12:00:00Z', lastAskedAt: '2026-10-24T12:00:00Z' },
+  { subject: 'italian', id: 'one', word: 'vigoroso', meaning: 'forte', example: 'Un calcio vigoroso fa volare il pallone.', firstAskedAt: '2026-10-25T12:00:00Z', lastAskedAt: '2026-10-25T12:00:00Z' },
+  { subject: 'italian', id: 'two', word: 'arcobaleno', meaning: 'Un arco di colori nel cielo.', example: 'Dopo la pioggia appare un arcobaleno.', firstAskedAt: '2026-10-24T12:00:00Z', lastAskedAt: '2026-10-24T12:00:00Z' },
 ];
 
 it('opens saved cards and searches words without case sensitivity', () => {
@@ -53,4 +53,21 @@ it('practices only the current search results and has an empty state', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Ripassiamo' }));
   expect(screen.getByText('Parola 1 di 1')).toBeVisible();
   expect(screen.getByRole('heading', { name: 'arcobaleno' })).toBeVisible();
+});
+
+it('separates subjects, searches English translations, and practices only the selected subject', () => {
+  const english: DictionaryEntry = { subject: 'english', id: 'dog', word: 'dog', meaning: 'cane', example: 'The dog is happy.', exampleTranslation: 'Il cane è felice.', firstAskedAt: '', lastAskedAt: '2026-10-25T12:00:00Z' };
+  render(<Dictionary words={[...words, english]}/>);
+  expect(screen.queryByRole('button', { name: /dog Scoperta/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Inglese' }));
+  expect(screen.queryByRole('button', { name: /vigoroso Scoperta/ })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'CANE' } });
+  expect(screen.getByRole('button', { name: /dog Scoperta/ })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Ripassiamo' }));
+  expect(screen.getByText('Parola 1 di 1')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Mostra il significato' }));
+  expect(screen.getByText('Il cane è felice.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Italiano' }));
+  expect(screen.queryByRole('heading', { name: 'dog' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /vigoroso Scoperta/ })).toBeVisible();
 });

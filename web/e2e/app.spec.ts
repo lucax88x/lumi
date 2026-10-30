@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Message, WordImage, SentenceMap, DictionaryEntry } from '../src/api/types.gen';
+import type { Message, WordImage, SentenceMap, DictionaryEntry, Conversation } from '../src/api/types.gen';
 import spaceMap from './fixtures/space-map.json' with { type: 'json' };
 
 const spaceQuestion = 'mi fai la mappa mentale con tutti i pianeti e i nomi stellari? tipo meteorite, asteroide, etc';
@@ -12,12 +12,24 @@ const catMap: SentenceMap = { sentence: 'La gatta si accoccolò sul tappeto.', p
   { text: 'sul tappeto.', question: 'Dove?', explanation: 'Sopra il tappeto.' },
 ] };
 
+const dogWord = { word: 'dog', meaning: 'cane', example: 'The dog is happy.', exampleTranslation: 'Il cane è felice.', sourceWord: 'cane', sourceLanguage: 'it' as const };
+const englishCatMap: SentenceMap = { sentence: 'The cat is on the mat.', language: 'en', translation: 'Il gatto è sul tappeto.', parts: [
+  { text: 'The cat', translation: 'Il gatto', question: 'Chi?', explanation: 'Si parla del gatto.' },
+  { text: 'is', translation: 'è', question: 'Che cosa fa?', explanation: 'Ci dice dove si trova.' },
+  { text: 'on the mat.', translation: 'sul tappeto.', question: 'Dove?', explanation: 'Si trova sopra il tappeto.' },
+] };
+const animalsMap = { title: 'Gli animali', labelLanguage: 'en' as const, branches: [
+  { label: 'Pets', explanation: 'Animali domestici.', items: [{ label: 'Dog', explanation: 'Cane.' }] },
+  { label: 'Farm animals', explanation: 'Animali della fattoria.', items: [{ label: 'Cow', explanation: 'Mucca.' }] },
+] };
+
 async function mockAPI(page: Page, autoRead = false) {
-  const chats: { id: string; title: string; createdAt: string; updatedAt: string }[] = [];
+  const chats: Conversation[] = [];
   const messages = new Map<string, Message[]>();
   const dictionary: DictionaryEntry[] = [];
   let authenticated = true;
   const settings = { model: 'test-model', prompt: 'Spiega una parola alla volta.', defaultPrompt: 'Spiega una parola alla volta.', autoRead, speechRate: 0.9 };
+  const englishSettings = { ...settings, prompt: 'Aiuta con inglese in italiano.', defaultPrompt: 'Aiuta con inglese in italiano.' };
   await page.route('**/api/v1/**', async route => {
     const request = route.request(); const path = new URL(request.url()).pathname.replace(/^\/api\/v1(?:\/families\/test)?/, ''); const method = request.method();
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -51,16 +63,17 @@ async function mockAPI(page: Page, autoRead = false) {
       if (request.postDataJSON().text === 'vigoroso') {
         message.text = ''; message.images = []; message.wordExplanation = vigorousWord;
       }
+      if (request.postDataJSON().subject === 'english') { message.text = ''; message.images = []; message.wordExplanation = dogWord; }
       return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'images', message: { ...message, text: '', status: 'streaming' } })}\n\ndata: ${JSON.stringify({ type: 'completed', message })}\n\n` });
     }
-    if (path === '/admin/settings') { if (method === 'PUT') Object.assign(settings, request.postDataJSON()); return json(settings); }
+    if (path === '/admin/settings') { const selected = new URL(request.url()).searchParams.get('subject') === 'english' ? englishSettings : settings; if (method === 'PUT') Object.assign(selected, request.postDataJSON()); return json(selected); }
     if (path === '/admin/models') return json([{ slug: 'test-model', displayName: 'Modello di prova' }]);
     if (path === '/admin/connection') return json({ connected: true, email: 'parent@example.test', message: '', transcriptionConfigured: true });
     if (path === '/admin/connection/start') return json({ authorizationUrl: 'https://auth.openai.com/authorize?state=test', expiresAt: new Date(Date.now() + 600_000).toISOString() });
     if (path === '/admin/connection/complete') return json({ connected: true, email: 'parent@example.test', message: '', transcriptionConfigured: true });
     if (path === '/admin/logout') { authenticated = false; return route.fulfill({ status: 204 }); }
     if (path === '/conversations' && method === 'GET') return json(chats);
-    if (path === '/conversations' && method === 'POST') { const c = { ...request.postDataJSON(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; chats.unshift(c); messages.set(c.id, []); return json(c); }
+    if (path === '/conversations' && method === 'POST') { const c = { subject: 'italian', ...request.postDataJSON(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; chats.unshift(c); messages.set(c.id, []); return json(c); }
     const match = path.match(/^\/conversations\/([^/]+)(\/messages)?$/);
     if (match) {
       const id = match[1]; const history = messages.get(id)!;
@@ -75,14 +88,25 @@ async function mockAPI(page: Page, autoRead = false) {
         answer.text = ''; answer.wordExplanation = { ...vigorousWord, example: body.action === 'example' ? 'Un albero vigoroso cresce in giardino.' : vigorousWord.example };
         const previous = dictionary.find(word => word.word === 'vigoroso');
         if (previous) Object.assign(previous, answer.wordExplanation, { lastAskedAt: date });
-        else dictionary.unshift({ id: 'word-vigoroso', ...answer.wordExplanation, firstAskedAt: date, lastAskedAt: date });
+        else dictionary.unshift({ subject: 'italian', id: 'word-vigoroso', ...answer.wordExplanation, firstAskedAt: date, lastAskedAt: date });
+      }
+      if (chats.find(c => c.id === id)?.subject === 'english') {
+        answer.text = body.text?.includes('Il pezzetto è') ? 'Questo pezzetto ci dice dove si trova il gatto: sopra il tappeto.' : 'Scopriamo l’inglese un pezzetto alla volta.';
+        if (['Come si dice cane?', 'Cosa significa dog?'].includes(body.text)) {
+          answer.text = ''; answer.wordExplanation = { ...dogWord, sourceWord: body.text.startsWith('Come') ? 'cane' : 'dog', sourceLanguage: body.text.startsWith('Come') ? 'it' : 'en' };
+          const previous = dictionary.find(word => word.subject === 'english' && word.word === 'dog');
+          if (previous) Object.assign(previous, answer.wordExplanation, { lastAskedAt: date });
+          else dictionary.unshift({ subject: 'english', id: 'word-dog', ...answer.wordExplanation, firstAskedAt: date, lastAskedAt: date });
+        }
+        if (body.text === englishCatMap.sentence) { answer.sentenceMap = englishCatMap; answer.text = 'Il gatto è sul tappeto. Partiamo da chi si parla.'; }
+        if (body.text === 'Mappa degli animali in inglese') { answer.topicMap = animalsMap; answer.text = 'Scegli un animale per scoprire il suo nome.'; }
       }
       history.push(user, answer);
       return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'started', message: { ...answer, wordExplanation: undefined, topicMap: undefined, sentenceMap: undefined, images: [], text: '', status: 'streaming' } })}\n\n${answer.wordExplanation ? `data: ${JSON.stringify({ type: 'word_explanation', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.topicMap ? `data: ${JSON.stringify({ type: 'topic_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.sentenceMap ? `data: ${JSON.stringify({ type: 'sentence_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.images ? `data: ${JSON.stringify({ type: 'images', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}data: ${JSON.stringify({ type: 'delta', delta: answer.text })}\n\ndata: ${JSON.stringify({ type: 'completed', message: answer })}\n\n` });
     }
     return json({ message: 'Not found' }, 404);
   });
-  return { chats, messages, dictionary };
+  return { chats, messages, dictionary, settings, englishSettings };
 }
 
 async function openNavigation(page: Page) {
@@ -680,4 +704,79 @@ test('parent preview shows a topic map and clears it for the next example', asyn
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
   await expect(page.getByRole('region', { name: 'Mappa della frase' })).toBeVisible();
   await expect(map).toHaveCount(0);
+});
+
+
+test('English cards retain their subject after reload and share a separate dictionary entry across directions', async ({ page }, testInfo) => {
+  const api = await mockAPI(page);
+  await page.goto('/famiglie/test');
+  await expect(page.getByRole('button', { name: 'Italiano', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Matematica', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+  await page.getByLabel('Scrivi una parola o una frase').fill('Come si dice cane?');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.locator('.word-heading')).toHaveText('dog');
+  await expect(page.locator('.example-translation')).toHaveText('Il cane è felice.');
+  expect(api.chats[0].subject).toBe('english');
+  await page.reload();
+  await expect(page.locator('.conversation-heading')).toContainText('Inglese');
+  await expect(page.locator('.word-heading')).toHaveText('dog');
+  await page.getByLabel('Scrivi una parola o una frase').fill('Cosa significa dog?');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.locator('.word-heading')).toHaveCount(2);
+  expect(api.dictionary).toHaveLength(1);
+  await page.screenshot({ path: `test-results/english-cards-${testInfo.project.name}.png`, fullPage: true });
+  await openNavigation(page);
+  await page.getByRole('link', { name: 'Il mio dizionario', exact: true }).click();
+  await expect(page.getByText('Le parole che chiedi a Lumi compariranno qui.')).toBeVisible();
+  await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+  await page.getByRole('searchbox').fill('cane');
+  await page.getByRole('button', { name: 'Ripassiamo', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'dog', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Mostra il significato' }).click();
+  await expect(page.getByText('Il cane è felice.')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('English sentence and topic maps keep translations and selected follow-up context', async ({ page }, testInfo) => {
+  const api = await mockAPI(page);
+  await page.goto('/famiglie/test');
+  await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+  await page.getByLabel('Scrivi una parola o una frase').fill(englishCatMap.sentence);
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.locator('.sentence-translation')).toHaveText('Il gatto è sul tappeto.');
+  await page.getByRole('button', { name: /Dove.*on the mat/ }).click();
+  await expect(page.getByText('Si trova sopra il tappeto.')).toBeVisible();
+  await page.getByRole('button', { name: 'Più facile', exact: true }).click();
+  await expect(page.locator('.message.assistant')).toHaveCount(2);
+  expect(api.messages.get(api.chats[0].id)!.at(-2)!.text).toContain('on the mat.');
+  await page.getByLabel('Scrivi una parola o una frase').fill('Mappa degli animali in inglese');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await page.getByRole('button', { name: 'Pets', exact: true }).click();
+  await page.getByRole('button', { name: 'Dog', exact: true }).click();
+  await expect(page.getByText('Cane.', { exact: true })).toBeVisible();
+  await page.screenshot({ path: `test-results/english-maps-${testInfo.project.name}.png`, fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('parents edit and preview English instructions independently from Italian', async ({ page }) => {
+  const api = await mockAPI(page);
+  await page.goto('/famiglie/test/genitore');
+  await page.getByRole('tab', { name: 'Come insegna' }).click();
+  await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.settings.prompt);
+  await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+  await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.englishSettings.prompt);
+  await page.getByLabel('Istruzioni per Lumi').fill('Usa esempi inglesi molto brevi.');
+  await page.getByRole('button', { name: 'Salva istruzioni', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Istruzioni salvate.');
+  expect(api.settings.prompt).toBe('Spiega una parola alla volta.');
+  expect(api.englishSettings.prompt).toBe('Usa esempi inglesi molto brevi.');
+  await page.getByLabel('Parola o frase di prova').fill('Come si dice cane?');
+  await page.getByRole('button', { name: 'Prova le istruzioni', exact: true }).click();
+  await expect(page.locator('.preview-result .word-heading')).toHaveText('dog');
+  expect(api.dictionary).toHaveLength(0);
+  await page.getByRole('button', { name: 'Ripristina il testo iniziale', exact: true }).click();
+  await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.englishSettings.defaultPrompt);
+  await page.getByRole('button', { name: 'Italiano', exact: true }).click();
+  await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.settings.prompt);
 });

@@ -43,3 +43,17 @@ it('does not show an empty map and renders model text without HTML', () => {
   expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeVisible();
   expect(container.querySelector('img')).toBeNull();
 });
+
+it('keeps sentence translations and selected fragment speech in the correct language', () => {
+  const onRead = vi.fn();
+  const bilingual: SentenceMapData = { sentence: 'The cat sleeps.', language: 'en', translation: 'Il gatto dorme.', parts: [
+    { text: 'The cat', translation: 'Il gatto', question: 'Chi?', explanation: 'Si parla del gatto.' },
+    { text: 'sleeps.', translation: 'dorme.', question: 'Che cosa fa?', explanation: 'Sta riposando.' },
+  ] };
+  render(<SentenceMap map={bilingual} onRead={onRead}/>);
+  expect(screen.getByText(bilingual.sentence)).toHaveAttribute('lang', 'en');
+  expect(screen.getByText(bilingual.translation!)).toHaveAttribute('lang', 'it');
+  fireEvent.click(screen.getByRole('button', { name: /Che cosa fa/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ascolta il pezzetto' }));
+  expect(onRead).toHaveBeenCalledWith([{ text: 'sleeps.', language: 'en' }, { text: 'dorme.', language: 'it' }, { text: 'Sta riposando.', language: 'it' }], 1);
+});

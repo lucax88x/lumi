@@ -1,3 +1,4 @@
+import { SubjectPicker, subjectLabel, subjects } from './subjects';
 import { familyID, familyPath, useAccount, useSession } from './portal-state';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
@@ -6,7 +7,7 @@ import { Dialog } from '@base-ui/react/dialog';
 import { ArrowRight, ArrowRightLeft, BookOpen, ChevronRight, Flower2, Heart, History, House, LockKeyhole, LogOut, Menu, MessageCircle, Send, Sparkles, Square, UsersRound, Volume2, WifiOff, X } from 'lucide-react';
 import { listConversationsOptions, listConversationsQueryKey, listDictionaryWordsQueryKey, getConversationOptions, getConversationQueryKey, getStatusOptions } from './api/@tanstack/react-query.gen';
 import { createConversation } from './api/sdk.gen';
-import type { Message, SendMessage, ConversationDetail, PublicStatus } from './api/types.gen';
+import type { Message, SendMessage, ConversationDetail, PublicStatus, Subject } from './api/types.gen';
 import { Avatar, type Mood } from './Avatar';
 import { Recorder } from './Recorder';
 import { WordImages } from './WordImages';
@@ -15,7 +16,7 @@ import { TopicMap } from './TopicMap';
 import { WordExplanation } from './WordExplanation';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { useSpeech } from './speech';
-import { errorMessage, messageSpeechText, readStream, shortDate } from './lib';
+import { errorMessage, messageSpeechParts, readStream, shortDate } from './lib';
 
 function Navigation({ familyId, close }: { familyId: string; close?: () => void }) {
   const session = useSession();
@@ -35,7 +36,7 @@ function Navigation({ familyId, close }: { familyId: string; close?: () => void 
     <div className="sidebar-history">
       {chats.data?.length === 0 && <p className="history-empty">Le tue domande saranno qui.<br/>Pronte da riscoprire!</p>}
       {chats.isError && <button className="text-button" onClick={() => void chats.refetch()}>Ricarica le mie domande</button>}
-      {chats.data?.map(c => <Link key={c.id} to="/famiglie/$familyId/domande/$id" params={{ familyId: familyId, id: c.id }} onClick={close} className={`history-item ${pathname === `/famiglie/${familyId}/domande/${c.id}` ? 'active' : ''}`}><MessageCircle size={17}/><span>{c.title}<small>{shortDate(c.createdAt)}</small></span></Link>)}
+      {chats.data?.map(c => <Link key={c.id} to="/famiglie/$familyId/domande/$id" params={{ familyId: familyId, id: c.id }} onClick={close} className={`history-item ${pathname === `/famiglie/${familyId}/domande/${c.id}` ? 'active' : ''}`}><MessageCircle size={17}/><span>{c.title}<small>{subjectLabel(c.subject)} · {shortDate(c.createdAt)}</small></span></Link>)}
     </div></>}
     <div className="sidebar-bottom">
       {family?.role === 'parent' && <Link to="/famiglie/$familyId/genitore" params={{ familyId }} className="sidebar-action" onClick={close}><LockKeyhole size={17}/>Angolo del genitore</Link>}
@@ -123,6 +124,8 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
   const familyId = familyID();
   const navigate = useNavigate(); const qc = useQueryClient();
   const detail = useQuery({ ...getConversationOptions({ path: { familyId: familyId, conversationId: id ?? '' } }), enabled: Boolean(id), refetchInterval: query => query.state.data?.messages.some(m => m.status === 'streaming') ? 2000 : false });
+  const [selectedSubject, setSelectedSubject] = useState<Subject>('italian');
+  const subject = detail.data?.conversation.subject ?? selectedSubject;
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -154,13 +157,13 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
     const focusedText = action !== 'message' && mapFocus ? `${mapFocus.kind === 'topic' ? (action === 'simplify' ? 'Puoi spiegarmi questo punto della mappa con parole più facili?' : action === 'example' ? 'Mi fai un esempio di questo punto della mappa?' : actionText[action]) : actionText[action]} ${mapFocus.context}` : null;
     const requestAction = focusedText ? 'message' : action;
     const text = focusedText ?? override ?? draft.trim();
-    if (locked.current || recording || (!text && action === 'message')) return;
+    if (locked.current || recording || (id && !detail.data) || (!text && action === 'message')) return;
     speech.stop(); setError(''); locked.current = true; setBusy(true);
     if (action === 'message') setMapFocus(null);
     try {
       if (!id) {
         const newID = crypto.randomUUID();
-        await createConversation({ path: { familyId: familyId }, body: { id: newID, title: [...text].slice(0, 80).join('') }, throwOnError: true });
+        await createConversation({ path: { familyId: familyId }, body: { subject, id: newID, title: [...text].slice(0, 80).join('') }, throwOnError: true });
         if (!mounted.current) return;
         qc.setQueryData(['pending-question', familyId, newID], text);
         await qc.invalidateQueries({ queryKey: listConversationsQueryKey({ path: { familyId: familyId } }) });
@@ -176,7 +179,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
         if (!mounted.current) return;
         if (event.message) setLive(event.message);
         if (event.type === 'delta') setLive(previous => previous ? { ...previous, text: previous.text + (event.delta ?? '') } : previous);
-        if (event.type === 'completed' && event.message && status.autoRead) speechRef.current.speak(messageSpeechText(event.message), event.message.id);
+        if (event.type === 'completed' && event.message && status.autoRead) speechRef.current.speak(messageSpeechParts(event.message), event.message.id);
         if (event.type === 'failed') setError(event.error?.message ?? 'La risposta si è interrotta. Puoi riprovare.');
       }, controller.current.signal);
     } catch (e) {
@@ -197,17 +200,19 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
   const lastAnswer = [...messages].reverse().find(m => m.role === 'assistant' && m.status === 'completed');
   const externallyBusy = detail.data?.messages.some(m => m.status === 'streaming') ?? false;
   const mood: Mood = recording ? 'listening' : busy ? 'thinking' : speech.speaking ? 'speaking' : 'idle';
-  const canSend = !busy && !recording && !externallyBusy && navigator.onLine;
+  const canSend = !busy && !recording && !externallyBusy && (!id || Boolean(detail.data)) && navigator.onLine;
   return <div className={`child-page ${id ? 'conversation-page' : 'home-page'}`}>
     {!id ? <>
+      <SubjectPicker value={selectedSubject} disabled={busy || recording} onChange={value => { speech.stop(); setSelectedSubject(value); }}/>
+      <p className="subject-intro">{subjects.find(item => item.id === subject)?.hint}</p>
       <section className="welcome"><div className="welcome-art"><span className="avatar-bubble">Ciao! Sono Lumi <span>✦</span></span><Avatar mood={mood}/><span className="art-flower">✳</span><span className="art-star">✧</span><span className="art-caption">La tua compagna di scoperte</span></div></section>
     </> : <>
-      <div className="conversation-heading"><Link to="/famiglie/$familyId" params={{ familyId: familyId }} className="back-link"><House size={16}/>Il mio angolino</Link><ChevronRight size={15}/><span>Una nuova scoperta</span></div>
-      <div className="chat-title"><Avatar mood={mood}/><div><span className="eyebrow">SCOPRIAMO INSIEME</span><h1>{detail.data?.conversation.title ?? 'La tua domanda'}</h1><p>Non c’è fretta. Facciamo un pezzetto alla volta.</p></div></div>
+      <div className="conversation-heading"><Link to="/famiglie/$familyId" params={{ familyId: familyId }} className="back-link"><House size={16}/>Il mio angolino</Link><ChevronRight size={15}/><span>{subjectLabel(subject)}</span></div>
+      <div className="chat-title"><Avatar mood={mood}/><div><span className="eyebrow">{subjectLabel(subject).toLocaleUpperCase('it')} · SCOPRIAMO INSIEME</span><h1>{detail.data?.conversation.title ?? 'La tua domanda'}</h1><p>Non c’è fretta. Facciamo un pezzetto alla volta.</p></div></div>
       {detail.isPending && <LoadingSkeleton label="Caricamento della conversazione" variant="messages" rows={2}/>}
       {detail.isError && <p role="alert" className="notice error-notice">{errorMessage(detail.error)} <button className="text-button" onClick={() => void detail.refetch()}>Riprova</button></p>}
       <div className="messages" role="log" aria-label="Conversazione con Lumi" aria-live="off">
-        {messages.map(m => <article key={m.id} className={`message ${m.role}`}><div className="message-label">{m.role === 'user' ? <><span className="you-dot"/>La tua domanda</> : <><Sparkles size={15}/>Lumi</>}</div><p>{m.text || (m.wordExplanation ? '' : m.status === 'streaming' ? 'Accendo una piccola idea…' : (m.images?.length || m.sentenceMap || m.topicMap) ? '' : 'La risposta non è arrivata. Puoi riprovare.')}</p><SentenceMap map={m.sentenceMap} onSelect={index => { speech.stop(); setMapFocus(index !== null && m.sentenceMap ? { kind: 'sentence', context: `Il pezzetto è «${m.sentenceMap.parts[index].text}», nella frase «${m.sentenceMap.sentence}».` } : null); }} readingPart={speech.activeMessageId?.startsWith(`${m.id}:part:`) ? Number(speech.activeMessageId.split(':').at(-1)) : undefined} onRead={m.status === 'completed' ? (text, index) => speech.activeMessageId === `${m.id}:part:${index}` ? speech.stop() : speech.speak(text, `${m.id}:part:${index}`) : undefined}/><TopicMap map={m.topicMap} onSelect={point => { speech.stop(); setMapFocus(point && m.topicMap ? { kind: 'topic', context: `Il punto è «${point.label}», nel ramo «${point.branch}» della mappa «${m.topicMap.title}».` } : null); }} readingNode={speech.activeMessageId?.startsWith(`${m.id}:topic:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, node) => speech.activeMessageId === `${m.id}:topic:${node}` ? speech.stop() : speech.speak(text, `${m.id}:topic:${node}`) : undefined}/><WordExplanation explanation={m.wordExplanation} readingPart={speech.activeMessageId?.startsWith(`${m.id}:word:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, part) => speech.activeMessageId === `${m.id}:word:${part}` ? speech.stop() : speech.speak(text, `${m.id}:word:${part}`) : undefined}/><WordImages images={m.images}/>{m.role === 'assistant' && <div className="message-tools">{m.status === 'completed' && <button className="listen-button" onClick={() => speech.activeMessageId === m.id ? speech.stop() : speech.speak(messageSpeechText(m), m.id)}>{speech.activeMessageId === m.id ? <><Square size={16}/>Ferma la voce</> : <><Volume2 size={16}/>Riascolta</>}</button>}{m.status === 'interrupted' && <span className="partial-label">La risposta si è interrotta</span>}{m.status === 'streaming' && <span className="thinking-dots" aria-label="Lumi sta pensando"><i/><i/><i/></span>}</div>}</article>)}
+        {messages.map(m => <article key={m.id} className={`message ${m.role}`}><div className="message-label">{m.role === 'user' ? <><span className="you-dot"/>La tua domanda</> : <><Sparkles size={15}/>Lumi</>}</div><p>{m.text || (m.wordExplanation ? '' : m.status === 'streaming' ? 'Accendo una piccola idea…' : (m.images?.length || m.sentenceMap || m.topicMap) ? '' : 'La risposta non è arrivata. Puoi riprovare.')}</p><SentenceMap map={m.sentenceMap} onSelect={index => { speech.stop(); setMapFocus(index !== null && m.sentenceMap ? { kind: 'sentence', context: `Il pezzetto è «${m.sentenceMap.parts[index].text}», nella frase «${m.sentenceMap.sentence}».` } : null); }} readingPart={speech.activeMessageId?.startsWith(`${m.id}:part:`) ? Number(speech.activeMessageId.split(':').at(-1)) : undefined} onRead={m.status === 'completed' ? (text, index) => speech.activeMessageId === `${m.id}:part:${index}` ? speech.stop() : speech.speak(text, `${m.id}:part:${index}`) : undefined}/><TopicMap map={m.topicMap} onSelect={point => { speech.stop(); setMapFocus(point && m.topicMap ? { kind: 'topic', context: `Il punto è «${point.label}», nel ramo «${point.branch}» della mappa «${m.topicMap.title}».` } : null); }} readingNode={speech.activeMessageId?.startsWith(`${m.id}:topic:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, node) => speech.activeMessageId === `${m.id}:topic:${node}` ? speech.stop() : speech.speak(text, `${m.id}:topic:${node}`) : undefined}/><WordExplanation explanation={m.wordExplanation} readingPart={speech.activeMessageId?.startsWith(`${m.id}:word:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, part) => speech.activeMessageId === `${m.id}:word:${part}` ? speech.stop() : speech.speak(text, `${m.id}:word:${part}`) : undefined}/><WordImages images={m.images}/>{m.role === 'assistant' && <div className="message-tools">{m.status === 'completed' && <button className="listen-button" onClick={() => speech.activeMessageId === m.id ? speech.stop() : speech.speak(messageSpeechParts(m), m.id)}>{speech.activeMessageId === m.id ? <><Square size={16}/>Ferma la voce</> : <><Volume2 size={16}/>Riascolta</>}</button>}{m.status === 'interrupted' && <span className="partial-label">La risposta si è interrotta</span>}{m.status === 'streaming' && <span className="thinking-dots" aria-label="Lumi sta pensando"><i/><i/><i/></span>}</div>}</article>)}
         <div ref={bottom}/>
       </div>
       {lastAnswer && !busy && <div className="followups">
@@ -215,14 +220,14 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
         <button className="soft-button" disabled={!canSend} onClick={() => void submit('example')}><Sparkles size={17}/>Fammi un esempio</button>
       </div>}
     </>}
-    {speech.blocked && <p className="notice">La voce ha bisogno di un tocco, oppure di una voce italiana installata sul dispositivo. {lastAnswer && <button className="text-button" onClick={() => speech.speak(messageSpeechText(lastAnswer), lastAnswer.id)}>Tocca per ascoltare</button>}</p>}
+    {speech.blocked && <p className="notice">La voce ha bisogno di un tocco, oppure di una voce {speech.missingLanguage === 'en' ? 'inglese' : 'italiana'} installata sul dispositivo. {lastAnswer && <button className="text-button" onClick={() => speech.speak(messageSpeechParts(lastAnswer), lastAnswer.id)}>Tocca per ascoltare</button>}</p>}
     <section className="question-card" aria-label="Fai una domanda">
       <div className="question-heading"><span className="tiny-spark"><Sparkles size={20}/></span><h2>{id ? 'Vuoi chiedermi qualcosa?' : 'Che cosa scopriamo oggi?'}</h2></div>
       <form onSubmit={e => { e.preventDefault(); void submit(); }}>
         <label htmlFor="question" className="sr-only">Scrivi una parola o una frase</label>
         <textarea id="question" ref={textarea} value={draft} onChange={e => { setDraft(e.target.value); setTranscribed(false); }} placeholder={id ? 'Scrivi qui, oppure raccontamelo a voce…' : 'Scrivi qui una parola o una frase…'} rows={id ? 2 : 3} maxLength={4000} disabled={busy || recording}/>
         {transcribed && <p className="transcript-note">Ho capito questo. Va bene? Puoi correggerlo e poi premere «Scopriamo!».</p>}
-        <div className="composer-bottom"><Recorder disabled={busy || externallyBusy} onStart={speech.stop} onState={setRecording} onText={text => { setDraft(text); setTranscribed(true); textarea.current?.focus(); }}/><span className="or-label">oppure</span><button type="submit" className="primary-button send-button" disabled={!canSend || !draft.trim()}>{busy ? 'Un attimo…' : 'Scopriamo!'}<ArrowRight size={19}/></button></div>
+        <div className="composer-bottom"><Recorder key={subject} subject={subject} disabled={busy || externallyBusy || (Boolean(id) && !detail.data)} onStart={speech.stop} onState={setRecording} onText={text => { setDraft(text); setTranscribed(true); textarea.current?.focus(); }}/><span className="or-label">oppure</span><button type="submit" className="primary-button send-button" disabled={!canSend || !draft.trim()}>{busy ? 'Un attimo…' : 'Scopriamo!'}<ArrowRight size={19}/></button></div>
       </form>
       {error && <div className="notice error-notice" role="alert">{error}</div>}
     </section>

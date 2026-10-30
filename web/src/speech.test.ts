@@ -107,3 +107,34 @@ it('clears playback when the device throws, without interrupting the chat respon
   expect(result.current.blocked).toBe(true);
   unmount();
 });
+
+it('switches English and Italian voices within an answer and honors each device preference', () => {
+  vi.useFakeTimers();
+  const italian = { voiceURI: 'local-it', lang: 'it-IT', localService: true } as SpeechSynthesisVoice;
+  const english = { voiceURI: 'chosen-en', lang: 'en-US', localService: false } as SpeechSynthesisVoice;
+  const localEnglish = { voiceURI: 'local-en', lang: 'en-GB', localService: true } as SpeechSynthesisVoice;
+  const speak = vi.fn();
+  localStorage.setItem('lumi-voice-en', english.voiceURI);
+  vi.stubGlobal('speechSynthesis', { getVoices: () => [italian, localEnglish, english], speak, cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} });
+  const { result, unmount } = renderHook(() => useSpeech());
+  act(() => result.current.speak([{ text: 'dog', language: 'en' }, { text: 'cane', language: 'it' }], 'word'));
+  expect(speak.mock.calls[0][0].voice).toBe(english);
+  expect(speak.mock.calls[0][0].lang).toBe('en-US');
+  act(() => { speak.mock.calls[0][0].onstart(); speak.mock.calls[0][0].onend(); vi.advanceTimersByTime(1200); });
+  expect(speak.mock.calls[1][0].voice).toBe(italian);
+  expect(speak.mock.calls[1][0].text).toBe('cane');
+  expect(result.current.activeMessageId).toBe('word');
+  unmount(); localStorage.removeItem('lumi-voice-en');
+});
+
+it('reports the missing English voice without reading English with an Italian voice', () => {
+  const speak = vi.fn();
+  vi.stubGlobal('speechSynthesis', { getVoices: () => [{ voiceURI: 'it', lang: 'it-IT' }], speak, cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  const { result } = renderHook(() => useSpeech());
+  act(() => result.current.speak([{ text: 'dog', language: 'en' }], 'english'));
+  expect(speak).not.toHaveBeenCalled();
+  expect(result.current.missingLanguage).toBe('en');
+  expect(result.current.blocked).toBe(true);
+  expect(result.current.speaking).toBe(false);
+});

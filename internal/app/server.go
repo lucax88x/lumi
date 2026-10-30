@@ -137,7 +137,11 @@ func (s *Server) GetStatus(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, 200, api.PublicStatus{Ready: s.auth.Status().Connected && v.Model != "", AutoRead: v.AutoRead, SpeechRate: v.SpeechRate})
 }
 func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
-	v, err := s.settings()
+	subject, ok := requestSubject(w, r)
+	if !ok {
+		return
+	}
+	v, err := s.settingsForSubject(subject)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -145,6 +149,10 @@ func (s *Server) GetSettings(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, 200, v)
 }
 func (s *Server) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+	subject, ok := requestSubject(w, r)
+	if !ok {
+		return
+	}
 	var v api.Settings
 	if !decode(w, r, &v) {
 		return
@@ -179,11 +187,11 @@ func (s *Server) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err = s.store.SaveSettings(v); err != nil {
+	if err = s.store.saveSubjectSettings(subject, v); err != nil {
 		internalError(w, err)
 		return
 	}
-	v.DefaultPrompt = defaultSettings().DefaultPrompt
+	v.DefaultPrompt = defaultSubjectPrompt(subject)
 	sendJSON(w, 200, v)
 }
 
@@ -215,7 +223,20 @@ func (s *Server) CreateConversation(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "invalid_conversation", "Scrivi una domanda breve.")
 		return
 	}
-	v, err := s.store.Create(b.Id, b.Title)
+	subject := api.Italian
+	if b.Subject != nil {
+		subject = *b.Subject
+	}
+	subject, ok := normalizeSubject(subject)
+	if !ok {
+		problem(w, 400, "invalid_subject", "Scegli Italiano o Inglese.")
+		return
+	}
+	v, err := s.store.CreateSubject(b.Id, b.Title, subject)
+	if errors.Is(err, errConversationSubjectConflict) {
+		problem(w, 409, "conversation_conflict", "Questa conversazione usa già un’altra materia. Apri una nuova domanda.")
+		return
+	}
 	if err != nil {
 		internalError(w, err)
 		return

@@ -413,3 +413,12 @@ button svg, a svg { flex-shrink: 0; }
 .family-setup .portal-status-card { width: 100%; }
 .family-setup .portal-status-art { margin-top: 0; }
 @media (max-width: 600px) { .portal-status-page { padding: 24px 20px; }.portal-status-card { margin: 0; padding: 28px 24px 32px; border-radius: 20px; }.portal-status-card h1 { font-size: 26px; }.portal-status-art { width: 128px; height: 128px; }.portal-status-actions > .primary-button { font-size: 13px; } }
+
+.subject-picker { display: flex; gap: .65rem; flex-wrap: wrap; margin: 1rem 0; }
+.subject-picker .subject-selected { background: var(--color-plum); color: white; border-color: transparent; }
+.subject-intro { color: #796f81; margin: 0 0 1rem; }
+.example-translation, .sentence-translation { border-top: 1px solid #dce6df; padding-top: .7rem; color: #796f81; }
+.history-row small { display: block; }
+
+.home-page > .subject-picker { justify-content: center; }
+.home-page > .subject-intro { text-align: center; line-height: 1.6; }

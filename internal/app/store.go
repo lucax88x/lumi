@@ -14,10 +14,12 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-//go:embed prompt.txt migrations/*.sql control_migrations/*.sql
+//go:embed prompt*.txt migrations/*.sql control_migrations/*.sql
 var resources embed.FS
 
 type Store struct{ db *sql.DB }
+
+var errConversationSubjectConflict = errors.New("conversation subject conflict")
 
 func OpenStore(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -101,7 +103,7 @@ func (s *Store) SaveSettings(v api.Settings) error {
 	return err
 }
 func (s *Store) Conversations() ([]api.Conversation, error) {
-	rows, err := s.db.Query(`SELECT id,title,created_at,updated_at FROM conversations ORDER BY updated_at DESC,id`)
+	rows, err := s.db.Query(`SELECT id,title,created_at,updated_at,subject FROM conversations ORDER BY updated_at DESC,id`)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +112,7 @@ func (s *Store) Conversations() ([]api.Conversation, error) {
 	for rows.Next() {
 		var c api.Conversation
 		var created, updated string
-		if err = rows.Scan(&c.Id, &c.Title, &created, &updated); err != nil {
+		if err = rows.Scan(&c.Id, &c.Title, &created, &updated, &c.Subject); err != nil {
 			return nil, err
 		}
 		c.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
@@ -120,19 +122,25 @@ func (s *Store) Conversations() ([]api.Conversation, error) {
 	return out, rows.Err()
 }
 func (s *Store) Create(id, title string) (api.Conversation, error) {
+	return s.CreateSubject(id, title, api.Italian)
+}
+func (s *Store) CreateSubject(id, title string, subject api.Subject) (api.Conversation, error) {
 	now := time.Now().UTC()
 	stamp := now.Format(time.RFC3339Nano)
-	_, err := s.db.Exec(`INSERT INTO conversations(id,title,created_at,updated_at) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING`, id, title, stamp, stamp)
+	_, err := s.db.Exec(`INSERT INTO conversations(id,title,created_at,updated_at,subject) VALUES(?,?,?,?,?) ON CONFLICT(id) DO NOTHING`, id, title, stamp, stamp, subject)
 	if err != nil {
 		return api.Conversation{}, err
 	}
 	d, err := s.Conversation(id)
+	if err == nil && d.Conversation.Subject != subject {
+		return api.Conversation{}, errConversationSubjectConflict
+	}
 	return d.Conversation, err
 }
 func (s *Store) Conversation(id string) (api.ConversationDetail, error) {
 	d := api.ConversationDetail{Messages: []api.Message{}}
 	var created, updated string
-	err := s.db.QueryRow(`SELECT id,title,created_at,updated_at FROM conversations WHERE id=?`, id).Scan(&d.Conversation.Id, &d.Conversation.Title, &created, &updated)
+	err := s.db.QueryRow(`SELECT id,title,created_at,updated_at,subject FROM conversations WHERE id=?`, id).Scan(&d.Conversation.Id, &d.Conversation.Title, &created, &updated, &d.Conversation.Subject)
 	if err != nil {
 		return d, err
 	}
@@ -249,13 +257,22 @@ func (s *Store) Finish(m api.Message) error {
 	// Save only the first successful completion, never checkpoints or replays.
 	if n > 0 && m.Status == "completed" && m.WordExplanation != nil {
 		word := m.WordExplanation
+		var subject api.Subject
+		if err = tx.QueryRow(`SELECT subject FROM conversations WHERE id=?`, m.ConversationId).Scan(&subject); err != nil {
+			return err
+		}
+		translation := ""
+		if word.ExampleTranslation != nil {
+			translation = *word.ExampleTranslation
+		}
 		stamp := m.CreatedAt.UTC().Format("2006-01-02T15:04:05.000000000Z")
-		_, err = tx.Exec(`INSERT INTO dictionary_entries(id,word_key,word,meaning,example,first_asked_at,last_asked_at) VALUES(?,?,?,?,?,?,?)
-		 ON CONFLICT(word_key) DO UPDATE SET
+		_, err = tx.Exec(`INSERT INTO dictionary_entries(id,subject,word_key,word,meaning,example,example_translation,first_asked_at,last_asked_at) VALUES(?,?,?,?,?,?,?,?,?)
+		 ON CONFLICT(subject,word_key) DO UPDATE SET
 		 word=CASE WHEN excluded.last_asked_at >= last_asked_at THEN excluded.word ELSE word END,
 		 meaning=CASE WHEN excluded.last_asked_at >= last_asked_at THEN excluded.meaning ELSE meaning END,
 		 example=CASE WHEN excluded.last_asked_at >= last_asked_at THEN excluded.example ELSE example END,
-		 first_asked_at=min(first_asked_at,excluded.first_asked_at),last_asked_at=max(last_asked_at,excluded.last_asked_at)`, randomID(), wordKey(word.Word), word.Word, word.Meaning, word.Example, stamp, stamp)
+		 example_translation=CASE WHEN excluded.last_asked_at >= last_asked_at THEN excluded.example_translation ELSE example_translation END,
+		 first_asked_at=min(first_asked_at,excluded.first_asked_at),last_asked_at=max(last_asked_at,excluded.last_asked_at)`, randomID(), subject, wordKey(word.Word), word.Word, word.Meaning, word.Example, translation, stamp, stamp)
 		if err != nil {
 			return err
 		}

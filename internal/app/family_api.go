@@ -22,13 +22,13 @@ func (p *portalAPI) GetConversation(w http.ResponseWriter, r *http.Request, fami
 func (p *portalAPI) SendMessage(w http.ResponseWriter, r *http.Request, familyId string, conversationId string) {
 	p.withFamily(w, r, familyId, false, func(s *Server) { s.SendMessage(w, r, conversationId) })
 }
-func (p *portalAPI) Transcribe(w http.ResponseWriter, r *http.Request, familyId string) {
+func (p *portalAPI) Transcribe(w http.ResponseWriter, r *http.Request, familyId string, _ api.TranscribeParams) {
 	p.withFamily(w, r, familyId, false, func(s *Server) { s.Transcribe(w, r) })
 }
-func (p *portalAPI) GetSettings(w http.ResponseWriter, r *http.Request, familyId string) {
+func (p *portalAPI) GetSettings(w http.ResponseWriter, r *http.Request, familyId string, _ api.GetSettingsParams) {
 	p.withFamily(w, r, familyId, true, func(s *Server) { s.GetSettings(w, r) })
 }
-func (p *portalAPI) UpdateSettings(w http.ResponseWriter, r *http.Request, familyId string) {
+func (p *portalAPI) UpdateSettings(w http.ResponseWriter, r *http.Request, familyId string, _ api.UpdateSettingsParams) {
 	p.withFamily(w, r, familyId, true, func(s *Server) { s.UpdateSettings(w, r) })
 }
 func (p *portalAPI) GetConnection(w http.ResponseWriter, r *http.Request) {
