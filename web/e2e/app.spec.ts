@@ -33,6 +33,7 @@ async function mockAPI(page: Page, autoRead = false) {
   await page.route('**/api/v1/**', async route => {
     const request = route.request(); const path = new URL(request.url()).pathname.replace(/^\/api\/v1(?:\/families\/test)?/, ''); const method = request.method();
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path === '/invitations') return json([]);
     if (path === '/dictionary') return json(dictionary);
     if (path === '/word-images') return json([]);
     if (path === '/status') return json({ ready: true, autoRead, speechRate: 0.9 });

@@ -223,6 +223,13 @@ export type AdminFamily = {
 
 export type Subject = 'italian' | 'english';
 
+export type ReceivedInvitation = {
+    id: string;
+    familyId: string;
+    familyName: string;
+    expiresAt: string;
+};
+
 export type GetStatusData = {
     body?: never;
     path: {
@@ -1847,3 +1854,109 @@ export type UpdateFamilyAccessResponses = {
 };
 
 export type UpdateFamilyAccessResponse = UpdateFamilyAccessResponses[keyof UpdateFamilyAccessResponses];
+
+export type ListReceivedInvitationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/invitations';
+};
+
+export type ListReceivedInvitationsErrors = {
+    /**
+     * Error
+     */
+    default: Error;
+};
+
+export type ListReceivedInvitationsError = ListReceivedInvitationsErrors[keyof ListReceivedInvitationsErrors];
+
+export type ListReceivedInvitationsResponses = {
+    /**
+     * Success
+     */
+    200: Array<ReceivedInvitation>;
+};
+
+export type ListReceivedInvitationsResponse = ListReceivedInvitationsResponses[keyof ListReceivedInvitationsResponses];
+
+export type AcceptReceivedInvitationData = {
+    body?: never;
+    path: {
+        invitationId: string;
+    };
+    query?: never;
+    url: '/api/v1/invitations/{invitationId}/accept';
+};
+
+export type AcceptReceivedInvitationErrors = {
+    /**
+     * Error
+     */
+    default: Error;
+};
+
+export type AcceptReceivedInvitationError = AcceptReceivedInvitationErrors[keyof AcceptReceivedInvitationErrors];
+
+export type AcceptReceivedInvitationResponses = {
+    /**
+     * Success
+     */
+    200: Family;
+};
+
+export type AcceptReceivedInvitationResponse = AcceptReceivedInvitationResponses[keyof AcceptReceivedInvitationResponses];
+
+export type DeclineInvitationData = {
+    body?: never;
+    path: {
+        invitationId: string;
+    };
+    query?: never;
+    url: '/api/v1/invitations/{invitationId}';
+};
+
+export type DeclineInvitationErrors = {
+    /**
+     * Error
+     */
+    default: Error;
+};
+
+export type DeclineInvitationError = DeclineInvitationErrors[keyof DeclineInvitationErrors];
+
+export type DeclineInvitationResponses = {
+    /**
+     * Invitation declined
+     */
+    204: void;
+};
+
+export type DeclineInvitationResponse = DeclineInvitationResponses[keyof DeclineInvitationResponses];
+
+export type DeleteAdminFamilyData = {
+    body?: never;
+    path: {
+        familyId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/families/{familyId}';
+};
+
+export type DeleteAdminFamilyErrors = {
+    /**
+     * Error
+     */
+    default: Error;
+};
+
+export type DeleteAdminFamilyError = DeleteAdminFamilyErrors[keyof DeleteAdminFamilyErrors];
+
+export type DeleteAdminFamilyResponses = {
+    /**
+     * Family deleted
+     */
+    204: void;
+};
+
+export type DeleteAdminFamilyResponse = DeleteAdminFamilyResponses[keyof DeleteAdminFamilyResponses];

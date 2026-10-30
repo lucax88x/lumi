@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type ServerSentEventsResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AcceptInvitationData, AcceptInvitationErrors, AcceptInvitationResponses, ClearConversationsData, ClearConversationsErrors, ClearConversationsResponses, ClearDictionaryData, ClearDictionaryErrors, ClearDictionaryResponses, CompleteConnectionData, CompleteConnectionErrors, CompleteConnectionResponses, CreateConversationData, CreateConversationErrors, CreateConversationResponses, CreateFamilyData, CreateFamilyErrors, CreateFamilyResponses, CreateInvitationData, CreateInvitationErrors, CreateInvitationResponses, DeleteConversationData, DeleteConversationErrors, DeleteConversationResponses, DeleteDictionaryWordData, DeleteDictionaryWordErrors, DeleteDictionaryWordResponses, DisconnectData, DisconnectErrors, DisconnectResponses, GetAdminSettingsData, GetAdminSettingsErrors, GetAdminSettingsResponses, GetConnectionData, GetConnectionErrors, GetConnectionResponses, GetConversationData, GetConversationErrors, GetConversationResponses, GetSessionData, GetSessionErrors, GetSessionResponses, GetSettingsData, GetSettingsErrors, GetSettingsResponses, GetStatusData, GetStatusErrors, GetStatusResponses, ListAdminFamiliesData, ListAdminFamiliesErrors, ListAdminFamiliesResponses, ListConversationsData, ListConversationsErrors, ListConversationsResponses, ListDictionaryWordsData, ListDictionaryWordsErrors, ListDictionaryWordsResponses, ListFamiliesData, ListFamiliesErrors, ListFamiliesResponses, ListInvitationsData, ListInvitationsErrors, ListInvitationsResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListModelsData, ListModelsErrors, ListModelsResponses, LogoutData, LogoutErrors, LogoutResponses, PreviewPromptData, PreviewPromptErrors, PreviewPromptResponse, PreviewPromptResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, RevokeInvitationData, RevokeInvitationErrors, RevokeInvitationResponses, SearchWordImagesData, SearchWordImagesErrors, SearchWordImagesResponses, SendMessageData, SendMessageErrors, SendMessageResponse, SendMessageResponses, StartConnectionData, StartConnectionErrors, StartConnectionResponses, TranscribeData, TranscribeErrors, TranscribeResponses, UpdateAdminSettingsData, UpdateAdminSettingsErrors, UpdateAdminSettingsResponses, UpdateFamilyAccessData, UpdateFamilyAccessErrors, UpdateFamilyAccessResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberResponses, UpdateSettingsData, UpdateSettingsErrors, UpdateSettingsResponses } from './types.gen';
+import type { AcceptInvitationData, AcceptInvitationErrors, AcceptInvitationResponses, AcceptReceivedInvitationData, AcceptReceivedInvitationErrors, AcceptReceivedInvitationResponses, ClearConversationsData, ClearConversationsErrors, ClearConversationsResponses, ClearDictionaryData, ClearDictionaryErrors, ClearDictionaryResponses, CompleteConnectionData, CompleteConnectionErrors, CompleteConnectionResponses, CreateConversationData, CreateConversationErrors, CreateConversationResponses, CreateFamilyData, CreateFamilyErrors, CreateFamilyResponses, CreateInvitationData, CreateInvitationErrors, CreateInvitationResponses, DeclineInvitationData, DeclineInvitationErrors, DeclineInvitationResponses, DeleteAdminFamilyData, DeleteAdminFamilyErrors, DeleteAdminFamilyResponses, DeleteConversationData, DeleteConversationErrors, DeleteConversationResponses, DeleteDictionaryWordData, DeleteDictionaryWordErrors, DeleteDictionaryWordResponses, DisconnectData, DisconnectErrors, DisconnectResponses, GetAdminSettingsData, GetAdminSettingsErrors, GetAdminSettingsResponses, GetConnectionData, GetConnectionErrors, GetConnectionResponses, GetConversationData, GetConversationErrors, GetConversationResponses, GetSessionData, GetSessionErrors, GetSessionResponses, GetSettingsData, GetSettingsErrors, GetSettingsResponses, GetStatusData, GetStatusErrors, GetStatusResponses, ListAdminFamiliesData, ListAdminFamiliesErrors, ListAdminFamiliesResponses, ListConversationsData, ListConversationsErrors, ListConversationsResponses, ListDictionaryWordsData, ListDictionaryWordsErrors, ListDictionaryWordsResponses, ListFamiliesData, ListFamiliesErrors, ListFamiliesResponses, ListInvitationsData, ListInvitationsErrors, ListInvitationsResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListModelsData, ListModelsErrors, ListModelsResponses, ListReceivedInvitationsData, ListReceivedInvitationsErrors, ListReceivedInvitationsResponses, LogoutData, LogoutErrors, LogoutResponses, PreviewPromptData, PreviewPromptErrors, PreviewPromptResponse, PreviewPromptResponses, RemoveMemberData, RemoveMemberErrors, RemoveMemberResponses, RevokeInvitationData, RevokeInvitationErrors, RevokeInvitationResponses, SearchWordImagesData, SearchWordImagesErrors, SearchWordImagesResponses, SendMessageData, SendMessageErrors, SendMessageResponse, SendMessageResponses, StartConnectionData, StartConnectionErrors, StartConnectionResponses, TranscribeData, TranscribeErrors, TranscribeResponses, UpdateAdminSettingsData, UpdateAdminSettingsErrors, UpdateAdminSettingsResponses, UpdateFamilyAccessData, UpdateFamilyAccessErrors, UpdateFamilyAccessResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberResponses, UpdateSettingsData, UpdateSettingsErrors, UpdateSettingsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -421,4 +421,50 @@ export const updateFamilyAccess = <ThrowOnError extends boolean = false>(options
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * List pending invitations for the verified session email
+ */
+export const listReceivedInvitations = <ThrowOnError extends boolean = false>(options?: Options<ListReceivedInvitationsData, ThrowOnError>): RequestResult<ListReceivedInvitationsResponses, ListReceivedInvitationsErrors, ThrowOnError> => (options?.client ?? client).get<ListReceivedInvitationsResponses, ListReceivedInvitationsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'lumi_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/invitations',
+    ...options
+});
+
+export const acceptReceivedInvitation = <ThrowOnError extends boolean = false>(options: Options<AcceptReceivedInvitationData, ThrowOnError>): RequestResult<AcceptReceivedInvitationResponses, AcceptReceivedInvitationErrors, ThrowOnError> => (options.client ?? client).post<AcceptReceivedInvitationResponses, AcceptReceivedInvitationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'lumi_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/invitations/{invitationId}/accept',
+    ...options
+});
+
+export const declineInvitation = <ThrowOnError extends boolean = false>(options: Options<DeclineInvitationData, ThrowOnError>): RequestResult<DeclineInvitationResponses, DeclineInvitationErrors, ThrowOnError> => (options.client ?? client).delete<DeclineInvitationResponses, DeclineInvitationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'lumi_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/invitations/{invitationId}',
+    ...options
+});
+
+/**
+ * Permanently delete a suspended family and its data (administrators only)
+ */
+export const deleteAdminFamily = <ThrowOnError extends boolean = false>(options: Options<DeleteAdminFamilyData, ThrowOnError>): RequestResult<DeleteAdminFamilyResponses, DeleteAdminFamilyErrors, ThrowOnError> => (options.client ?? client).delete<DeleteAdminFamilyResponses, DeleteAdminFamilyErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'lumi_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/admin/families/{familyId}',
+    ...options
 });

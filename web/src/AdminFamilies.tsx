@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { Drawer } from '@base-ui/react/drawer';
+import { Dialog } from '@base-ui/react/dialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Users, UsersRound, X } from 'lucide-react';
 import { listAdminFamiliesOptions } from './api/@tanstack/react-query.gen';
-import { updateFamilyAccess } from './api/sdk.gen';
+import { deleteAdminFamily, updateFamilyAccess } from './api/sdk.gen';
 import type { AdminFamily } from './api/types.gen';
 import { FamilyAccessManager } from './Portal';
 import { errorMessage } from './lib';
@@ -28,6 +29,9 @@ function AdminFamilies() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [deleting, setDeleting] = useState<AdminFamily | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const cancelDelete = useRef<HTMLButtonElement | null>(null);
   async function toggle(family: AdminFamily) {
     if (family.accessEnabled && !window.confirm(`Sospendere l’accesso a ${family.name} per tutti i suoi membri?`)) return;
     setBusy(true); setError(''); setNotice('');
@@ -36,6 +40,22 @@ function AdminFamilies() {
       setNotice(`Accesso ${family.accessEnabled ? 'sospeso' : 'riattivato'} per ${family.name}.`);
       await qc.invalidateQueries();
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+  }
+  async function remove() {
+    if (!deleting || busy) return;
+    setBusy(true); setDeleteError(''); setNotice('');
+    try {
+      await deleteAdminFamily({ path: { familyId: deleting.id }, throwOnError: true });
+      const filter = { predicate: (query: { queryKey: readonly unknown[] }) => {
+        const key = query.queryKey[0] as { path?: { familyId?: string } } | undefined;
+        return key?.path?.familyId === deleting.id || (query.queryKey[0] === 'pending-question' && query.queryKey[1] === deleting.id);
+      } };
+      await qc.cancelQueries(filter);
+      qc.removeQueries(filter);
+      setNotice(`Famiglia ${deleting.name} eliminata definitivamente.`);
+      setDeleting(null);
+      await qc.invalidateQueries();
+    } catch (e) { setDeleteError(errorMessage(e)); await qc.invalidateQueries(); } finally { setBusy(false); }
   }
   const filtered = families.data?.filter(f => f.name.toLocaleLowerCase('it').includes(search.trim().toLocaleLowerCase('it')));
   return <section className="admin-card" aria-labelledby="admin-families-title">
@@ -65,7 +85,16 @@ function AdminFamilies() {
           </Drawer.Portal>
         </Drawer.Root>
         <button className={`text-button ${f.accessEnabled ? 'danger-text' : ''}`} disabled={busy} onClick={() => void toggle(f)}>{f.accessEnabled ? 'Sospendi accesso' : 'Riattiva accesso'}</button>
+        {!f.accessEnabled && <button className="text-button danger-text" disabled={busy} onClick={() => { setDeleteError(''); setDeleting(f); }}>Elimina famiglia</button>}
       </div>
     </article>)}</div>
+    <Dialog.Root open={Boolean(deleting)} onOpenChange={open => { if (!open && !busy) setDeleting(null); }}>
+      <Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="dialog-panel" initialFocus={cancelDelete}>
+        <Dialog.Title>Eliminare {deleting?.name}?</Dialog.Title>
+        <Dialog.Description>Verranno eliminati definitivamente conversazioni, dizionario, impostazioni, appartenenze e inviti della famiglia. Questa azione non può essere annullata.</Dialog.Description>
+        {deleteError && <p role="alert">{deleteError}</p>}
+        <div className="button-row"><Dialog.Close ref={cancelDelete} className="soft-button" disabled={busy}>Annulla</Dialog.Close><button className="primary-button danger-button" disabled={busy} onClick={() => void remove()}>{busy ? 'Elimino…' : 'Elimina definitivamente'}</button></div>
+      </Dialog.Popup></Dialog.Portal>
+    </Dialog.Root>
   </section>;
 }

@@ -221,6 +221,15 @@ func (p *Portal) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "invalid_invitation", "Invito non valido.")
 		return
 	}
+	p.acceptInvitation(w, r, "", digest(body.Token))
+}
+
+func (p *Portal) AcceptReceivedInvitation(w http.ResponseWriter, r *http.Request, invitationID string) {
+	p.acceptInvitation(w, r, invitationID, "")
+}
+
+// Both entry points consume the same invitation in the membership transaction.
+func (p *Portal) acceptInvitation(w http.ResponseWriter, r *http.Request, invitationID, tokenHash string) {
 	sess := currentSession(r)
 	tx, err := p.db.Begin()
 	if err != nil {
@@ -228,8 +237,13 @@ func (p *Portal) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	var familyID, email, name string
-	err = tx.QueryRow(`SELECT i.family_id,i.email,f.name FROM invitations i JOIN families f ON f.id=i.family_id WHERE token_hash=? AND expires_at>? AND f.access_enabled=1`, digest(body.Token), time.Now().Unix()).Scan(&familyID, &email, &name)
+	var id, familyID, email, name string
+	query := `SELECT i.id,i.family_id,i.email,f.name FROM invitations i JOIN families f ON f.id=i.family_id WHERE expires_at>? AND f.access_enabled=1 AND `
+	if invitationID != "" {
+		err = tx.QueryRow(query+`i.id=? AND i.email=? COLLATE NOCASE`, time.Now().Unix(), invitationID, sess.Email).Scan(&id, &familyID, &email, &name)
+	} else {
+		err = tx.QueryRow(query+`token_hash=?`, time.Now().Unix(), tokenHash).Scan(&id, &familyID, &email, &name)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		problem(w, 404, "invalid_invitation", "L’invito è scaduto o non è più disponibile.")
 		return
@@ -244,7 +258,7 @@ func (p *Portal) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = tx.Exec(`INSERT INTO memberships VALUES(?,?,'member') ON CONFLICT(family_id,user_id) DO NOTHING`, familyID, sess.UserID)
 	if err == nil {
-		_, err = tx.Exec(`DELETE FROM invitations WHERE token_hash=?`, digest(body.Token))
+		_, err = tx.Exec(`DELETE FROM invitations WHERE id=?`, id)
 	}
 	var role api.FamilyRole
 	if err == nil {
@@ -258,4 +272,54 @@ func (p *Portal) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sendJSON(w, 200, api.Family{Id: familyID, Name: name, Role: role, AccessEnabled: true})
+}
+
+func (p *Portal) ListReceivedInvitations(w http.ResponseWriter, r *http.Request) {
+	sess := currentSession(r)
+	rows, err := p.db.Query(`SELECT i.id,i.family_id,f.name,i.expires_at
+		FROM invitations i JOIN families f ON f.id=i.family_id
+		WHERE i.email=? COLLATE NOCASE AND i.expires_at>? AND f.access_enabled=1
+		AND NOT EXISTS(SELECT 1 FROM memberships m WHERE m.family_id=i.family_id AND m.user_id=?)
+		ORDER BY i.expires_at,i.id`, sess.Email, time.Now().Unix(), sess.UserID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer rows.Close()
+	out := []api.ReceivedInvitation{}
+	for rows.Next() {
+		var invitation api.ReceivedInvitation
+		var expires int64
+		if err = rows.Scan(&invitation.Id, &invitation.FamilyId, &invitation.FamilyName, &expires); err != nil {
+			internalError(w, err)
+			return
+		}
+		invitation.ExpiresAt = time.Unix(expires, 0).UTC()
+		out = append(out, invitation)
+	}
+	if err = rows.Err(); err != nil {
+		internalError(w, err)
+		return
+	}
+	sendJSON(w, 200, out)
+}
+
+func (p *Portal) DeclineInvitation(w http.ResponseWriter, r *http.Request, invitationID string) {
+	result, err := p.db.Exec(`DELETE FROM invitations WHERE id=? AND email=? COLLATE NOCASE AND expires_at>?
+		AND EXISTS(SELECT 1 FROM families f WHERE f.id=invitations.family_id AND f.access_enabled=1)`,
+		invitationID, currentSession(r).Email, time.Now().Unix())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if count == 0 {
+		problem(w, 404, "invalid_invitation", "L’invito è scaduto o non è più disponibile.")
+		return
+	}
+	w.WriteHeader(204)
 }

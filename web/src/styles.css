@@ -422,3 +422,18 @@ button svg, a svg { flex-shrink: 0; }
 
 .home-page > .subject-picker { justify-content: center; }
 .home-page > .subject-intro { text-align: center; line-height: 1.6; }
+
+.notification-button { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 12px; background: transparent; color: #79599c; cursor: pointer; font: inherit; font-size: 13px; }
+.notification-button:hover { background: #eee7f2; }
+.notification-button:focus-visible { outline: 2px solid #79599c; outline-offset: 2px; }
+.notification-count { display: inline-flex; align-items: center; justify-content: center; min-width: 23px; height: 23px; padding: 0 5px; border-radius: 20px; background: #79599c; color: white; font-size: 12px; }
+.topbar .notification-button { margin-left: auto; }
+.topbar .notification-label { display: none; }
+.invitation-dialog { max-height: calc(100dvh - 40px); overflow-y: auto; }
+.received-invitation { padding: 18px 0; border-top: 1px solid #eee7f2; overflow-wrap: anywhere; }
+.received-invitation h3 { margin: 0; color: #604878; }
+.received-invitation p { margin: 8px 0; }
+.received-invitation small { color: #756b7c; }
+.received-invitation .button-row { margin-top: 16px; }
+.danger-button { background: #a23d46; }
+.danger-button:hover { background: #892e38; }

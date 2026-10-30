@@ -15,10 +15,11 @@ import { SentenceMap } from './SentenceMap';
 import { TopicMap } from './TopicMap';
 import { WordExplanation } from './WordExplanation';
 import { LoadingSkeleton } from './LoadingSkeleton';
+import { useInvitationNotifications } from './InvitationNotifications';
 import { useSpeech } from './speech';
 import { errorMessage, messageSpeechParts, readStream, shortDate } from './lib';
 
-function Navigation({ familyId, close }: { familyId: string; close?: () => void }) {
+function Navigation({ familyId, close, notifications }: { familyId: string; close?: () => void; notifications?: ReactNode }) {
   const session = useSession();
   const family = session.families.find(f => f.id === familyId);
   const { signout, signingOut } = useAccount();
@@ -32,6 +33,7 @@ function Navigation({ familyId, close }: { familyId: string; close?: () => void 
       {familyId ? <Link className={`nav-item ${pathname === `/famiglie/${familyId}` ? 'selected' : ''}`} {...homeLink} onClick={close}><House size={20}/>Il mio angolino<span className="nav-dot"/></Link> : <Link to="/" onClick={close} className={`nav-item ${pathname === '/' ? 'selected' : ''}`}><UsersRound size={20}/>Le tue famiglie</Link>}
       {familyId && <Link to="/famiglie/$familyId/dizionario" params={{ familyId }} onClick={close} className={`nav-item ${pathname === `/famiglie/${familyId}/dizionario` ? 'selected' : ''}`}><BookOpen size={20}/>Il mio dizionario</Link>}
     </nav>
+    {notifications}
     {familyId && <><div className="history-heading"><span>LE MIE SCOPERTE</span><History size={15}/></div>
     <div className="sidebar-history">
       {chats.data?.length === 0 && <p className="history-empty">Le tue domande saranno qui.<br/>Pronte da riscoprire!</p>}
@@ -64,6 +66,7 @@ export function AppShell({ familyId, checkConnection, children }: { familyId: st
   const status = useQuery({ ...getStatusOptions({ path: { familyId } }), enabled: checkConnection && Boolean(familyId) });
   // Keep the error screen visible during retries, until a request succeeds.
   const connectionError = !online || (checkConnection && (status.isError || status.errorUpdatedAt > status.dataUpdatedAt));
+  const notifications = useInvitationNotifications(!connectionError);
   const location = useRouterState({ select: s => s.location.pathname });
   useEffect(() => {
     // The HTML splash outlives React startup and is removed only once the
@@ -86,13 +89,14 @@ export function AppShell({ familyId, checkConnection, children }: { familyId: st
       <button className="primary-button" disabled={!online || status.isFetching} onClick={() => void status.refetch()}>{status.isFetching ? 'Riprovo…' : 'Riprova'}</button>
     </main>}
     <div className="app-shell" hidden={connectionError} inert={connectionError}>
-    <aside className="sidebar"><Navigation familyId={familyId}/></aside>
+    <aside className="sidebar"><Navigation familyId={familyId} notifications={notifications.button}/></aside>
     <div className="main-shell">
-      <header className="topbar"><button className="icon-button" aria-label="Apri menu" onClick={() => setMenu(true)}><Menu size={22}/></button><span className="topbar-brand">lumi.</span></header>
+      <header className="topbar"><button className="icon-button" aria-label="Apri menu" onClick={() => setMenu(true)}><Menu size={22}/></button><span className="topbar-brand">lumi.</span>{notifications.button}</header>
       <main id="main">{children}</main>
       <footer className="page-footer"><Heart size={13}/> Un piccolo aiuto, una scoperta alla volta.<span>Lumi è un assistente artificiale.</span></footer>
     </div>
     <Dialog.Root open={menu && !connectionError} onOpenChange={setMenu}><Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="mobile-nav-panel"><Dialog.Title className="sr-only">Navigazione principale</Dialog.Title><Dialog.Close className="icon-button close-dialog" aria-label="Chiudi menu"><X size={20}/></Dialog.Close><Navigation familyId={familyId} close={() => setMenu(false)}/></Dialog.Popup></Dialog.Portal></Dialog.Root>
+    {notifications.dialog}
   </div></>;
 }
 

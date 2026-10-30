@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"lumi/internal/api"
 )
@@ -42,6 +44,8 @@ func (p *Portal) UpdateFamilyAccess(w http.ResponseWriter, r *http.Request, fami
 		problem(w, 400, "invalid_access", "Indica se abilitare l’accesso alla famiglia.")
 		return
 	}
+	p.familiesMu.Lock()
+	defer p.familiesMu.Unlock()
 	result, err := p.db.Exec(`UPDATE families SET access_enabled=? WHERE id=?`, *body.AccessEnabled, familyID)
 	if err != nil {
 		internalError(w, err)
@@ -57,11 +61,72 @@ func (p *Portal) UpdateFamilyAccess(w http.ResponseWriter, r *http.Request, fami
 		return
 	}
 	if !*body.AccessEnabled {
-		p.familiesMu.Lock()
 		if f := p.families[familyID]; f != nil {
 			f.cancelAll()
 		}
-		p.familiesMu.Unlock()
+	}
+	w.WriteHeader(204)
+}
+
+func (p *Portal) DeleteAdminFamily(w http.ResponseWriter, r *http.Request, familyID string) {
+	if !currentSession(r).Admin {
+		problem(w, 403, "admin_required", "Questa parte è riservata agli amministratori.")
+		return
+	}
+	if !validID.MatchString(familyID) {
+		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
+		return
+	}
+	// Runtime creation, access changes and deletion use the same lock order:
+	// runtime registry first, control database second.
+	p.familiesMu.Lock()
+	defer p.familiesMu.Unlock()
+	tx, err := p.db.Begin()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer tx.Rollback()
+	var enabled bool
+	err = tx.QueryRow(`SELECT access_enabled FROM families WHERE id=?`, familyID).Scan(&enabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if enabled {
+		problem(w, 409, "family_active", "Sospendi la famiglia prima di eliminarla.")
+		return
+	}
+	if f := p.families[familyID]; f != nil {
+		delete(p.families, familyID)
+		if err = f.Close(); err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+	// Keep the suspended record until file removal succeeds, so failures and
+	// process interruptions can be retried without orphaning family data.
+	if err = os.RemoveAll(filepath.Join(p.config.DataDir, "families", familyID)); err != nil {
+		internalError(w, err)
+		return
+	}
+	for _, query := range []string{
+		`DELETE FROM invitations WHERE family_id=?`,
+		`DELETE FROM memberships WHERE family_id=?`,
+		`DELETE FROM families WHERE id=?`,
+	} {
+		if _, err = tx.Exec(query, familyID); err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		internalError(w, err)
+		return
 	}
 	w.WriteHeader(204)
 }

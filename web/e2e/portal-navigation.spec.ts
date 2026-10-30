@@ -9,6 +9,7 @@ async function mockPortal(page: Page, families: Family[] = [], admin = false) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path === '/api/v1/invitations') return json([]);
     if (path === '/api/v1/session') return json({ authenticated: true, portalAccess: true, admin, email: 'user@example.test', csrfToken: 'csrf-test', families: state.families });
     if (path === '/api/v1/logout') return route.fulfill({ status: 204 });
     if ((path === '/api/v1/families' && request.method() === 'POST') || path === '/api/v1/invitations/accept') {

@@ -126,7 +126,7 @@ test('registration, verified email, approval, families, invitations and cookie-o
     await expect(page.getByText(conversation.title)).toHaveCount(0);
     const responseBodies: string[] = [];
     page.on('response', async response => { if (response.url().startsWith(origin + '/api/')) responseBodies.push(await response.text().catch(() => '')); });
-    await page.goto(origin + `/famiglie/${first.id}/membri`); await page.getByLabel('Email della persona').fill(guestEmail); await page.getByRole('button', { name: 'Crea link di invito' }).click();
+    await page.goto(origin + `/famiglie/${first.id}/membri`); await page.getByLabel('Email della persona').fill(guestEmail); await page.getByRole('button', { name: 'Invita', exact: true }).click();
     const invitation = await page.getByLabel('Link da condividere').inputValue(); expect(invitation).toContain('/auth/invite#');
     const guestID = await seedAccount(guestEmail, password); createdUsers.push(guestID);
     const guestContext = await browser.newContext(); const guest = await guestContext.newPage();

@@ -11,6 +11,7 @@ test('administrator manages all families, members and invitations', async ({ pag
   const requests: string[] = [];
   await page.route('**/api/v1/**', async route => {
     const request = route.request(); const path = new URL(request.url()).pathname;
+    if (path === '/api/v1/invitations') return route.fulfill({ contentType: 'application/json', body: '[]' });
     requests.push(path);
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path === '/api/v1/session') return json({ authenticated: true, portalAccess: true, admin: true, email: 'admin@example.test', csrfToken: 'csrf-test', families: [] });
@@ -58,7 +59,7 @@ test('administrator manages all families, members and invitations', async ({ pag
   await expect(alba.getByText('Accesso sospeso')).toBeVisible();
   await alba.getByRole('button', { name: 'Riattiva accesso' }).click();
   await expect(alba.getByText('Accesso attivo')).toBeVisible();
-  expect(requests.some(path => path.endsWith('/members') || path.endsWith('/invitations'))).toBe(false);
+  expect(requests.some(path => path.startsWith('/api/v1/families/') && (path.endsWith('/members') || path.endsWith('/invitations')))).toBe(false);
   const manageAlba = alba.getByRole('button', { name: 'Gestisci membri e inviti' });
   await manageAlba.focus();
   await page.keyboard.press('Enter');
@@ -68,7 +69,7 @@ test('administrator manages all families, members and invitations', async ({ pag
   await drawer.getByRole('combobox', { name: 'Ruolo di membro@example.test' }).selectOption('parent');
   await expect(drawer.getByRole('combobox', { name: 'Ruolo di membro@example.test' })).toHaveValue('parent');
   await drawer.getByLabel('Email della persona').fill('ospite@example.test');
-  await drawer.getByRole('button', { name: 'Crea link di invito' }).click();
+  await drawer.getByRole('button', { name: 'Invita', exact: true }).click();
   await expect(drawer.getByLabel('Link da condividere')).toHaveValue('https://lumi.test/auth/invite#test');
   await expect(drawer.getByText('ospite@example.test')).toBeVisible();
   await drawer.getByRole('button', { name: 'Revoca' }).click();
@@ -102,6 +103,7 @@ test('Admin and family management have separate pages and preserve the navigatio
   const requests: string[] = [];
   await page.route('**/api/v1/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/invitations') return route.fulfill({ contentType: 'application/json', body: '[]' });
     requests.push(path);
     const json = (body: unknown) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
     if (path === '/api/v1/session') return json({ authenticated: true, portalAccess: true, admin: true, email: 'admin@example.test', csrfToken: 'csrf-test', families: [{ id: 'other', name: 'Altra famiglia', role: 'parent' }, { id: 'alpha', name: 'Famiglia Alba', role: 'parent' }] });
@@ -136,6 +138,7 @@ test('family management is reserved for administrators and makes no management r
   const requests: string[] = [];
   await page.route('**/api/v1/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/invitations') return route.fulfill({ contentType: 'application/json', body: '[]' });
     if (path === '/api/v1/session') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authenticated: true, portalAccess: true, admin: false, email: 'user@example.test', csrfToken: 'csrf-test', families: [] }) });
     requests.push(path);
     return route.fulfill({ status: 403 });
@@ -153,6 +156,7 @@ test('suspended families are visible in the hub and cannot be opened', async ({ 
   const familyRequests: string[] = [];
   await page.route('**/api/v1/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/invitations') return route.fulfill({ contentType: 'application/json', body: '[]' });
     if (path === '/api/v1/session') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authenticated: true, portalAccess: true, admin: false, email: 'genitore@example.test', csrfToken: 'csrf-test', families: [{ id: 'alpha', name: 'Famiglia Alba', role: 'parent', accessEnabled: false }] }) });
     familyRequests.push(path);
     return route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ message: 'Accesso sospeso' }) });
@@ -164,4 +168,52 @@ test('suspended families are visible in the hub and cannot be opened', async ({ 
   await page.goto('/famiglie/alpha');
   await expect(page.getByRole('heading', { name: 'Accesso sospeso' })).toBeVisible();
   expect(familyRequests).toHaveLength(0);
+});
+
+test('administrator deletes a suspended family only after confirming', async ({ page }, info) => {
+  const families = [
+    { id: 'active', name: 'Famiglia Attiva', accessEnabled: true, memberCount: 1 },
+    { id: 'suspended', name: 'Famiglia Sospesa', accessEnabled: false, memberCount: 2 },
+  ];
+  let deletions = 0;
+  let reactivated = false;
+  await page.route('**/api/v1/**', async route => {
+    const request = route.request(); const path = new URL(request.url()).pathname;
+    if (path === '/api/v1/invitations') return route.fulfill({ contentType: 'application/json', body: '[]' });
+    const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path === '/api/v1/session') return json({ authenticated: true, portalAccess: true, admin: true, email: 'admin@example.test', csrfToken: 'csrf-test', families: [] });
+    if (path === '/api/v1/admin/families') return json(families);
+    if (path === '/api/v1/admin/families/suspended' && request.method() === 'DELETE') {
+      expect(request.headers()['x-csrf-token']).toBe('csrf-test');
+      deletions++;
+      if (reactivated) return json({ message: 'Sospendi la famiglia prima di eliminarla.' }, 409);
+      families.splice(1, 1);
+      return route.fulfill({ status: 204 });
+    }
+    return json({ message: 'Not found' }, 404);
+  });
+  await page.goto('/admin/famiglie');
+  const active = page.getByRole('article', { name: 'Famiglia Attiva' });
+  const suspended = page.getByRole('article', { name: 'Famiglia Sospesa' });
+  await expect(active.getByRole('button', { name: 'Elimina famiglia' })).toHaveCount(0);
+  await suspended.getByRole('button', { name: 'Elimina famiglia' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Eliminare Famiglia Sospesa?' });
+  await expect(confirmation.getByRole('button', { name: 'Annulla' })).toBeFocused();
+  await expect(confirmation.getByText(/conversazioni, dizionario/)).toBeVisible();
+  await page.screenshot({ path: `test-results/delete-family-${info.project.name}.png`, fullPage: true });
+  await confirmation.getByRole('button', { name: 'Annulla' }).click();
+  await expect(confirmation).toHaveCount(0);
+  expect(deletions).toBe(0);
+  await suspended.getByRole('button', { name: 'Elimina famiglia' }).click();
+  reactivated = true;
+  await confirmation.getByRole('button', { name: 'Elimina definitivamente' }).click();
+  await expect(confirmation.getByRole('alert')).toHaveText('Sospendi la famiglia prima di eliminarla.');
+  await expect(page.getByRole('article', { name: 'Famiglia Sospesa', includeHidden: true })).toBeAttached();
+  reactivated = false;
+  await confirmation.getByRole('button', { name: 'Elimina definitivamente' }).click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(suspended).toHaveCount(0);
+  await expect(active).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Famiglia Famiglia Sospesa eliminata definitivamente.');
+  expect(deletions).toBe(2);
 });

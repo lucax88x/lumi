@@ -108,3 +108,62 @@ func TestInvalidLoginDiagnostics(t *testing.T) {
 		})
 	}
 }
+
+func TestLoginDestinationUsesOnlyActiveFamilyAndPreservesExplicitTargets(t *testing.T) {
+	p := portalTest(t)
+	parent, pc, userID := seedPortalUser(t, p, "parent", true, true)
+	check := func(target string, approved bool, want string) {
+		t.Helper()
+		got, err := p.loginDestination(target, userID, approved)
+		if err != nil || got != want {
+			t.Fatalf("destination %q approved=%t: got %q want %q: %v", target, approved, got, want, err)
+		}
+	}
+	check("/", true, "/")
+	family := createTestFamily(t, p, parent, pc, "Only family")
+	check("/", true, "/famiglie/"+family.Id)
+	check("/", false, "/")
+	for _, target := range []string{"/invito#secret", "/admin", "/admin/famiglie", "/famiglie/another/domande/saved"} {
+		check(target, true, target)
+	}
+	other := createTestFamily(t, p, parent, pc, "Other family")
+	check("/", true, "/")
+	if _, err := p.db.Exec(`UPDATE families SET access_enabled=0 WHERE id=?`, other.Id); err != nil {
+		t.Fatal(err)
+	}
+	check("/", true, "/famiglie/"+family.Id)
+	if _, err := p.db.Exec(`UPDATE families SET access_enabled=0`); err != nil {
+		t.Fatal(err)
+	}
+	check("/", true, "/")
+}
+
+func TestLoginCallbackRedirectsToSingleFamily(t *testing.T) {
+	issuer := newPortalIssuer(t)
+	p := oidcPortal(t, issuer)
+	login, _, _ := loginPortal(t, p, issuer)
+	var cookie *http.Cookie
+	for _, c := range login.Result().Cookies() {
+		if c.Name == "lumi_session" {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("no session")
+	}
+	var csrf string
+	if err := p.db.QueryRow(`SELECT csrf FROM portal_sessions WHERE token_hash=?`, digest(cookie.Value)).Scan(&csrf); err != nil {
+		t.Fatal(err)
+	}
+	family := createTestFamily(t, p, cookie, csrf, "Only family")
+	start := portalCall(p, "GET", "/auth/login?return=%2F", "", cookie, "")
+	u, err := url.Parse(start.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer.nonce = u.Query().Get("nonce")
+	callback := portalCall(p, "GET", "/auth/callback?code=good&state="+u.Query().Get("state"), "", start.Result().Cookies()[0], "")
+	if callback.Code != 303 || callback.Header().Get("Location") != "/famiglie/"+family.Id {
+		t.Fatal(callback.Code, callback.Header().Get("Location"))
+	}
+}

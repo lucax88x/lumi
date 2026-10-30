@@ -158,11 +158,20 @@ func (p *Portal) Close() error {
 func (p *Portal) family(id string) (*Server, error) {
 	p.familiesMu.Lock()
 	defer p.familiesMu.Unlock()
-	if f := p.families[id]; f != nil {
-		return f, nil
-	}
 	if !validID.MatchString(id) {
 		return nil, errors.New("invalid family")
+	}
+	// Recheck inside the registry lock: an authorized request may have waited
+	// here while another request suspended or deleted the family.
+	var enabled bool
+	if err := p.db.QueryRow(`SELECT access_enabled FROM families WHERE id=?`, id).Scan(&enabled); err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, errFamilySuspended
+	}
+	if f := p.families[id]; f != nil {
+		return f, nil
 	}
 	if p.admin == nil {
 		return nil, errors.New("shared connection is unavailable")
@@ -176,6 +185,9 @@ func (p *Portal) family(id string) (*Server, error) {
 	p.families[id] = f
 	return f, nil
 }
+
+var errFamilySuspended = errors.New("family suspended")
+
 func (p *Portal) withFamily(w http.ResponseWriter, r *http.Request, id string, parent bool, serve func(*Server)) {
 	sess := currentSession(r)
 	var role string
@@ -198,6 +210,14 @@ func (p *Portal) withFamily(w http.ResponseWriter, r *http.Request, id string, p
 		return
 	}
 	f, err := p.family(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
+		return
+	}
+	if errors.Is(err, errFamilySuspended) {
+		problem(w, 403, "family_suspended", "L’accesso a questa famiglia è sospeso. Contatta un amministratore.")
+		return
+	}
 	if err != nil {
 		internalError(w, err)
 		return

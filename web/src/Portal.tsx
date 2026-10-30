@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Mail, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
-import { getSessionOptions, getSessionQueryKey, listMembersOptions, listInvitationsOptions } from './api/@tanstack/react-query.gen';
+import { getSessionOptions, getSessionQueryKey, listMembersOptions, listInvitationsOptions, listReceivedInvitationsQueryKey } from './api/@tanstack/react-query.gen';
 import { acceptInvitation, createFamily, createInvitation, logout, removeMember, revokeInvitation, updateMember } from './api/sdk.gen';
 import { AccountContext, SessionContext, familyID, useSession } from './portal-state';
 import { errorMessage, setCSRF } from './lib';
@@ -33,7 +33,8 @@ export function PortalRoot() {
   const [expired, setExpired] = useState(false); const [error, setError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
   const session = useQuery({ ...getSessionOptions(), enabled: !expired && !signingOut, retry: false, staleTime: 0, refetchInterval: 60_000 });
-  const inFamily = pathname.startsWith('/famiglie/') && session.data?.portalAccess && session.data.families.some(f => f.id === familyID() && f.accessEnabled !== false);
+  const currentFamilyId = pathname.match(/^\/famiglie\/([^/]+)/)?.[1] ?? '';
+  const inFamily = Boolean(currentFamilyId) && session.data?.portalAccess && session.data.families.some(f => f.id === currentFamilyId && f.accessEnabled !== false);
   useEffect(() => {
     if (expired || (!session.isPending && !inFamily)) { document.getElementById('lumi-splash')?.remove(); const root = document.getElementById('root'); if (root) { root.hidden = false; root.inert = false; } }
     setCSRF(expired ? '' : session.data?.csrfToken ?? '');
@@ -63,7 +64,7 @@ export function PortalRoot() {
   if (session.isPending) return <PortalStatus title="Controllo l’accesso…" description="Un attimo, il tuo angolino ti aspetta." mood="thinking" loading/>;
   if (!session.data) return <PortalStatus title="Accedi a Lumi" description={errorMessage(session.error)}><button className="primary-button" onClick={login}>Accedi a Lumi</button><button className="text-button" onClick={() => void session.refetch()}>Riprova</button></PortalStatus>;
   const available = session.data.families.filter(f => f.accessEnabled !== false);
-  const shellFamilyId = inFamily ? familyID() : (pathname === '/admin' || pathname.startsWith('/admin/')) ? (available.find(f => f.id === requestedFamily) ?? available[0])?.id ?? '' : '';
+  const shellFamilyId = inFamily ? currentFamilyId : (pathname === '/admin' || pathname.startsWith('/admin/')) ? (available.find(f => f.id === requestedFamily) ?? available[0])?.id ?? '' : '';
   const account = <footer className="portal-account"><span>{session.data.email}</span><button className="text-button" disabled={signingOut} onClick={() => void signout()}>Esci</button></footer>;
   return <SessionContext.Provider value={session.data}>
     <AccountContext.Provider value={{ signout, signingOut }}>
@@ -86,7 +87,7 @@ export function InvitationPage() {
   const qc = useQueryClient(); const navigate = useNavigate();
   async function accept() {
     setBusy(true); setError('');
-    try { const { data } = await acceptInvitation({ body: { token }, throwOnError: true }); window.history.replaceState(null, '', '/invito'); await qc.invalidateQueries({ queryKey: getSessionQueryKey() }); await navigate({ to: '/famiglie/$familyId', params: { familyId: data.id } }); }
+    try { const { data } = await acceptInvitation({ body: { token }, throwOnError: true }); window.history.replaceState(null, '', '/invito'); await Promise.all([qc.invalidateQueries({ queryKey: getSessionQueryKey() }), qc.invalidateQueries({ queryKey: listReceivedInvitationsQueryKey() })]); await navigate({ to: '/famiglie/$familyId', params: { familyId: data.id } }); }
     catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
   return <section className="portal-card"><h1>Un invito per te</h1><p>Entra nella famiglia con l’indirizzo email verificato a cui è destinato l’invito.</p><button className="primary-button" disabled={busy || !token} onClick={() => void accept()}>Accetta invito</button>{!token && <p>Questo invito non è completo.</p>}{error && <p role="alert">{error}</p>}</section>;
@@ -124,12 +125,12 @@ export function FamilyAccessManager({ family, variant = 'embedded' }: { family: 
       </div>)}
     </section>
     <section className={page ? 'admin-card' : undefined}>
-      <div className={page ? 'section-heading' : undefined}>{page && <span className="section-icon peach"><UserPlus size={22}/></span>}<div><Heading>Invita una persona</Heading>{page && <p>Crea un link personale per entrare nella famiglia.</p>}</div></div>
+      <div className={page ? 'section-heading' : undefined}>{page && <span className="section-icon peach"><UserPlus size={22}/></span>}<div><Heading>Invita una persona</Heading>{page && <p>La persona troverà l’invito nelle notifiche di Lumi.</p>}</div></div>
       <form onSubmit={e => { e.preventDefault(); void run(async () => { const { data } = await createInvitation({ path, body: { email }, throwOnError: true }); setUrl(data.url); setEmail(''); }); }}>
         <label htmlFor="invite-email">Email della persona</label><input id="invite-email" type="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)}/>
-        <div className="button-row"><button className="primary-button" disabled={busy}><UserPlus size={17}/>Crea link di invito</button></div>
+        <div className="button-row"><button className="primary-button" disabled={busy}><UserPlus size={17}/>Invita</button></div>
       </form>
-      <p className="field-hint">Il link dura sette giorni. La persona deve verificare l’email e avere l’approvazione dell’amministratore.</p>
+      <p className="field-hint">L’invito dura sette giorni e compare in Lumi accedendo con questa email verificata. Serve l’approvazione dell’amministratore. Puoi anche condividere il link.</p>
       {url && <div className="notice"><label htmlFor="invite-link">Link da condividere</label><input id="invite-link" value={url} readOnly onFocus={e => e.target.select()}/><button className="text-button" onClick={() => void navigator.clipboard.writeText(url).catch(() => setError('Seleziona e copia il link.'))}>Copia link</button></div>}
     </section>
     <section className={page ? 'admin-card' : undefined}>

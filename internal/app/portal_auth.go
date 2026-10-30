@@ -122,8 +122,38 @@ func (p *Portal) finishLogin(w http.ResponseWriter, r *http.Request) {
 		loginInternalError(w, r, err)
 		return
 	}
+	target, err = p.loginDestination(target, digest(p.config.OIDCIssuer+"\x00"+id.Subject), hasPortal(access))
+	if err != nil {
+		loginInternalError(w, r, err)
+		return
+	}
 	p.cookie(w, "lumi_session", value, 43200)
 	http.Redirect(w, r, safeReturn(target), http.StatusSeeOther)
+}
+
+func (p *Portal) loginDestination(target, userID string, approved bool) (string, error) {
+	target = safeReturn(target)
+	if target != "/" || !approved {
+		return target, nil
+	}
+	families, err := p.userFamilies(userID)
+	if err != nil {
+		return "", err
+	}
+	var only string
+	for _, family := range families {
+		if !family.AccessEnabled {
+			continue
+		}
+		if only != "" {
+			return "/", nil
+		}
+		only = family.Id
+	}
+	if only != "" {
+		return "/famiglie/" + only, nil
+	}
+	return "/", nil
 }
 
 type accessClaims struct {
