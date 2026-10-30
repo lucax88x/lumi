@@ -8,7 +8,7 @@ import { DictionaryPage } from './Dictionary';
 import { GlobalAdminPage } from './GlobalAdmin';
 import { AdminFamiliesPage } from './AdminFamilies';
 import './lib';
-import { PortalRoot, FamilyHub, FamilyMembers, InvitationPage } from './Portal';
+import { ErrorPage, PortalRoot, FamilyHub, FamilyMembers, InvitationPage } from './Portal';
 import { familyID, useSession } from './portal-state';
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,7 +32,8 @@ function GlobalAdminLayout() {
   const id = available.find(f => f.id === requestedFamily)?.id ?? available[0]?.id ?? '';
   return <GlobalAdminPage familyId={id}/>;
 }
-const root = createRootRoute({ component: PortalRoot, notFoundComponent: () => <div className="empty-state"><h1>Questa pagina si è nascosta!</h1><a href="/">Torniamo da Lumi</a></div> });
+const root = createRootRoute({ component: () => window.location.pathname === '/errore' ? <Outlet/> : <PortalRoot/>, notFoundComponent: () => <div className="empty-state"><h1>Questa pagina si è nascosta!</h1><a href="/">Torniamo da Lumi</a></div> });
+const errorRoute = createRoute({ getParentRoute: () => root, path: '/errore', component: ErrorPage });
 const home = createRoute({ getParentRoute: () => root, path: '/', component: FamilyHub });
 const invitation = createRoute({ getParentRoute: () => root, path: '/invito', component: InvitationPage });
 const globalAdmin = createRoute({
@@ -53,7 +54,7 @@ const chat = createRoute({ getParentRoute: () => family, path: '/domande/$id', c
 const dictionary = createRoute({ getParentRoute: () => family, path: '/dizionario', component: DictionaryPage });
 const admin = createRoute({ getParentRoute: () => family, path: '/genitore', component: AdminPage });
 const members = createRoute({ getParentRoute: () => family, path: '/membri', component: FamilyMembers });
-const router = createRouter({ routeTree: root.addChildren([home, invitation, globalAdmin, adminFamilies, family.addChildren([familyHome, chat, dictionary, admin, members])]), defaultPreload: 'intent' });
+const router = createRouter({ routeTree: root.addChildren([errorRoute, home, invitation, globalAdmin, adminFamilies, family.addChildren([familyHome, chat, dictionary, admin, members])]), defaultPreload: 'intent' });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }
 export const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 15_000, refetchOnWindowFocus: true }, mutations: { retry: false } } });
 

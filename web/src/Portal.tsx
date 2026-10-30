@@ -141,3 +141,22 @@ export function FamilyAccessManager({ family, variant = 'embedded' }: { family: 
     </section>
   </div>;
 }
+
+export function ErrorPage() {
+  const messages: Record<string, string> = {
+    invalid_login: 'Il collegamento di accesso è scaduto o non è valido. Riprova.',
+    login_failed: 'Non riesco a completare l’accesso. Riprova.',
+    invalid_identity: 'Non riesco a verificare la tua identità. Riprova.',
+    email_unverified: 'Verifica il tuo indirizzo email prima di entrare.',
+    storage_error: 'Non riesco a salvare i dati. Riprova tra poco.',
+    identity_unavailable: 'Non riesco a controllare l’accesso. Riprova.',
+  };
+  const code = new URLSearchParams(window.location.search).get('code') ?? '';
+  const description = Object.hasOwn(messages, code) ? messages[code] : 'Qualcosa non ha funzionato. Riprova tra poco.';
+  useEffect(() => {
+    document.getElementById('lumi-splash')?.remove();
+    const root = document.getElementById('root');
+    if (root) { root.hidden = false; root.inert = false; }
+  }, []);
+  return <PortalStatus title="Non riesco a completare l’accesso" description={description}><a className="primary-button" href="/auth/login?return=%2F">Riprova l’accesso</a></PortalStatus>;
+}

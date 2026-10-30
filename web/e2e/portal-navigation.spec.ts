@@ -133,3 +133,15 @@ test('logout is available from the family hub', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'A presto!' })).toBeVisible();
   await expect(page.locator('.app-shell')).toHaveCount(0);
 });
+
+test('public error page works without a session', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => { if (request.url().includes('/api/')) requests.push(request.url()); });
+  await page.goto('/errore?code=invalid_login');
+  await expect(page.getByText('Il collegamento di accesso è scaduto o non è valido. Riprova.')).toBeVisible();
+  await expect(page.locator('#lumi-splash')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Riprova l’accesso' })).toHaveAttribute('href', '/auth/login?return=%2F');
+  expect(requests).toEqual([]);
+  await page.goto('/errore?code=unknown');
+  await expect(page.getByText('Qualcosa non ha funzionato. Riprova tra poco.')).toBeVisible();
+});

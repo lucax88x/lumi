@@ -363,7 +363,7 @@ func TestOIDCCookieRefreshLogoutAndCallbackValidation(t *testing.T) {
 	if cookie == nil || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode || strings.Contains(cookie.Value, ".") {
 		t.Fatal("session cookie is not opaque and secure")
 	}
-	if retry := portalCall(p, "GET", callback, "", binding, ""); retry.Code != 400 {
+	if retry := portalCall(p, "GET", callback, "", binding, ""); retry.Code != 303 || retry.Header().Get("Location") != "/errore?code=invalid_login" {
 		t.Fatal("replayed callback")
 	}
 	sessionResponse := portalCall(p, "GET", "/api/v1/session", "", cookie, "")
@@ -403,7 +403,7 @@ func TestOIDCCookieRefreshLogoutAndCallbackValidation(t *testing.T) {
 			bad.badIssuer = mode == "issuer"
 			bad.badNonce = mode == "nonce"
 			result, _, _ := loginPortal(t, q, bad)
-			if result.Code == 303 {
+			if result.Code != 303 || result.Header().Get("Location") != "/errore?code=invalid_identity" {
 				t.Fatal("invalid token accepted")
 			}
 		})

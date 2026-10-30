@@ -246,6 +246,10 @@ func (p *Portal) Handler() http.Handler {
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		securityHeaders(w)
+		if (r.Method == "GET" || r.Method == "HEAD") && (r.URL.Path == "/errore" || strings.HasPrefix(r.URL.Path, "/assets/") || r.URL.Path == "/lumi.svg" || r.URL.Path == "/manifest.webmanifest" || r.URL.Path == "/icon-192.png" || r.URL.Path == "/icon-512.png" || r.URL.Path == "/icon-maskable.png" || r.URL.Path == "/sw.js") {
+			mux.ServeHTTP(w, r)
+			return
+		}
 		if r.URL.Path == "/healthz" || r.URL.Path == "/auth/login" || r.URL.Path == "/auth/callback" || r.URL.Path == "/auth/invite" || r.URL.Path == "/auth/invite.js" {
 			mux.ServeHTTP(w, r)
 			return
@@ -256,6 +260,10 @@ func (p *Portal) Handler() http.Handler {
 		}
 		sess, err := p.resolveSession(r)
 		if err != nil {
+			if (r.Method == "GET" || r.Method == "HEAD") && !strings.HasPrefix(r.URL.Path, "/api/") {
+				loginError(w, r, "identity_unavailable")
+				return
+			}
 			problem(w, 503, "identity_unavailable", "Non riesco a controllare l’accesso. Riprova.")
 			return
 		}

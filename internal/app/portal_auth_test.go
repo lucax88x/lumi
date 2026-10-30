@@ -71,7 +71,7 @@ func TestInvalidLoginDiagnostics(t *testing.T) {
 				cookie = &http.Cookie{Name: "lumi_login", Value: tc.cookie}
 			}
 			response := portalCall(p, "GET", "/auth/callback?"+query.Encode(), "", cookie, "")
-			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid_login"`) {
+			if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/errore?code=invalid_login" {
 				t.Fatalf("callback: %d %s", response.Code, response.Body.String())
 			}
 			var entry struct {

@@ -15,6 +15,14 @@ import (
 	"lumi/internal/api"
 )
 
+func loginError(w http.ResponseWriter, r *http.Request, code string) {
+	http.Redirect(w, r, "/errore?code="+url.QueryEscape(code), http.StatusSeeOther)
+}
+func loginInternalError(w http.ResponseWriter, r *http.Request, err error) {
+	slog.Error("storage operation failed", "error", err)
+	loginError(w, r, "storage_error")
+}
+
 func safeReturn(raw string) string {
 	u, e := url.Parse(raw)
 	if e != nil || u.IsAbs() || u.Host != "" || !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") || strings.ContainsAny(raw, "\\\r\n") || strings.HasPrefix(u.Path, "/auth/") {
@@ -29,12 +37,12 @@ func (p *Portal) beginLogin(w http.ResponseWriter, r *http.Request) {
 	binding, state, nonce, verifier := randomID()+randomID(), randomID(), randomID(), oauth2.GenerateVerifier()
 	_, err := p.db.Exec(`DELETE FROM login_attempts WHERE expires_at<?`, time.Now().Unix())
 	if err != nil {
-		internalError(w, err)
+		loginInternalError(w, r, err)
 		return
 	}
 	_, err = p.db.Exec(`INSERT INTO login_attempts VALUES(?,?,?,?,?,?)`, digest(binding), state, nonce, verifier, safeReturn(r.URL.Query().Get("return")), time.Now().Add(10*time.Minute).Unix())
 	if err != nil {
-		internalError(w, err)
+		loginInternalError(w, r, err)
 		return
 	}
 	p.cookie(w, "lumi_login", binding, 600)
@@ -55,7 +63,7 @@ func (p *Portal) finishLogin(w http.ResponseWriter, r *http.Request) {
 		} else {
 			logFailure("oversized_cookie")
 		}
-		problem(w, 400, "invalid_login", "Il collegamento di accesso è scaduto. Riprova.")
+		loginError(w, r, "invalid_login")
 		return
 	}
 	var state, nonce, verifier, target string
@@ -72,20 +80,20 @@ func (p *Portal) finishLogin(w http.ResponseWriter, r *http.Request) {
 		default:
 			logFailure("missing_code")
 		}
-		problem(w, 400, "invalid_login", "Il collegamento di accesso non è valido. Riprova.")
+		loginError(w, r, "invalid_login")
 		return
 	}
 	ctx := oidc.ClientContext(r.Context(), p.client)
 	token, err := p.oauth.Exchange(ctx, query.Get("code"), oauth2.VerifierOption(verifier))
 	if err != nil {
-		problem(w, 502, "login_failed", "Non riesco a completare l’accesso. Riprova.")
+		loginError(w, r, "login_failed")
 		return
 	}
 	raw, _ := token.Extra("id_token").(string)
 	id, err := p.provider.Verifier(&oidc.Config{ClientID: p.config.OIDCClientID}).Verify(ctx, raw)
 	if err != nil || !equal(id.Nonce, nonce) {
 		slog.Warn("OIDC login validation failed", "stage", "id_token_or_nonce")
-		problem(w, 400, "invalid_identity", "Identità non valida.")
+		loginError(w, r, "invalid_identity")
 		return
 	}
 	var identity struct {
@@ -93,25 +101,25 @@ func (p *Portal) finishLogin(w http.ResponseWriter, r *http.Request) {
 		Verified bool   `json:"email_verified"`
 	}
 	if id.Claims(&identity) != nil || identity.Email == "" || !identity.Verified {
-		problem(w, 403, "email_unverified", "Verifica il tuo indirizzo email prima di entrare.")
+		loginError(w, r, "email_unverified")
 		return
 	}
 	access, err := p.verifyAccess(ctx, token.AccessToken)
 	if err != nil || access.Subject != id.Subject {
 		slog.Warn("OIDC login validation failed", "stage", "access_token_or_subject")
-		problem(w, 400, "invalid_identity", "Identità non valida.")
+		loginError(w, r, "invalid_identity")
 		return
 	}
 	if old, _ := r.Cookie("lumi_session"); old != nil {
 		_, err = p.db.Exec(`DELETE FROM portal_sessions WHERE token_hash=?`, digest(old.Value))
 		if err != nil {
-			internalError(w, err)
+			loginInternalError(w, r, err)
 			return
 		}
 	}
 	value, err := p.createSession(identity.Email, id.Subject, token, access)
 	if err != nil {
-		internalError(w, err)
+		loginInternalError(w, r, err)
 		return
 	}
 	p.cookie(w, "lumi_session", value, 43200)
