@@ -298,7 +298,7 @@ test('a question opens its own chat and follow-ups stay there', async ({ page })
   await page.getByRole('button', { name: 'Più facile', exact: true }).click();
   await expect(page.getByText('Proviamo con parole più semplici.')).toBeVisible();
   expect(state.chats).toHaveLength(1); expect(state.messages.get(state.chats[0].id)).toHaveLength(4);
-  await page.getByRole('link', { name: 'Il mio angolino' }).last().click();
+  await page.getByRole('link', { name: 'Fai una nuova domanda', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill('Che cosa significa gentile?');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.getByText('Meraviglia è una bella sorpresa, come quando vedi un arcobaleno.')).toBeVisible();
@@ -720,7 +720,7 @@ test('English cards retain their subject after reload and share a separate dicti
   await expect(page.locator('.example-translation')).toHaveText('Il cane è felice.');
   expect(api.chats[0].subject).toBe('english');
   await page.reload();
-  await expect(page.locator('.conversation-heading')).toContainText('Inglese');
+  await expect(page.locator('.chat-title')).toContainText('Inglese');
   await expect(page.locator('.word-heading')).toHaveText('dog');
   await page.getByLabel('Scrivi una parola o una frase').fill('Cosa significa dog?');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
@@ -780,4 +780,129 @@ test('parents edit and preview English instructions independently from Italian',
   await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.englishSettings.defaultPrompt);
   await page.getByRole('button', { name: 'Italiano', exact: true }).click();
   await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.settings.prompt);
+});
+
+test('mobile tabs open discoveries without losing the draft and restore keyboard focus', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 720 });
+  await mockAPI(page);
+  await page.goto('/famiglie/test');
+  const tabs = page.getByRole('navigation', { name: 'Il tuo angolino' });
+  const question = page.getByLabel('Scrivi una parola o una frase');
+  await question.fill('Una domanda da finire');
+  const discoveries = tabs.getByRole('button', { name: 'Scoperte', exact: true });
+  await discoveries.click();
+  const dialog = page.getByRole('dialog', { name: 'Le mie scoperte' });
+  await expect(dialog.getByText('Cominciamo dalla prima?', { exact: false })).toBeVisible();
+  await expect(dialog.getByRole('link', { name: 'Fai una domanda' })).toBeVisible();
+  await page.screenshot({ path: `test-results/discoveries-empty-${testInfo.project.name}.png` });
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(discoveries).toBeFocused();
+  await expect(question).toHaveValue('Una domanda da finire');
+  await tabs.getByRole('link', { name: 'Dizionario', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Il mio dizionario' })).toBeVisible();
+  await expect(tabs.getByRole('link', { name: 'Dizionario', exact: true })).toHaveAttribute('aria-current', 'page');
+  await tabs.getByRole('link', { name: 'Domanda', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
+  await expect(tabs.getByRole('link', { name: 'Domanda', exact: true })).toHaveAttribute('aria-current', 'page');
+});
+
+test('discoveries retry failures, scroll long history and reopen the current chat', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  const api = await mockAPI(page);
+  const date = new Date().toISOString();
+  for (let index = 0; index < 30; index++) {
+    const id = `saved-${index}`;
+    api.chats.push({ id, title: `La mia scoperta numero ${index + 1}`, subject: 'italian', createdAt: date, updatedAt: date });
+    api.messages.set(id, []);
+  }
+  let unavailable = true;
+  await page.route('**/api/v1/families/test/conversations', async route => {
+    if (unavailable) return route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    return route.fallback();
+  });
+  await page.goto('/famiglie/test');
+  const trigger = page.getByRole('button', { name: 'Scoperte', exact: true });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Le mie scoperte' });
+  await expect(dialog.getByRole('alert')).toContainText('Non riesco a caricare le tue scoperte.');
+  unavailable = false;
+  await dialog.getByRole('button', { name: 'Riprova', exact: true }).click();
+  await expect(dialog.getByRole('link')).toHaveCount(30);
+  const last = dialog.getByRole('link', { name: /La mia scoperta numero 30/ });
+  await last.scrollIntoViewIfNeeded();
+  await expect(last).toBeInViewport();
+  await expect(dialog.getByRole('button', { name: 'Chiudi scoperte' })).toBeInViewport();
+  await page.screenshot({ path: `test-results/discoveries-list-${testInfo.project.name}.png` });
+  await last.click();
+  await expect(page).toHaveURL(/\/domande\/saved-29$/);
+  await expect(dialog).toHaveCount(0);
+  await trigger.click();
+  await expect(last).toHaveAttribute('aria-current', 'page');
+  await last.click();
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('long streaming answers respect reading position and keep the composer in view', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.clock.install();
+  const api = await mockAPI(page);
+  const date = new Date().toISOString();
+  api.chats.push({ id: 'long', title: 'Leggiamo un pezzetto alla volta', subject: 'italian', createdAt: date, updatedAt: date });
+  const answer: Message = { id: 'long-answer', conversationId: 'long', role: 'assistant', status: 'streaming', text: 'Una parola nuova ci aiuta a raccontare quello che vediamo.\n\n'.repeat(35), createdAt: date };
+  api.messages.set('long', [answer]);
+  await page.goto('/famiglie/test/domande/long');
+  const reading = page.getByRole('region', { name: 'Leggi la conversazione' });
+  await expect(page.locator('.message.assistant')).toHaveCount(1);
+  await expect.poll(() => reading.evaluate(area => area.scrollTop)).toBeGreaterThan(0);
+  const composer = page.getByRole('region', { name: 'Fai una domanda' });
+  const initialBox = (await composer.boundingBox())!;
+  await reading.evaluate(area => { area.scrollTop = 0; });
+  const latest = page.getByRole('button', { name: 'Ultima risposta', exact: true });
+  await expect(latest).toBeVisible();
+  answer.text += 'Ecco un altro pezzetto da leggere.';
+  await page.clock.fastForward(2100);
+  await expect(page.locator('.message.assistant')).toContainText('Ecco un altro pezzetto da leggere.');
+  expect(await reading.evaluate(area => area.scrollTop)).toBe(0);
+  await expect(latest).toBeVisible();
+  await latest.click();
+  await expect.poll(() => reading.evaluate(area => area.scrollHeight - area.scrollTop - area.clientHeight)).toBeLessThan(2);
+  await expect(latest).toBeHidden();
+  const finalBox = (await composer.boundingBox())!;
+  expect(finalBox.y).toBeCloseTo(initialBox.y, 0);
+  expect(finalBox.y + finalBox.height).toBeLessThanOrEqual(700);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page.getByRole('button', { name: 'Parla con Lumi' })).toBeInViewport();
+});
+
+test('chat adapts to keyboard viewport changes and small landscape screens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 850 });
+  await mockAPI(page);
+  await page.goto('/famiglie/test');
+  await page.getByLabel('Scrivi una parola o una frase').fill('Meraviglia');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.locator('.message.assistant')).toHaveCount(1);
+  await page.getByLabel('Scrivi una parola o una frase').fill('Un’altra domanda');
+  // Desktop Chromium does not open an OS keyboard: model its visual viewport.
+  await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport!, 'height', { configurable: true, value: 480 });
+    window.visualViewport!.dispatchEvent(new Event('resize'));
+  });
+  const tabs = page.getByRole('navigation', { name: 'Il tuo angolino' });
+  await expect(tabs).toBeHidden();
+  const send = page.getByRole('button', { name: 'Scopriamo!' });
+  const keyboardBox = (await send.boundingBox())!;
+  expect(keyboardBox.y + keyboardBox.height).toBeLessThanOrEqual(480);
+  await expect(page.getByLabel('Scrivi una parola o una frase')).toHaveValue('Un’altra domanda');
+  await page.evaluate(() => {
+    delete (window.visualViewport as unknown as { height?: number }).height;
+    window.visualViewport!.dispatchEvent(new Event('resize'));
+  });
+  await expect(tabs).toBeVisible();
+  await page.setViewportSize({ width: 740, height: 390 });
+  await expect(send).toBeInViewport();
+  await expect(tabs).toBeInViewport();
+  expect(await page.getByRole('region', { name: 'Leggi la conversazione' }).evaluate(area => area.clientHeight)).toBeGreaterThan(40);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
