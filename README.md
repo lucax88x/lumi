@@ -24,7 +24,7 @@ Apri **http://localhost:15173**. Go e Vite girano sul computer con `just dev`; C
 - Keycloak admin: **http://localhost:19090/keycloak/admin/**. Utente e password sono in `.env.stack.local`.
 - Email di verifica e recupero password: **http://localhost:18025** (Mailpit).
 - Registrati, verifica l’email in Mailpit e assegna `portal-access` al nuovo utente dal realm **lumi**, in **Users → Role mapping → Assign role**.
-- Assegna anche `portal-admin` ai soli amministratori che devono gestire il collegamento condiviso. Rientra in Lumi e apri **Admin** per collegare ChatGPT una volta per tutte le famiglie.
+- Assegna anche `portal-admin` ai soli amministratori che devono gestire il collegamento condiviso. Rientra in Lumi e apri **Admin** per collegare ChatGPT una volta per tutti gli spazi.
 - Per Google, configura le credenziali come descritto nella [guida operativa](docs/deployment.md). Senza credenziali il pulsante Google non appare.
 
 ```sh
@@ -34,13 +34,15 @@ just local-down       # Ferma i container, conserva i volumi.
 just test-auth        # Ferma prima just dev; i test avviano il proprio backend nativo.
 ```
 
-I test di autenticazione richiedono i servizi di `just local-up`, compilano Lumi e avviano un backend nativo su **http://localhost:15173**, con dati separati in `data/auth-tests`. Rimuovono gli account di prova da Keycloak e conservano i dati delle famiglie nella directory di test. Non chiamano Google o OpenAI. Le credenziali di test non vengono aggiunte alla configurazione di produzione.
+I test di autenticazione richiedono i servizi di `just local-up`, compilano Lumi e avviano un backend nativo su **http://localhost:15173**, con dati separati in `data/auth-tests`. Rimuovono gli account di prova da Keycloak e conservano i dati degli spazi nella directory di test. Non chiamano Google o OpenAI. Le credenziali di test non vengono aggiunte alla configurazione di produzione.
 
-## Famiglie e permessi
+## Spazi e permessi
 
-Un account approvato può creare più famiglie e far parte di altre. La persona che crea una famiglia ne diventa il primo genitore. Ogni famiglia conserva separatamente conversazioni, istruzioni didattiche e preferenze vocali. Tutte le famiglie riutilizzano lo stesso collegamento ChatGPT, modello e chiave API del server.
+Un account approvato può creare più spazi e far parte di altri. La persona che crea uno spazio ne diventa il primo coach. Ogni spazio conserva separatamente conversazioni, istruzioni didattiche e preferenze vocali. Tutti gli spazi riutilizzano lo stesso collegamento ChatGPT, modello e chiave API del server.
 
-I membri condividono le scoperte della propria famiglia. Solo i genitori possono modificare le preferenze didattiche e vocali, gestire la cronologia e invitare o rimuovere persone. Una persona può essere genitore in una famiglia e membro in un’altra. Non si può rimuovere o declassare l’ultimo genitore. Il ruolo Keycloak **`portal-admin`**, assegnato esplicitamente oltre a `portal-access`, abilita la sezione **Admin** (`/admin`): essere genitore non concede accesso alle connessioni condivise e gli amministratori non ottengono accesso alle conversazioni delle altre famiglie.
+I membri condividono le scoperte del proprio spazio. Solo i coach possono modificare le preferenze didattiche e vocali, gestire la cronologia e invitare o rimuovere persone. Una persona può essere coach in uno spazio e membro in un altro. Non si può rimuovere o declassare l’ultimo coach. Il ruolo Keycloak **`portal-admin`**, assegnato esplicitamente oltre a `portal-access`, abilita la sezione **Admin** (`/admin`): essere coach non concede accesso alle connessioni condivise e gli amministratori non ottengono accesso alle conversazioni degli altri spazi.
+
+Le pagine degli spazi usano `/spazi/ID` e `/spazi/ID/coach`; la gestione amministrativa usa `/admin/spazi`. I vecchi link vengono aggiornati automaticamente conservando query e frammenti. Le API e i dati conservano i nomi tecnici `families` e `parent` per compatibilità: nell’interfaccia corrispondono a spazi e coach.
 
 Gli inviti sono link copiabili, validi sette giorni e utilizzabili una sola volta dall’indirizzo email verificato indicato. Un invito non concede `portal-access`: l’approvazione resta all’amministratore Keycloak.
 
@@ -48,16 +50,16 @@ In produzione SMTP è opzionale e spento per impostazione predefinita: con `SMTP
 
 ## Collegare il piano ChatGPT
 
-1. Accedi con un account con `portal-access` e `portal-admin` e apri **Admin** dalla pagina famiglie o dalla navigazione.
+1. Accedi con un account con `portal-access` e `portal-admin` e apri **Admin** dalla pagina spazi o dalla navigazione.
 2. Premi **Continue with ChatGPT**, poi **Apri il consenso ChatGPT**.
 3. Autorizza l’utilizzo del tuo piano.
 4. Il ritorno prova ad aprire `http://127.0.0.1:1455/auth/callback?...`. Copia l’URL completo dalla barra degli indirizzi, anche se la pagina non si apre.
 5. Incollalo in **URL finale di ritorno** entro dieci minuti.
-6. Scegli un modello disponibile e premi **Salva modello**. Il piano e il modello valgono per tutte le famiglie, comprese quelle create in seguito.
+6. Scegli un modello disponibile e premi **Salva modello**. Il piano e il modello valgono per tutti gli spazi, compresi quelli creati in seguito.
 
-Il backend verifica PKCE, state, nonce, firma, audience e utilizzo singolo del ritorno. Il collegamento è distinto dal login Keycloak e appartiene all’installazione. Una sola istanza OAuth coordina i rinnovi per tutte le famiglie. **Scollega per tutti** interrompe anche le generazioni attive delle famiglie. Non copiare lo stesso grant tra installazioni: i refresh token ruotano.
+Il backend verifica PKCE, state, nonce, firma, audience e utilizzo singolo del ritorno. Il collegamento è distinto dal login Keycloak e appartiene all’installazione. Una sola istanza OAuth coordina i rinnovi per tutti gli spazi. **Scollega per tutti** interrompe anche le generazioni attive degli spazi. Non copiare lo stesso grant tra installazioni: i refresh token ruotano.
 
-Il grant condiviso è salvato privatamente in `DATA_DIR/chatgpt.json` e il modello in `DATA_DIR/lumi.db`. Un collegamento globale già presente viene conservato. Nell’aggiornamento dal precedente modello per famiglia, se esiste un solo grant collegato viene promosso con il suo modello; se ne esistono più di uno, un amministratore deve collegare l’account condiviso da **Admin**. I vecchi file delle famiglie vengono conservati ma non sono più usati: non avviare una vecchia versione in parallelo sullo stesso grant.
+Il grant condiviso è salvato privatamente in `DATA_DIR/chatgpt.json` e il modello in `DATA_DIR/lumi.db`. Un collegamento globale già presente viene conservato. Nell’aggiornamento dal precedente modello per spazio, se esiste un solo grant collegato viene promosso con il suo modello; se ne esistono più di uno, un amministratore deve collegare l’account condiviso da **Admin**. I vecchi file degli spazi vengono conservati ma non sono più usati: non avviare una vecchia versione in parallelo sullo stesso grant.
 
 Le risposte usano il piano ChatGPT attraverso l’SDK OpenAI e l’API Responses, con `store:false`, streaming e cronologia locale. Non c’è un passaggio automatico alle API a pagamento. I limiti dipendono dal piano collegato.
 
@@ -65,13 +67,13 @@ I vocali usano invece `OPENAI_API_KEY` da `.env` in produzione (`.env.local` nel
 
 ## Interfaccia e dati
 
-- Nella home si sceglie **Italiano** o **Inglese**. Ogni conversazione conserva la materia; nell’angolo del genitore le istruzioni e la prova sono separate per materia.
+- Nella home si sceglie **Italiano** o **Inglese**. Ogni conversazione conserva la materia; nell’area coach le istruzioni e la prova sono separate per materia.
 - Le risposte arrivano in streaming. Il testo parziale resta salvato quando una risposta si interrompe; le generazioni non vengono ripetute automaticamente.
 - Le mappe di frasi e argomenti vengono conservate insieme alla risposta. Le immagini vengono cercate su Wikipedia solo quando richieste, con attribuzioni Wikimedia.
 - Per una singola parola, Lumi mostra significato ed esempio in due schede. In Italiano, quando possibile usa un sinonimo facile come significato. In Inglese mostra la parola inglese, il significato italiano e un esempio inglese con traduzione, anche partendo da una domanda italiana.
-- **Il mio dizionario** conserva le nuove parole spiegate nella famiglia, in due sezioni, Italiano e Inglese, con ricerca, ascolto e ripasso tramite schede della materia scelta. I risultati del ripasso valgono solo per la sessione corrente. Le parole restano anche dopo l’eliminazione delle chat; i genitori possono gestirle separatamente dal loro angolo.
+- **Il mio dizionario** conserva le nuove parole spiegate nello spazio, in due sezioni, Italiano e Inglese, con ricerca, ascolto e ripasso tramite schede della materia scelta. I risultati del ripasso valgono solo per la sessione corrente. Le parole restano anche dopo l’eliminazione delle chat; i coach possono gestirle separatamente dall’area coach.
 - La lettura usa le voci italiana e inglese del dispositivo secondo la lingua del contenuto. Le due preferenze vocali restano sul dispositivo e non contengono dati di autenticazione. I vocali dell’assistente inglese accettano entrambe le lingue e si possono correggere prima dell’invio.
-- Chat e impostazioni rimangono nella famiglia fino alla loro eliminazione. Audio, testo e contesto necessari vengono inviati a OpenAI; evita dati personali nelle domande.
+- Chat e impostazioni rimangono nello spazio fino alla loro eliminazione. Audio, testo e contesto necessari vengono inviati a OpenAI; evita dati personali nelle domande.
 - Il service worker conserva soltanto asset generici. HTML autenticato, API e conversazioni non vengono memorizzati nella cache offline.
 
 I prompt iniziali sono in `internal/app/prompt.txt` e `internal/app/prompt_english.txt`; le valutazioni didattiche sono in [docs/pedagogy.md](docs/pedagogy.md).

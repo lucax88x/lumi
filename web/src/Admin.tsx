@@ -23,9 +23,9 @@ export function AdminPage() {
   const session = useSession();
   const family = session.families.find(f => f.id === familyId);
   return <div className="admin-page">
-    <Link className="back-link" to="/famiglie/$familyId" params={{ familyId: familyId }}><ArrowLeft size={16}/>Torna da Lumi</Link>
-    <div className="admin-heading"><span className="admin-badge"><ShieldCheck size={24}/></span><div><span className="eyebrow">UNO SPAZIO PER TE</span><h1>L’angolo del genitore</h1><p>Prepara Lumi, scegli la sua voce e segui le piccole scoperte.</p></div></div>
-    {family?.role === 'parent' ? <AdminPanel/> : <p role="alert">Questa parte è riservata ai genitori.</p>}
+    <Link className="back-link" to="/spazi/$familyId" params={{ familyId: familyId }}><ArrowLeft size={16}/>Torna da Lumi</Link>
+    <div className="admin-heading"><span className="admin-badge"><ShieldCheck size={24}/></span><div><span className="eyebrow">UNO SPAZIO PER TE</span><h1>Area coach</h1><p>Prepara Lumi, scegli la sua voce e segui le piccole scoperte.</p></div></div>
+    {family?.role === 'parent' ? <AdminPanel/> : <p role="alert">Questa parte è riservata ai coach.</p>}
   </div>;
 }
 function AdminPanel() {
@@ -33,10 +33,10 @@ function AdminPanel() {
   const settings = useQuery(getSettingsOptions({ path: { familyId } }));
   const session = useSession();
   return <>
-    <div className="admin-toolbar"><span className="private-label"><ShieldCheck size={15}/>Accesso privato</span><Link className="text-button" to="/famiglie/$familyId/membri" params={{ familyId: familyId }}>Gestisci la famiglia</Link></div>
-    <Tabs.Root defaultValue="settings" className="admin-tabs"><Tabs.List className="tab-list"><Tabs.Tab value="settings"><Settings2 size={17}/>Impostazioni</Tabs.Tab><Tabs.Tab value="prompt"><FileText size={17}/>Come insegna</Tabs.Tab><Tabs.Tab value="history"><Eye size={17}/>Le sue scoperte</Tabs.Tab></Tabs.List>
+    <div className="admin-toolbar"><span className="private-label"><ShieldCheck size={15}/>Accesso privato</span><Link className="text-button" to="/spazi/$familyId/membri" params={{ familyId: familyId }}>Gestisci lo spazio</Link></div>
+    <Tabs.Root defaultValue="settings" className="admin-tabs"><Tabs.List className="tab-list"><Tabs.Tab value="settings"><Settings2 size={17}/>Impostazioni</Tabs.Tab><Tabs.Tab value="prompt"><FileText size={17}/>Come insegna</Tabs.Tab><Tabs.Tab value="history"><Eye size={17}/>Scoperte dello spazio</Tabs.Tab></Tabs.List>
       <Tabs.Panel value="settings">
-        <section className="admin-card"><h2>Un piano condiviso</h2><p>Il collegamento ChatGPT e il modello sono gestiti dall’amministratore per tutte le famiglie.</p>{session.admin && <Link className="text-button" to="/admin" search={{ family: familyId }}>Apri Admin</Link>}</section>
+        <section className="admin-card"><h2>Un piano condiviso</h2><p>Il collegamento ChatGPT e il modello sono gestiti dall’amministratore per tutti gli spazi.</p>{session.admin && <Link className="text-button" to="/admin" search={{ family: familyId }}>Apri Admin</Link>}</section>
         {settings.isPending && <section className="admin-card"><LoadingSkeleton label="Caricamento delle impostazioni"/></section>}
         {settings.data && <Preferences initial={settings.data}/>}
         {settings.isError && <p className="error-text">{errorMessage(settings.error)}</p>}
@@ -95,7 +95,7 @@ function HistoryPanel() {
   const familyId = familyID();
   const qc = useQueryClient(); const chats = useQuery(listConversationsOptions({ path: { familyId: familyId } })); const [selected, setSelected] = useState<string | null>(null); const [remove, setRemove] = useState<string | null>(null);
   const detail = useQuery({ ...getConversationOptions({ path: { familyId: familyId, conversationId: selected ?? '' } }), enabled: Boolean(selected) });
-  return <section className="admin-card"><div className="section-heading"><div><h2>Le sue scoperte</h2><p>Rileggi le conversazioni e gestisci ciò che viene conservato.</p></div><button className="text-button danger-text" disabled={!chats.data?.length} onClick={() => setRemove('all')}><Trash2 size={16}/>Elimina tutto</button></div>
+  return <section className="admin-card"><div className="section-heading"><div><h2>Scoperte dello spazio</h2><p>Rileggi le conversazioni e gestisci ciò che viene conservato.</p></div><button className="text-button danger-text" disabled={!chats.data?.length} onClick={() => setRemove('all')}><Trash2 size={16}/>Elimina tutto</button></div>
     {chats.isPending && <LoadingSkeleton label="Caricamento delle conversazioni"/>}
     {chats.data?.length === 0 && <div className="empty-state"><FileText size={30}/><p>Le prime domande compariranno qui.</p></div>}{chats.isError && <p className="error-text">{errorMessage(chats.error)}</p>}
     <div className="history-table">{chats.data?.map(c => <div className="history-row" key={c.id}><button onClick={() => setSelected(c.id)}><span>{c.title}</span><small>{subjectLabel(c.subject)} · {shortDate(c.createdAt)}</small></button><button className="icon-button danger-text" aria-label={`Elimina ${c.title}`} onClick={() => setRemove(c.id)}><Trash2 size={17}/></button></div>)}</div>

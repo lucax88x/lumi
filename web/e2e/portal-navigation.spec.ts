@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Family } from '../src/api/types.gen';
 
-const family: Family = { id: 'alba', name: 'Famiglia Alba', role: 'parent', accessEnabled: true };
+const family: Family = { id: 'alba', name: 'Spazio Alba', role: 'parent', accessEnabled: true };
 
 async function mockPortal(page: Page, families: Family[] = [], admin = false) {
   const state = { families: [...families], familyRequests: [] as string[] };
@@ -45,14 +45,14 @@ async function expectPortalNavigation(page: Page, admin = false) {
   await expect(page.getByRole('main')).toHaveCount(1);
   await expect(page.locator('.portal-account')).toHaveCount(0);
   await openNavigation(page);
-  await expect(page.getByRole('link', { name: 'Le tue famiglie', exact: true })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: 'I tuoi spazi', exact: true })).toHaveAttribute('href', '/');
   await expect(page.getByRole('link', { name: 'Il mio angolino' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Il mio dizionario' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Angolo del genitore' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Area coach' })).toHaveCount(0);
   await expect(page.getByText('LE MIE SCOPERTE', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Cambia famiglia' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Cambia spazio' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(admin ? 1 : 0);
-  const account = page.getByRole('navigation', { name: 'Account e famiglia' });
+  const account = page.getByRole('navigation', { name: 'Account e spazio' });
   await expect(account.getByText('user@example.test')).toBeVisible();
   await expect(account.getByRole('button', { name: 'Esci', exact: true })).toBeVisible();
   await closeNavigation(page);
@@ -64,9 +64,9 @@ for (const admin of [false, true]) {
     test(`family hub uses portal navigation (${admin ? 'admin' : 'user'}, ${families.length === 0 ? 'no families' : families[0].accessEnabled ? 'active family' : 'suspended family'})`, async ({ page }, testInfo) => {
       const state = await mockPortal(page, families, admin);
       await page.goto('/');
-      await expect(page.getByRole('heading', { name: 'Le tue famiglie' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'I tuoi spazi' })).toBeVisible();
       await expectPortalNavigation(page, admin);
-      await expect(page.getByRole('link', { name: 'Le tue famiglie', exact: true, includeHidden: true })).toHaveClass(/selected/);
+      await expect(page.getByRole('link', { name: 'I tuoi spazi', exact: true, includeHidden: true })).toHaveClass(/selected/);
       expect(state.familyRequests).toHaveLength(0);
       if (admin && families.length === 0) await page.screenshot({ path: `test-results/family-hub-${testInfo.project.name}.png`, fullPage: true });
     });
@@ -75,8 +75,8 @@ for (const admin of [false, true]) {
 
 for (const [path, heading, families] of [
   ['/invito', 'Un invito per te', []],
-  ['/famiglie/missing', 'Famiglia non disponibile', [family]],
-  ['/famiglie/alba', 'Accesso sospeso', [{ ...family, accessEnabled: false }]],
+  ['/spazi/missing', 'Spazio non disponibile', [family]],
+  ['/spazi/alba', 'Accesso sospeso', [{ ...family, accessEnabled: false }]],
   ['/pagina-inesistente', 'Questa pagina si è nascosta!', []],
 ] as const) {
   test(`portal navigation remains available at ${path}`, async ({ page }) => {
@@ -94,41 +94,41 @@ for (const entry of ['create', 'invite'] as const) {
     await page.goto(entry === 'create' ? '/' : '/invito#test-token');
     await expectPortalNavigation(page);
     if (entry === 'create') {
-      await page.getByLabel('Crea una famiglia').fill(family.name);
-      await page.getByRole('button', { name: 'Crea famiglia', exact: true }).click();
+      await page.getByLabel('Crea uno spazio').fill(family.name);
+      await page.getByRole('button', { name: 'Crea spazio', exact: true }).click();
     } else await page.getByRole('button', { name: 'Accetta invito' }).click();
     await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await openNavigation(page);
-    await expect(page.getByRole('link', { name: 'Il mio angolino' })).toHaveAttribute('href', '/famiglie/alba');
+    await expect(page.getByRole('link', { name: 'Il mio angolino' })).toHaveAttribute('href', '/spazi/alba');
     await expect(page.getByRole('link', { name: 'Il mio dizionario' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Angolo del genitore' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Area coach' })).toBeVisible();
     await expect(page.getByRole('link', { name: /Perché il cielo è blu/ })).toBeVisible();
-    await page.getByRole('link', { name: 'Cambia famiglia' }).click();
-    await expect(page.getByRole('heading', { name: 'Le tue famiglie' })).toBeVisible();
+    await page.getByRole('link', { name: 'Cambia spazio' }).click();
+    await expect(page.getByRole('heading', { name: 'I tuoi spazi' })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expectPortalNavigation(page);
     await expect(page.getByRole('link', { name: /Perché il cielo è blu/ })).toHaveCount(0);
-    await page.getByRole('link', { name: /Famiglia Alba/ }).click();
+    await page.getByRole('link', { name: /Spazio Alba/ }).click();
     await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   });
 }
 
 test('members see discoveries without parent or administrator actions', async ({ page }) => {
   await mockPortal(page, [{ ...family, role: 'member' }]);
-  await page.goto('/famiglie/alba');
+  await page.goto('/spazi/alba');
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   await openNavigation(page);
   await expect(page.getByRole('link', { name: 'Il mio dizionario' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Perché il cielo è blu/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Angolo del genitore' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Area coach' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0);
 });
 
 test('logout is available from the family hub', async ({ page }) => {
   await mockPortal(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Le tue famiglie' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'I tuoi spazi' })).toBeVisible();
   await openNavigation(page);
   await page.getByRole('button', { name: 'Esci', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'A presto!' })).toBeVisible();

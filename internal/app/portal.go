@@ -194,7 +194,7 @@ func (p *Portal) withFamily(w http.ResponseWriter, r *http.Request, id string, p
 	var enabled bool
 	err := p.db.QueryRow(`SELECT m.role,f.access_enabled FROM memberships m JOIN families f ON f.id=m.family_id WHERE family_id=? AND user_id=?`, id, sess.UserID).Scan(&role, &enabled)
 	if errors.Is(err, sql.ErrNoRows) {
-		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
+		problem(w, 404, "not_found", "Questo spazio non è disponibile.")
 		return
 	}
 	if err != nil {
@@ -202,20 +202,20 @@ func (p *Portal) withFamily(w http.ResponseWriter, r *http.Request, id string, p
 		return
 	}
 	if !enabled {
-		problem(w, 403, "family_suspended", "L’accesso a questa famiglia è sospeso. Contatta un amministratore.")
+		problem(w, 403, "family_suspended", "L’accesso a questo spazio è sospeso. Contatta un amministratore.")
 		return
 	}
 	if parent && role != "parent" {
-		problem(w, 403, "parent_required", "Questa parte è riservata ai genitori.")
+		problem(w, 403, "parent_required", "Questa parte è riservata ai coach.")
 		return
 	}
 	f, err := p.family(id)
 	if errors.Is(err, sql.ErrNoRows) {
-		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
+		problem(w, 404, "not_found", "Questo spazio non è disponibile.")
 		return
 	}
 	if errors.Is(err, errFamilySuspended) {
-		problem(w, 403, "family_suspended", "L’accesso a questa famiglia è sospeso. Contatta un amministratore.")
+		problem(w, 403, "family_suspended", "L’accesso a questo spazio è sospeso. Contatta un amministratore.")
 		return
 	}
 	if err != nil {

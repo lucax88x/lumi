@@ -48,7 +48,7 @@ test('shared Admin requires the explicit portal-admin realm role', async ({ page
   try {
     await approve(id);
     await login(page, email, password);
-    await expect(page.getByRole('heading', { name: 'Le tue famiglie' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'I tuoi spazi' })).toBeVisible();
     expect((await session(page)).admin).toBe(false);
     expect((await appRequest(page, '/api/v1/admin/connection')).status).toBe(403);
     await page.goto(origin + '/admin');
@@ -105,8 +105,8 @@ test('registration, verified email, approval, families, invitations and cookie-o
     await expect(page.getByRole('heading', { name: 'Il tuo angolino ti aspetta' })).toBeVisible();
     expect((await appRequest(page, '/api/v1/families', 'POST', { name: 'Forbidden' })).status).toBe(403);
     await approve(id); await page.getByRole('button', { name: 'Controlla l’accesso' }).click();
-    await expect(page.getByRole('heading', { name: 'Le tue famiglie' })).toBeVisible();
-    await page.getByLabel('Crea una famiglia').fill('Le lucciole'); await page.getByRole('button', { name: 'Crea famiglia', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'I tuoi spazi' })).toBeVisible();
+    await page.getByLabel('Crea uno spazio').fill('Le lucciole'); await page.getByRole('button', { name: 'Crea spazio', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Lumi si sta preparando' })).toBeVisible();
     const first = (await session(page)).families[0]; expect(first.role).toBe('parent');
     const second = await appRequest(page, '/api/v1/families', 'POST', { name: 'Le stelle' }); expect(second.status).toBe(201); const other = second.body as Family;
@@ -118,15 +118,15 @@ test('registration, verified email, approval, families, invitations and cookie-o
     const otherChats = await appRequest(page, `/api/v1/families/${other.id}/conversations`); expect(otherChats.body).toEqual([]);
     const members = await appRequest(page, `/api/v1/families/${first.id}/members`);
     expect((await appRequest(page, `/api/v1/families/${first.id}/members/${members.body[0].userId}`, 'DELETE')).status).toBe(409);
-    await page.goto(origin + `/famiglie/${first.id}`);
+    await page.goto(origin + `/spazi/${first.id}`);
     await openNavigation(page);
-    await page.getByRole('link', { name: /Cambia famiglia/ }).click();
+    await page.getByRole('link', { name: /Cambia spazio/ }).click();
     await page.getByRole('link', { name: /Le stelle/ }).click();
     await expect(page).toHaveURL(new RegExp(other.id));
     await expect(page.getByText(conversation.title)).toHaveCount(0);
     const responseBodies: string[] = [];
     page.on('response', async response => { if (response.url().startsWith(origin + '/api/')) responseBodies.push(await response.text().catch(() => '')); });
-    await page.goto(origin + `/famiglie/${first.id}/membri`); await page.getByLabel('Email della persona').fill(guestEmail); await page.getByRole('button', { name: 'Invita', exact: true }).click();
+    await page.goto(origin + `/spazi/${first.id}/membri`); await page.getByLabel('Email della persona').fill(guestEmail); await page.getByRole('button', { name: 'Invita', exact: true }).click();
     const invitation = await page.getByLabel('Link da condividere').inputValue(); expect(invitation).toContain('/auth/invite#');
     const guestID = await seedAccount(guestEmail, password); createdUsers.push(guestID);
     const guestContext = await browser.newContext(); const guest = await guestContext.newPage();
@@ -138,7 +138,7 @@ test('registration, verified email, approval, families, invitations and cookie-o
     expect((await appRequest(guest, `/api/v1/families/${other.id}/conversations`)).status).toBe(404);
     expect((await appRequest(guest, `/api/v1/families/${first.id}/admin/settings`)).status).toBe(403);
     expect((await appRequest(guest, '/api/v1/invitations/accept', 'POST', { token: inviteToken })).status).toBe(404);
-    const guestFamily = await appRequest(guest, '/api/v1/families', 'POST', { name: 'La famiglia ospite' });
+    const guestFamily = await appRequest(guest, '/api/v1/families', 'POST', { name: 'Lo spazio ospite' });
     expect(guestFamily.status).toBe(201);
     expect((await appRequest(guest, `/api/v1/families/${guestFamily.body.id}/admin/settings`)).status).toBe(200);
     expect((await appRequest(guest, `/api/v1/families/${first.id}/admin/settings`)).status).toBe(403);

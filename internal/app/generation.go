@@ -316,7 +316,7 @@ func (g *OpenAIGenerator) streamResponse(ctx context.Context, token *string, par
 					return responses.Response{}, errConnection
 				}
 				if apiErr.StatusCode == 400 || apiErr.StatusCode == 404 {
-					return responses.Response{}, errors.New("Questo modello non è disponibile per la chat. Chiedi a un genitore di controllare le impostazioni.")
+					return responses.Response{}, errors.New("Questo modello non è disponibile per la chat. Chiedi a un coach di controllare le impostazioni.")
 				}
 			}
 			return responses.Response{}, errors.New("La risposta si è interrotta. Puoi riprovare tra poco.")
@@ -342,7 +342,7 @@ func (g *OpenAIGenerator) streamResponse(ctx context.Context, token *string, par
 }
 func generationError(code string) error {
 	if strings.Contains(code, "limit") || strings.Contains(code, "quota") {
-		return errors.New("Lumi deve fare una pausa: il piano ChatGPT ha raggiunto un limite. Chiedi a un genitore.")
+		return errors.New("Lumi deve fare una pausa: il piano ChatGPT ha raggiunto un limite. Chiedi a un coach.")
 	}
 	if strings.Contains(code, "usage_unavailable") {
 		return errors.New("Il piano ChatGPT non è disponibile in questo momento. Riprova più tardi.")

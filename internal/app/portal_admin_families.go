@@ -41,7 +41,7 @@ func (p *Portal) UpdateFamilyAccess(w http.ResponseWriter, r *http.Request, fami
 		return
 	}
 	if body.AccessEnabled == nil {
-		problem(w, 400, "invalid_access", "Indica se abilitare l’accesso alla famiglia.")
+		problem(w, 400, "invalid_access", "Indica se abilitare l’accesso allo spazio.")
 		return
 	}
 	p.familiesMu.Lock()
@@ -57,7 +57,7 @@ func (p *Portal) UpdateFamilyAccess(w http.ResponseWriter, r *http.Request, fami
 		return
 	}
 	if count == 0 {
-		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
+		problem(w, 404, "not_found", "Questo spazio non è disponibile.")
 		return
 	}
 	if !*body.AccessEnabled {
@@ -74,7 +74,7 @@ func (p *Portal) DeleteAdminFamily(w http.ResponseWriter, r *http.Request, famil
 		return
 	}
 	if !validID.MatchString(familyID) {
-		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
+		problem(w, 404, "not_found", "Questo spazio non è disponibile.")
 		return
 	}
 	// Runtime creation, access changes and deletion use the same lock order:
@@ -90,7 +90,7 @@ func (p *Portal) DeleteAdminFamily(w http.ResponseWriter, r *http.Request, famil
 	var enabled bool
 	err = tx.QueryRow(`SELECT access_enabled FROM families WHERE id=?`, familyID).Scan(&enabled)
 	if errors.Is(err, sql.ErrNoRows) {
-		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
+		problem(w, 404, "not_found", "Questo spazio non è disponibile.")
 		return
 	}
 	if err != nil {
@@ -98,7 +98,7 @@ func (p *Portal) DeleteAdminFamily(w http.ResponseWriter, r *http.Request, famil
 		return
 	}
 	if enabled {
-		problem(w, 409, "family_active", "Sospendi la famiglia prima di eliminarla.")
+		problem(w, 409, "family_active", "Sospendi lo spazio prima di eliminarlo.")
 		return
 	}
 	if f := p.families[familyID]; f != nil {
@@ -140,7 +140,7 @@ func (p *Portal) withFamilyManagement(w http.ResponseWriter, r *http.Request, id
 	var exists int
 	err := p.db.QueryRow(`SELECT 1 FROM families WHERE id=?`, id).Scan(&exists)
 	if errors.Is(err, sql.ErrNoRows) {
-		problem(w, 404, "not_found", "Questa famiglia non è disponibile.")
+		problem(w, 404, "not_found", "Questo spazio non è disponibile.")
 		return
 	}
 	if err != nil {

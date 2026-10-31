@@ -270,7 +270,7 @@ func (o *OAuth) Token(ctx context.Context, rejected string) (string, error) {
 	t, status, err := o.tokenRequest(ctx, url.Values{"grant_type": {"refresh_token"}, "client_id": {o.creds.ClientID}, "refresh_token": {o.creds.RefreshToken}, "resource": {resource}})
 	if err != nil {
 		if status == 400 || status == 401 || status == 403 {
-			o.reason = "Il collegamento ChatGPT è scaduto. Ricollegalo dall'area genitore."
+			o.reason = "Il collegamento ChatGPT è scaduto. Ricollegalo dall'area coach."
 		}
 		return "", err
 	}

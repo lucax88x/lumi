@@ -151,7 +151,7 @@ func (p *Portal) loginDestination(target, userID string, approved bool) (string,
 		only = family.Id
 	}
 	if only != "" {
-		return "/famiglie/" + only, nil
+		return "/spazi/" + only, nil
 	}
 	return "/", nil
 }

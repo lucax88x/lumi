@@ -30,7 +30,7 @@ export function useInvitationNotifications(enabled: boolean) {
           qc.invalidateQueries({ queryKey: listReceivedInvitationsQueryKey() }),
         ]);
         setOpen(false);
-        await navigate({ to: '/famiglie/$familyId', params: { familyId: data.id } });
+        await navigate({ to: '/spazi/$familyId', params: { familyId: data.id } });
       } else {
         await declineInvitation({ path: { invitationId: id }, throwOnError: true });
         await qc.invalidateQueries({ queryKey: listReceivedInvitationsQueryKey() });
@@ -46,14 +46,14 @@ export function useInvitationNotifications(enabled: boolean) {
   const dialog = <Dialog.Root open={open && enabled} onOpenChange={value => { if (!busy) setOpen(value); }}>
     <Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="dialog-panel invitation-dialog" finalFocus={trigger}>
       <Dialog.Title>Inviti ricevuti</Dialog.Title>
-      <Dialog.Description>Scegli se entrare nelle famiglie che ti hanno invitato.</Dialog.Description>
+      <Dialog.Description>Scegli se entrare negli spazi che ti hanno invitato.</Dialog.Description>
       <Dialog.Close className="icon-button close-dialog" aria-label="Chiudi inviti" disabled={busy}><X size={20}/></Dialog.Close>
       {invitations.isPending && <LoadingSkeleton label="Caricamento degli inviti" rows={2}/>}
       {invitations.isError && <div><p role="alert">{errorMessage(invitations.error)}</p><button className="text-button" onClick={() => void invitations.refetch()}>Riprova</button></div>}
       {error && <p role="alert">{error}</p>}
       {invitations.data?.length === 0 && <p>Non hai inviti in attesa.</p>}
       {invitations.data?.map(invitation => <article className="received-invitation" key={invitation.id} aria-label={invitation.familyName}>
-        <h3>{invitation.familyName}</h3><p>Ti invita a entrare nella famiglia.</p>
+        <h3>{invitation.familyName}</h3><p>Ti invita a entrare nello spazio.</p>
         <small>Scade il {new Date(invitation.expiresAt).toLocaleDateString('it')}</small>
         <div className="button-row"><button className="primary-button" disabled={busy} onClick={() => void act(invitation.id, true)}>Accetta</button><button className="text-button" disabled={busy} onClick={() => void act(invitation.id, false)}>Rifiuta</button></div>
       </article>)}

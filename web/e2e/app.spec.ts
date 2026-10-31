@@ -37,7 +37,7 @@ async function mockAPI(page: Page, autoRead = false) {
     if (path === '/dictionary') return json(dictionary);
     if (path === '/word-images') return json([]);
     if (path === '/status') return json({ ready: true, autoRead, speechRate: 0.9 });
-    if (path === '/session') return json({ authenticated, portalAccess: authenticated, admin: true, email: 'user@example.test', csrfToken: 'csrf-test', families: [{ id: 'test', name: 'La nostra famiglia', role: 'parent' }] });
+    if (path === '/session') return json({ authenticated, portalAccess: authenticated, admin: true, email: 'user@example.test', csrfToken: 'csrf-test', families: [{ id: 'test', name: 'Il nostro spazio', role: 'parent' }] });
     if (path === '/logout') { authenticated = false; return route.fulfill({ status: 204 }); }
     if (path.startsWith('/admin/') && !authenticated) return json({ message: 'Accedi' }, 401);
     if (path.startsWith('/admin/') && !['GET'].includes(method)) expect(request.headers()['x-csrf-token']).toBe('csrf-test');
@@ -117,7 +117,7 @@ async function openNavigation(page: Page) {
 
 test('word cards survive reload, save one dictionary entry, and support practice', async ({ page }, testInfo) => {
   const api = await mockAPI(page);
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   await page.getByLabel('Scrivi una parola o una frase').fill('Cosa significa vigoroso?');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   const answer = page.locator('.message.assistant').last();
@@ -165,7 +165,7 @@ test('dictionary loading, retry, empty state, and search do not require generati
     if (!ready) return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Non riesco a leggere le parole.' }) });
     return route.fulfill({ contentType: 'application/json', body: '[]' });
   });
-  await page.goto('/famiglie/test/dizionario');
+  await page.goto('/spazi/test/dizionario');
   await expect(page.getByRole('alert')).toContainText('Non riesco a leggere le parole.');
   ready = true;
   await page.getByRole('button', { name: 'Riprova', exact: true }).click();
@@ -177,17 +177,17 @@ test('dictionary loading, retry, empty state, and search do not require generati
 
 test('parents can remove dictionary words independently from chats and previews', async ({ page }) => {
   const api = await mockAPI(page);
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   await page.getByLabel('Scrivi una parola o una frase').fill('vigoroso');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.locator('.message.assistant .word-explanation')).toBeVisible();
-  await page.goto('/famiglie/test/genitore');
+  await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
   await page.getByLabel('Parola o frase di prova').fill('vigoroso');
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
   await expect(page.locator('.preview-result').getByText('forte', { exact: true })).toBeVisible();
   expect(api.dictionary).toHaveLength(1);
-  await page.getByRole('tab', { name: 'Le sue scoperte' }).click();
+  await page.getByRole('tab', { name: 'Scoperte dello spazio' }).click();
   await page.getByRole('button', { name: 'Elimina tutto', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('Le parole nel dizionario restano disponibili.');
   await page.getByRole('dialog').getByRole('button', { name: 'Elimina', exact: true }).click();
@@ -203,13 +203,13 @@ for (const role of ['parent', 'member'] as const) {
   test(`an unconfigured family hides chat until Lumi is ready (${role})`, async ({ page }, testInfo) => {
     await mockAPI(page);
     let ready = false; let chatRequests = 0;
-    await page.route('**/api/v1/session', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authenticated: true, portalAccess: true, admin: false, email: 'user@example.test', csrfToken: 'csrf-test', families: [{ id: 'test', name: 'La nostra famiglia', role }] }) }));
+    await page.route('**/api/v1/session', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authenticated: true, portalAccess: true, admin: false, email: 'user@example.test', csrfToken: 'csrf-test', families: [{ id: 'test', name: 'Il nostro spazio', role }] }) }));
     await page.route('**/api/v1/families/test/status', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ready, autoRead: false, speechRate: 0.9 }) }));
     page.on('request', request => {
       const path = new URL(request.url()).pathname;
       if (path.includes('/conversations/') || path.endsWith('/transcribe') || (path.endsWith('/conversations') && request.method() === 'POST')) chatRequests++;
     });
-    await page.goto('/famiglie/test');
+    await page.goto('/spazi/test');
     await expect(page.getByRole('heading', { name: 'Lumi si sta preparando' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Fai una domanda' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Parla con Lumi' })).toHaveCount(0);
@@ -218,11 +218,11 @@ for (const role of ['parent', 'member'] as const) {
     await page.screenshot({ path: `test-results/family-setup-${role}-${testInfo.project.name}.png`, fullPage: true });
     await expect(page.getByRole('link', { name: 'Apri Admin' })).toHaveCount(0);
     await expect(page.getByText('Un amministratore sta preparando Lumi. Il tuo angolino ti aspetta.')).toBeVisible();
-    await page.goto('/famiglie/test/domande/saved');
+    await page.goto('/spazi/test/domande/saved');
     await expect(page.getByRole('heading', { name: 'Lumi si sta preparando' })).toBeVisible();
     await expect(page.getByRole('log', { name: 'Conversazione con Lumi' })).toHaveCount(0);
     expect(chatRequests).toBe(0);
-    await page.goto('/famiglie/test');
+    await page.goto('/spazi/test');
     await expect(page.getByRole('heading', { name: 'Lumi si sta preparando' })).toBeVisible();
     ready = true;
     await page.getByRole('button', { name: 'Controlla se è pronta' }).click();
@@ -233,7 +233,7 @@ for (const role of ['parent', 'member'] as const) {
   });
 }
 
-for (const path of ['/', '/famiglie/test']) {
+for (const path of ['/', '/spazi/test']) {
   test(`an expired session at startup stops checking and reveals sign-in at ${path}`, async ({ page }, testInfo) => {
     await page.clock.install();
     let sessionRequests = 0;
@@ -264,7 +264,7 @@ test('session expiry during polling stops subsequent checks', async ({ page }) =
     if (!expired) return route.fallback();
     return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Accedi a Lumi.' }) });
   });
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   expired = true;
   await page.clock.fastForward(60_000);
@@ -279,7 +279,7 @@ test('logout in another tab stops session polling', async ({ page }) => {
   await mockAPI(page);
   let sessionRequests = 0;
   page.on('request', request => { if (new URL(request.url()).pathname === '/api/v1/session') sessionRequests++; });
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   await page.evaluate(() => { const channel = new BroadcastChannel('lumi-session'); channel.postMessage('logout'); channel.close(); });
   await expect(page.getByRole('heading', { name: 'A presto!' })).toBeVisible();
@@ -289,7 +289,7 @@ test('logout in another tab stops session polling', async ({ page }) => {
 });
 
 test('a question opens its own chat and follow-ups stay there', async ({ page }) => {
-  const state = await mockAPI(page); await page.goto('/famiglie/test');
+  const state = await mockAPI(page); await page.goto('/spazi/test');
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   await page.getByLabel('Scrivi una parola o una frase').fill('Cosa vuol dire meraviglia?');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
@@ -316,14 +316,14 @@ test('global Admin connects ChatGPT and family parents keep teaching preferences
   await expect(page.getByRole('link', { name: 'Apri il consenso ChatGPT' })).toBeVisible();
   await page.getByLabel('URL finale di ritorno').fill('http://127.0.0.1:1455/auth/callback?code=test&state=test');
   await page.getByRole('button', { name: 'Completa collegamento', exact: true }).click();
-  await expect(page.getByText('Piano collegato per tutte le famiglie.')).toBeVisible();
+  await expect(page.getByText('Piano collegato per tutti gli spazi.')).toBeVisible();
   await page.getByRole('button', { name: 'Salva modello', exact: true }).click();
-  await expect(page.getByText('Modello salvato per tutte le famiglie.')).toBeVisible();
+  await expect(page.getByText('Modello salvato per tutti gli spazi.')).toBeVisible();
   expect(globalRequests).toContain('/api/v1/admin/connection/complete');
   expect(globalRequests.every(path => !path.includes('/families/'))).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
-  await page.goto('/famiglie/test/genitore');
+  await page.goto('/spazi/test/coach');
   await expect(page.getByRole('button', { name: /(?:Collega|Ricollega) ChatGPT/ })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Come insegna' }).click();
   await page.getByLabel('Istruzioni per Lumi').fill('Un esempio alla volta, con parole semplici.');
@@ -336,7 +336,7 @@ test('global Admin connects ChatGPT and family parents keep teaching preferences
 
 test('family parents cannot open shared Admin controls', async ({ page }) => {
   await mockAPI(page);
-  await page.route('**/api/v1/session', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authenticated: true, portalAccess: true, admin: false, email: 'user@example.test', csrfToken: 'csrf-test', families: [{ id: 'test', name: 'La nostra famiglia', role: 'parent' }] }) }));
+  await page.route('**/api/v1/session', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authenticated: true, portalAccess: true, admin: false, email: 'user@example.test', csrfToken: 'csrf-test', families: [{ id: 'test', name: 'Il nostro spazio', role: 'parent' }] }) }));
   const requests: string[] = [];
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/v1/admin/')) requests.push(request.url()); });
   await page.goto('/admin');
@@ -347,28 +347,28 @@ test('family parents cannot open shared Admin controls', async ({ page }) => {
 
 test('Admin keeps the family navbar and returns to the family it was opened from', async ({ page }, testInfo) => {
   await mockAPI(page);
-  await page.route('**/api/v1/session', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authenticated: true, portalAccess: true, admin: true, email: 'user@example.test', csrfToken: 'csrf-test', families: [{ id: 'other', name: 'Un’altra famiglia', role: 'parent' }, { id: 'test', name: 'La nostra famiglia', role: 'parent' }] }) }));
-  await page.goto('/famiglie/test/genitore');
-  await expect(page.getByRole('heading', { name: 'L’angolo del genitore' })).toBeVisible();
+  await page.route('**/api/v1/session', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authenticated: true, portalAccess: true, admin: true, email: 'user@example.test', csrfToken: 'csrf-test', families: [{ id: 'other', name: 'Un altro spazio', role: 'parent' }, { id: 'test', name: 'Il nostro spazio', role: 'parent' }] }) }));
+  await page.goto('/spazi/test/coach');
+  await expect(page.getByRole('heading', { name: 'Area coach' })).toBeVisible();
   await openNavigation(page);
   await page.getByRole('link', { name: 'Admin', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\?family=test$/);
   await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible();
   await expect(page.locator('.app-shell')).toBeVisible();
   await expect(page.locator('.back-link')).toHaveText('Torna da Lumi');
-  await expect(page.locator('.back-link')).toHaveAttribute('href', '/famiglie/test');
+  await expect(page.locator('.back-link')).toHaveAttribute('href', '/spazi/test');
   await expect(page.locator('.portal-account')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `test-results/global-admin-navigation-${testInfo.project.name}.png`, fullPage: true });
   await page.reload();
-  await expect(page.locator('.back-link')).toHaveAttribute('href', '/famiglie/test');
+  await expect(page.locator('.back-link')).toHaveAttribute('href', '/spazi/test');
   await openNavigation(page);
-  await expect(page.getByRole('link', { name: 'Il mio angolino' })).toHaveAttribute('href', '/famiglie/test');
-  await expect(page.getByRole('link', { name: 'Angolo del genitore', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Il mio angolino' })).toHaveAttribute('href', '/spazi/test');
+  await expect(page.getByRole('link', { name: 'Area coach', exact: true })).toBeVisible();
   const closeMenu = page.getByRole('button', { name: 'Chiudi menu', exact: true });
   if (await closeMenu.isVisible()) await closeMenu.click();
   await page.getByRole('link', { name: 'Torna da Lumi', exact: true }).click();
-  await expect(page).toHaveURL(/\/famiglie\/test$/);
+  await expect(page).toHaveURL(/\/spazi\/test$/);
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
 });
 
@@ -381,34 +381,34 @@ test('Admin navigation works without a family and makes no family requests', asy
   await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /(?:Collega|Ricollega) ChatGPT/ })).toBeVisible();
   await openNavigation(page);
-  await expect(page.getByRole('link', { name: 'Le tue famiglie' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: 'I tuoi spazi' })).toHaveAttribute('href', '/');
   await expect(page.getByRole('link', { name: 'Il mio angolino' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Angolo del genitore', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Area coach', exact: true })).toHaveCount(0);
   expect(familyRequests).toHaveLength(0);
 });
 
 test('home preserves its layout and account actions live in the sidebar', async ({ page }, testInfo) => {
-  await mockAPI(page); await page.goto('/famiglie/test');
+  await mockAPI(page); await page.goto('/spazi/test');
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByText('UN PEZZETTO ALLA VOLTA', { exact: true })).toHaveCount(0);
   await expect(page.locator('header').getByRole('button', { name: 'Esci', exact: true })).toHaveCount(0);
-  await expect(page.locator('header').getByRole('link', { name: 'Cambia famiglia' })).toHaveCount(0);
+  await expect(page.locator('header').getByRole('link', { name: 'Cambia spazio' })).toHaveCount(0);
   await page.screenshot({ path: `test-results/home-${testInfo.project.name}.png`, fullPage: true });
   await openNavigation(page);
-  const account = page.getByRole('navigation', { name: 'Account e famiglia' });
-  await expect(account.getByText('La nostra famiglia', { exact: true })).toBeVisible();
+  const account = page.getByRole('navigation', { name: 'Account e spazio' });
+  await expect(account.getByText('Il nostro spazio', { exact: true })).toBeVisible();
   await expect(account.getByText('user@example.test')).toBeVisible();
   await expect(account.getByRole('button', { name: 'Esci', exact: true })).toBeVisible();
   await page.screenshot({ path: `test-results/sidebar-${testInfo.project.name}.png`, fullPage: true });
   await page.locator('.sidebar-bottom').last().screenshot({ path: `test-results/sidebar-account-${testInfo.project.name}.png` });
-  await account.getByRole('link', { name: 'Cambia famiglia' }).click();
-  await expect(page.getByRole('heading', { name: 'Le tue famiglie' })).toBeVisible();
+  await account.getByRole('link', { name: 'Cambia spazio' }).click();
+  await expect(page.getByRole('heading', { name: 'I tuoi spazi' })).toBeVisible();
   await openNavigation(page);
   await expect(page.getByRole('button', { name: 'Esci', exact: true })).toBeVisible();
   const closeMenu = page.getByRole('button', { name: 'Chiudi menu', exact: true });
   if (await closeMenu.isVisible()) await closeMenu.click();
-  await page.getByRole('link', { name: /La nostra famiglia/ }).click();
+  await page.getByRole('link', { name: /Il nostro spazio/ }).click();
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
@@ -416,7 +416,7 @@ test('home preserves its layout and account actions live in the sidebar', async 
 test('connection failures retain the written question', async ({ page }) => {
   await mockAPI(page);
   await page.route('**/api/v1/families/test/conversations/*/messages', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'unavailable', message: 'Il piano ChatGPT non è disponibile.' }) }));
-  await page.goto('/famiglie/test'); await page.getByLabel('Scrivi una parola o una frase').fill('Che cosa vuol dire prato?'); await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await page.goto('/spazi/test'); await page.getByLabel('Scrivi una parola o una frase').fill('Che cosa vuol dire prato?'); await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.getByRole('alert')).toContainText('Il piano ChatGPT non è disponibile.');
   await expect(page.getByLabel('Scrivi una parola o una frase')).toHaveValue('Che cosa vuol dire prato?');
 });
@@ -441,7 +441,7 @@ for (const connected of [true, false]) {
       await check;
       return route.fulfill({ status: connected ? 200 : 503, contentType: 'application/json', body: JSON.stringify(connected ? { ready: true, autoRead: false, speechRate: 0.9 } : { message: 'Unavailable' }) });
     });
-    await page.goto('/famiglie/test');
+    await page.goto('/spazi/test');
     const splash = page.locator('#lumi-splash');
     await expect(splash).toBeVisible();
     // React has rendered, but the application remains hidden during the check.
@@ -456,8 +456,8 @@ for (const connected of [true, false]) {
     if (connected) {
       const menu = page.getByRole('button', { name: 'Apri menu' });
       if (await menu.isVisible()) await menu.click();
-      await page.getByRole('link', { name: 'Angolo del genitore' }).last().click();
-      await expect(page.getByRole('heading', { name: 'L’angolo del genitore' })).toBeVisible();
+      await page.getByRole('link', { name: 'Area coach' }).last().click();
+      await expect(page.getByRole('heading', { name: 'Area coach' })).toBeVisible();
       await expect(splash).toHaveCount(0);
     }
   });
@@ -472,7 +472,7 @@ test('unreachable Lumi shows a full-screen error until retry succeeds', async ({
     await new Promise<void>(resolve => { finishRetry = resolve; });
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ready: true, autoRead: false, speechRate: 0.9 }) });
   });
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   const heading = page.getByRole('heading', { name: 'Non riesco a raggiungere Lumi.' });
   await expect(heading).toBeVisible();
   await expect(page.locator('#lumi-splash')).toHaveCount(0);
@@ -499,7 +499,7 @@ test('unreachable Lumi shows a full-screen error until retry succeeds', async ({
 });
 
 test('going offline hides the page and preserves the draft on reconnect', async ({ page, context }) => {
-  await mockAPI(page); await page.goto('/famiglie/test');
+  await mockAPI(page); await page.goto('/spazi/test');
   const question = page.getByLabel('Scrivi una parola o una frase');
   await question.fill('Che cosa vuol dire prato?');
   await context.setOffline(true);
@@ -513,7 +513,7 @@ test('going offline hides the page and preserves the draft on reconnect', async 
 test.describe('installed PWA shell', () => {
   test.use({ serviceWorkers: 'allow' });
   test('caches only static assets and opens offline', async ({ page, context }) => {
-    await mockAPI(page); await page.goto('/famiglie/test');
+    await mockAPI(page); await page.goto('/spazi/test');
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
     await page.reload();
     await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
@@ -522,7 +522,7 @@ test.describe('installed PWA shell', () => {
       return (await Promise.all(names.map(async name => (await (await caches.open(name)).keys()).map(request => new URL(request.url).pathname)))).flat();
     });
     expect(paths).not.toContain('/');
-    expect(paths.some(path => path.startsWith('/famiglie/'))).toBe(false);
+    expect(paths.some(path => path.startsWith('/spazi/'))).toBe(false);
     expect(paths).toContain('/icon-192.png');
     expect(paths.some(path => path.startsWith('/api/'))).toBe(false);
     await page.unrouteAll();
@@ -536,7 +536,7 @@ test.describe('installed PWA shell', () => {
 for (const width of [320, 375, 390]) {
   test(`chat actions occupy separate full rows at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 850 });
-    await mockAPI(page); await page.goto('/famiglie/test');
+    await mockAPI(page); await page.goto('/spazi/test');
     await page.getByLabel('Scrivi una parola o una frase').fill('Cosa vuol dire arcobaleno?');
     await page.getByRole('button', { name: 'Scopriamo!' }).click();
     const actions = page.locator('.followups');
@@ -566,7 +566,7 @@ for (const automatic of [true, false]) {
         speak(utterance: SpeechSynthesisUtterance) { state.activeUtterance = utterance; queueMicrotask(() => utterance.onstart?.(new Event('start') as SpeechSynthesisEvent)); },
       } });
     });
-    await mockAPI(page, automatic); await page.goto('/famiglie/test');
+    await mockAPI(page, automatic); await page.goto('/spazi/test');
     await page.getByLabel('Scrivi una parola o una frase').fill('Cosa vuol dire arcobaleno?');
     await page.getByRole('button', { name: 'Scopriamo!' }).click();
     const answer = page.locator('.message.assistant').last();
@@ -584,7 +584,7 @@ test('requested images belong to the answer and survive reload', async ({ page }
   let searches = 0;
   await page.route('**/api/v1/families/test/word-images?*', route => { searches++; return route.fulfill({ contentType: 'application/json', body: '[]' }); });
   await page.route('https://upload.wikimedia.org/test.jpg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="gray" width="100" height="100"/></svg>' }));
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   await page.getByLabel('Scrivi una parola o una frase').fill('Cos’è una roccia?');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.locator('.message.assistant')).toHaveCount(1);
@@ -605,7 +605,7 @@ test('requested images belong to the answer and survive reload', async ({ page }
 test('parent preview displays image tool results', async ({ page }) => {
   await mockAPI(page);
   await page.route('https://upload.wikimedia.org/test.jpg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>' }));
-  await page.goto('/famiglie/test/genitore');
+  await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
   await page.getByLabel('Parola o frase di prova').fill('Mostrami una roccia');
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
@@ -614,7 +614,7 @@ test('parent preview displays image tool results', async ({ page }) => {
 });
 
 test('sentence maps open one piece at a time, guide follow-ups and survive reload', async ({ page }, testInfo) => {
-  const state = await mockAPI(page); await page.goto('/famiglie/test');
+  const state = await mockAPI(page); await page.goto('/spazi/test');
   await page.getByLabel('Scrivi una parola o una frase').fill(catMap.sentence);
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   const map = page.getByRole('region', { name: 'Mappa della frase' });
@@ -640,14 +640,14 @@ test('sentence maps open one piece at a time, guide follow-ups and survive reloa
   await page.setViewportSize({ width: 320, height: 850 });
   await expect(map.getByRole('button', { name: /Dove/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.goto('/famiglie/test/genitore');
-  await page.getByRole('tab', { name: 'Le sue scoperte' }).click();
+  await page.goto('/spazi/test/coach');
+  await page.getByRole('tab', { name: 'Scoperte dello spazio' }).click();
   await page.locator('.history-table').getByRole('button', { name: new RegExp(catMap.sentence) }).first().click();
   await expect(page.getByRole('dialog').getByRole('region', { name: 'Mappa della frase' })).toBeVisible();
 });
 
 test('parent preview shows the sentence map', async ({ page }) => {
-  await mockAPI(page); await page.goto('/famiglie/test/genitore');
+  await mockAPI(page); await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
   await page.getByLabel('Parola o frase di prova').fill(catMap.sentence);
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
@@ -658,7 +658,7 @@ test('parent preview shows the sentence map', async ({ page }) => {
 });
 
 test('explicit topic maps show all planets, expand gradually and preserve selected context', async ({ page }, testInfo) => {
-  const state = await mockAPI(page); await page.goto('/famiglie/test');
+  const state = await mockAPI(page); await page.goto('/spazi/test');
   await page.getByLabel('Scrivi una parola o una frase').fill(spaceQuestion);
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   const map = page.getByRole('region', { name: 'Mappa dell’argomento' });
@@ -686,14 +686,14 @@ test('explicit topic maps show all planets, expand gradually and preserve select
   await expect(map.getByRole('button', { name: 'Marte', exact: true })).toBeHidden();
   await page.setViewportSize({ width: 320, height: 850 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.goto('/famiglie/test/genitore');
-  await page.getByRole('tab', { name: 'Le sue scoperte' }).click();
+  await page.goto('/spazi/test/coach');
+  await page.getByRole('tab', { name: 'Scoperte dello spazio' }).click();
   await page.locator('.history-table').getByRole('button').first().click();
   await expect(page.getByRole('dialog').getByRole('region', { name: 'Mappa dell’argomento' })).toBeVisible();
 });
 
 test('parent preview shows a topic map and clears it for the next example', async ({ page }) => {
-  await mockAPI(page); await page.goto('/famiglie/test/genitore');
+  await mockAPI(page); await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
   await page.getByLabel('Parola o frase di prova').fill(spaceQuestion);
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
@@ -710,7 +710,7 @@ test('parent preview shows a topic map and clears it for the next example', asyn
 
 test('English cards retain their subject after reload and share a separate dictionary entry across directions', async ({ page }, testInfo) => {
   const api = await mockAPI(page);
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   await expect(page.getByRole('button', { name: 'Italiano', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Matematica', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Inglese', exact: true }).click();
@@ -741,7 +741,7 @@ test('English cards retain their subject after reload and share a separate dicti
 
 test('English sentence and topic maps keep translations and selected follow-up context', async ({ page }, testInfo) => {
   const api = await mockAPI(page);
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   await page.getByRole('button', { name: 'Inglese', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill(englishCatMap.sentence);
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
@@ -762,7 +762,7 @@ test('English sentence and topic maps keep translations and selected follow-up c
 
 test('parents edit and preview English instructions independently from Italian', async ({ page }) => {
   const api = await mockAPI(page);
-  await page.goto('/famiglie/test/genitore');
+  await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
   await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.settings.prompt);
   await page.getByRole('button', { name: 'Inglese', exact: true }).click();
@@ -782,10 +782,24 @@ test('parents edit and preview English instructions independently from Italian',
   await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.settings.prompt);
 });
 
+test('saved family and parent URLs open the matching space and coach pages', async ({ page }) => {
+  await mockAPI(page);
+  for (const [legacy, current, heading] of [
+    ['/famiglie/test', '/spazi/test', 'Che cosa scopriamo oggi?'],
+    ['/famiglie/test/genitore', '/spazi/test/coach', 'Area coach'],
+    ['/famiglie/test/dizionario', '/spazi/test/dizionario', 'Il mio dizionario'],
+    ['/admin/famiglie', '/admin/spazi', 'Spazi'],
+  ]) {
+    await page.goto(`${legacy}?family=test#sezione`);
+    await expect(page).toHaveURL(`${new URL(current, page.url()).href}?family=test#sezione`);
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+  }
+});
+
 test('mobile tabs open discoveries without losing the draft and restore keyboard focus', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 720 });
   await mockAPI(page);
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   const tabs = page.getByRole('navigation', { name: 'Il tuo angolino' });
   const question = page.getByLabel('Scrivi una parola o una frase');
   await question.fill('Una domanda da finire');
@@ -821,7 +835,7 @@ test('discoveries retry failures, scroll long history and reopen the current cha
     if (unavailable) return route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
     return route.fallback();
   });
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   const trigger = page.getByRole('button', { name: 'Scoperte', exact: true });
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: 'Le mie scoperte' });
@@ -852,7 +866,7 @@ test('long streaming answers respect reading position and keep the composer in v
   api.chats.push({ id: 'long', title: 'Leggiamo un pezzetto alla volta', subject: 'italian', createdAt: date, updatedAt: date });
   const answer: Message = { id: 'long-answer', conversationId: 'long', role: 'assistant', status: 'streaming', text: 'Una parola nuova ci aiuta a raccontare quello che vediamo.\n\n'.repeat(35), createdAt: date };
   api.messages.set('long', [answer]);
-  await page.goto('/famiglie/test/domande/long');
+  await page.goto('/spazi/test/domande/long');
   const reading = page.getByRole('region', { name: 'Leggi la conversazione' });
   await expect(page.locator('.message.assistant')).toHaveCount(1);
   await expect.poll(() => reading.evaluate(area => area.scrollTop)).toBeGreaterThan(0);
@@ -879,7 +893,7 @@ test('long streaming answers respect reading position and keep the composer in v
 test('chat adapts to keyboard viewport changes and small landscape screens', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 850 });
   await mockAPI(page);
-  await page.goto('/famiglie/test');
+  await page.goto('/spazi/test');
   await page.getByLabel('Scrivi una parola o una frase').fill('Meraviglia');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.locator('.message.assistant')).toHaveCount(1);

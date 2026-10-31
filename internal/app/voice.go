@@ -28,7 +28,7 @@ func (s *Server) Transcribe(w http.ResponseWriter, r *http.Request) {
 		languages = nil
 	}
 	if strings.TrimSpace(s.config.OpenAIAPIKey) == "" {
-		problem(w, 503, "transcription_not_configured", "Per i vocali serve la chiave OpenAI: chiedi a un genitore di configurarla. Intanto puoi scrivere.")
+		problem(w, 503, "transcription_not_configured", "Per i vocali serve la chiave OpenAI: chiedi a un coach di configurarla. Intanto puoi scrivere.")
 		return
 	}
 	select {
@@ -99,10 +99,10 @@ func (s *Server) Transcribe(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &apiErr) {
 			switch apiErr.StatusCode {
 			case 401, 403:
-				problem(w, 503, "transcription_credentials", "Un genitore deve controllare la chiave OpenAI per i vocali. Intanto puoi scrivere.")
+				problem(w, 503, "transcription_credentials", "Un coach deve controllare la chiave OpenAI per i vocali. Intanto puoi scrivere.")
 				return
 			case 429:
-				problem(w, 503, "transcription_limit", "L’ascolto ha raggiunto un limite. Un genitore può controllare il credito OpenAI; intanto puoi scrivere.")
+				problem(w, 503, "transcription_limit", "L’ascolto ha raggiunto un limite. Un coach può controllare il credito OpenAI; intanto puoi scrivere.")
 				return
 			}
 		}

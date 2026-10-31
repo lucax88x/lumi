@@ -94,7 +94,7 @@ func (p *Portal) UpdateMember(w http.ResponseWriter, r *http.Request, familyID, 
 		return
 	}
 	if body.Role != api.MemberRoleRoleParent && body.Role != api.MemberRoleRoleMember {
-		problem(w, 400, "invalid_role", "Scegli genitore o membro.")
+		problem(w, 400, "invalid_role", "Scegli coach o membro.")
 		return
 	}
 	p.changeMember(w, r, familyID, userID, string(body.Role))
@@ -115,7 +115,7 @@ func (p *Portal) changeMember(w http.ResponseWriter, r *http.Request, familyID, 
 		var enabled bool
 		err = tx.QueryRow(`SELECT m.role,f.access_enabled FROM memberships m JOIN families f ON f.id=m.family_id WHERE family_id=? AND user_id=?`, familyID, currentSession(r).UserID).Scan(&actor, &enabled)
 		if err != nil || actor != "parent" || !enabled {
-			problem(w, 403, "parent_required", "Questa parte è riservata ai genitori di una famiglia attiva.")
+			problem(w, 403, "parent_required", "Questa parte è riservata ai coach di uno spazio attivo.")
 			return
 		}
 	}
@@ -135,7 +135,7 @@ func (p *Portal) changeMember(w http.ResponseWriter, r *http.Request, familyID, 
 			return
 		}
 		if count <= 1 {
-			problem(w, 409, "last_parent", "La famiglia deve avere almeno un genitore.")
+			problem(w, 409, "last_parent", "Lo spazio deve avere almeno un coach.")
 			return
 		}
 	}

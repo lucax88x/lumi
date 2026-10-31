@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Family, ReceivedInvitation } from '../src/api/types.gen';
 
-const family: Family = { id: 'alba', name: 'Famiglia Alba', role: 'member', accessEnabled: true };
+const family: Family = { id: 'alba', name: 'Spazio Alba', role: 'member', accessEnabled: true };
 const invitation: ReceivedInvitation = { id: 'invite', familyId: family.id, familyName: family.name, expiresAt: '2027-01-01T00:00:00Z' };
 
 async function mockInvitations(page: Page, initial: ReceivedInvitation[] = [invitation]) {
@@ -9,7 +9,7 @@ async function mockInvitations(page: Page, initial: ReceivedInvitation[] = [invi
   await page.route('**/api/v1/**', async route => {
     const request = route.request(); const path = new URL(request.url()).pathname;
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-    if (path === '/api/v1/session') return json({ authenticated: true, portalAccess: true, admin: false, email: 'figlia@example.test', csrfToken: 'csrf-test', families: state.families });
+    if (path === '/api/v1/session') return json({ authenticated: true, portalAccess: true, admin: false, email: 'membro@example.test', csrfToken: 'csrf-test', families: state.families });
     if (path === '/api/v1/invitations') {
       state.lists++;
       if (state.failList) return json({ message: 'Non riesco a caricare gli inviti.' }, 503);
@@ -40,15 +40,15 @@ test('recipient with no families accepts from the bell and can still switch fami
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `test-results/invitations-${info.project.name}.png`, fullPage: true });
   await dialog.getByRole('button', { name: 'Accetta', exact: true }).click();
-  await expect(page).toHaveURL(/\/famiglie\/alba$/);
+  await expect(page).toHaveURL(/\/spazi\/alba$/);
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   await expect(dialog).toHaveCount(0);
   await expect(bell(page)).toHaveAccessibleName('Inviti ricevuti');
   expect(state.accepts).toBe(1);
   const menu = page.getByRole('button', { name: 'Apri menu' });
   if (await menu.isVisible()) await menu.click();
-  await page.getByRole('link', { name: 'Cambia famiglia' }).click();
-  await expect(page.getByRole('heading', { name: 'Le tue famiglie' })).toBeVisible();
+  await page.getByRole('link', { name: 'Cambia spazio' }).click();
+  await expect(page.getByRole('heading', { name: 'I tuoi spazi' })).toBeVisible();
 });
 
 test('recipient declines, sees the empty state and focus returns to the bell', async ({ page }) => {

@@ -24,9 +24,9 @@ function ConversationHistory({ familyId, close }: { familyId: string; close?: ()
   const pathname = useRouterState({ select: s => s.location.pathname });
   return <div className="sidebar-history">
     {chats.isPending && <LoadingSkeleton label="Caricamento delle scoperte" rows={3}/>}
-    {chats.data?.length === 0 && <div className="history-empty"><MessageCircle size={28} aria-hidden="true"/><p>Qui ritrovi le tue domande.<br/>Cominciamo dalla prima?</p><Link className="soft-button" to="/famiglie/$familyId" params={{ familyId }} onClick={close}><Plus size={18}/>Fai una domanda</Link></div>}
+    {chats.data?.length === 0 && <div className="history-empty"><MessageCircle size={28} aria-hidden="true"/><p>Qui ritrovi le tue domande.<br/>Cominciamo dalla prima?</p><Link className="soft-button" to="/spazi/$familyId" params={{ familyId }} onClick={close}><Plus size={18}/>Fai una domanda</Link></div>}
     {chats.isError && <div className="notice error-notice" role="alert"><p>Non riesco a caricare le tue scoperte.</p><button className="soft-button" onClick={() => void chats.refetch()}>Riprova</button></div>}
-    {chats.data?.map(c => <Link key={c.id} to="/famiglie/$familyId/domande/$id" params={{ familyId, id: c.id }} onClick={close} aria-current={pathname === `/famiglie/${familyId}/domande/${c.id}` ? 'page' : undefined} className={`history-item ${pathname === `/famiglie/${familyId}/domande/${c.id}` ? 'active' : ''}`}><MessageCircle size={18} aria-hidden="true"/><span>{c.title}<small>{subjectLabel(c.subject)}<span>{shortDate(c.createdAt)}</span></small></span></Link>)}
+    {chats.data?.map(c => <Link key={c.id} to="/spazi/$familyId/domande/$id" params={{ familyId, id: c.id }} onClick={close} aria-current={pathname === `/spazi/${familyId}/domande/${c.id}` ? 'page' : undefined} className={`history-item ${pathname === `/spazi/${familyId}/domande/${c.id}` ? 'active' : ''}`}><MessageCircle size={18} aria-hidden="true"/><span>{c.title}<small>{subjectLabel(c.subject)}<span>{shortDate(c.createdAt)}</span></small></span></Link>)}
   </div>;
 }
 
@@ -35,29 +35,29 @@ function Navigation({ familyId, close, notifications }: { familyId: string; clos
   const family = session.families.find(f => f.id === familyId);
   const { signout, signingOut } = useAccount();
   const pathname = useRouterState({ select: s => s.location.pathname });
-  const homeLink = familyId ? { to: '/famiglie/$familyId' as const, params: { familyId } } : { to: '/' as const };
+  const homeLink = familyId ? { to: '/spazi/$familyId' as const, params: { familyId } } : { to: '/' as const };
   return <>
     <Link className="brand" {...homeLink} onClick={close}><span className="brand-symbol"><Sparkles size={24}/></span><span>lumi<span className="brand-dot">.</span></span></Link>
     <p className="brand-tagline">Una piccola luce per imparare</p>
     <nav aria-label="Navigazione principale" className="main-nav">
-      {familyId ? <Link className={`nav-item ${pathname === `/famiglie/${familyId}` ? 'selected' : ''}`} aria-current={pathname === `/famiglie/${familyId}` ? 'page' : undefined} {...homeLink} onClick={close}><House size={20}/>Il mio angolino</Link> : <Link to="/" onClick={close} className={`nav-item ${pathname === '/' ? 'selected' : ''}`}><UsersRound size={20}/>Le tue famiglie</Link>}
-      {familyId && <Link to="/famiglie/$familyId/dizionario" params={{ familyId }} aria-current={pathname === `/famiglie/${familyId}/dizionario` ? 'page' : undefined} onClick={close} className={`nav-item ${pathname === `/famiglie/${familyId}/dizionario` ? 'selected' : ''}`}><BookOpen size={20}/>Il mio dizionario</Link>}
+      {familyId ? <Link className={`nav-item ${pathname === `/spazi/${familyId}` ? 'selected' : ''}`} aria-current={pathname === `/spazi/${familyId}` ? 'page' : undefined} {...homeLink} onClick={close}><House size={20}/>Il mio angolino</Link> : <Link to="/" onClick={close} className={`nav-item ${pathname === '/' ? 'selected' : ''}`}><UsersRound size={20}/>I tuoi spazi</Link>}
+      {familyId && <Link to="/spazi/$familyId/dizionario" params={{ familyId }} aria-current={pathname === `/spazi/${familyId}/dizionario` ? 'page' : undefined} onClick={close} className={`nav-item ${pathname === `/spazi/${familyId}/dizionario` ? 'selected' : ''}`}><BookOpen size={20}/>Il mio dizionario</Link>}
     </nav>
     {notifications}
     {familyId && <><div className="history-heading"><span>Le mie scoperte</span><History size={17} aria-hidden="true"/></div><ConversationHistory familyId={familyId} close={close}/></>}
     <div className="sidebar-bottom">
-      {family?.role === 'parent' && <Link to="/famiglie/$familyId/genitore" params={{ familyId }} className="sidebar-action" onClick={close}><LockKeyhole size={17}/>Angolo del genitore</Link>}
+      {family?.role === 'parent' && <Link to="/spazi/$familyId/coach" params={{ familyId }} className="sidebar-action" onClick={close}><LockKeyhole size={17}/>Area coach</Link>}
       {session.admin && <nav aria-label="Amministrazione">
         <Link to="/admin" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin' ? 'selected' : ''}`} onClick={close}><LockKeyhole size={17}/>Admin</Link>
-        <Link to="/admin/famiglie" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin/famiglie' ? 'selected' : ''}`} onClick={close}><UsersRound size={17}/>Famiglie gestite</Link>
+        <Link to="/admin/spazi" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin/spazi' ? 'selected' : ''}`} onClick={close}><UsersRound size={17}/>Spazi gestiti</Link>
       </nav>}
-      <nav className="sidebar-account" aria-label="Account e famiglia">
+      <nav className="sidebar-account" aria-label="Account e spazio">
         <div className="sidebar-identity">
           <UsersRound size={17} aria-hidden="true"/>
           <div><span className="sidebar-family" title={family?.name}>{family?.name ?? 'Lumi'}</span><span className="sidebar-email" title={session.email}>{session.email}</span></div>
         </div>
         <div className="sidebar-account-actions">
-          {familyId && <Link to="/" className="sidebar-action" onClick={close}><ArrowRightLeft size={17}/>Cambia famiglia</Link>}
+          {familyId && <Link to="/" className="sidebar-action" onClick={close}><ArrowRightLeft size={17}/>Cambia spazio</Link>}
           <button type="button" className="sidebar-action" disabled={signingOut} onClick={() => void signout()}><LogOut size={17}/>Esci</button>
         </div>
       </nav>
@@ -76,9 +76,9 @@ export function AppShell({ familyId, checkConnection, children }: { familyId: st
   const connectionError = !online || (checkConnection && (status.isError || status.errorUpdatedAt > status.dataUpdatedAt));
   const notifications = useInvitationNotifications(!connectionError);
   const location = useRouterState({ select: s => s.location.pathname });
-  const inConversation = Boolean(familyId) && location.startsWith(`/famiglie/${familyId}/domande/`);
-  const inDictionary = location === `/famiglie/${familyId}/dizionario`;
-  const inChat = Boolean(familyId) && (inConversation || location === `/famiglie/${familyId}`);
+  const inConversation = Boolean(familyId) && location.startsWith(`/spazi/${familyId}/domande/`);
+  const inDictionary = location === `/spazi/${familyId}/dizionario`;
+  const inChat = Boolean(familyId) && (inConversation || location === `/spazi/${familyId}`);
   useEffect(() => {
     // The HTML splash outlives React startup and is removed only once the
     // first connection check resolves (or the browser is already offline).
@@ -115,13 +115,13 @@ export function AppShell({ familyId, checkConnection, children }: { familyId: st
     <div ref={shell} className={`app-shell ${familyId ? 'family-shell' : ''} ${inConversation ? 'chat-shell' : ''}`} hidden={connectionError} inert={connectionError}>
     <aside className="sidebar"><Navigation familyId={familyId} notifications={notifications.button}/></aside>
     <div className="main-shell">
-      <header className="topbar"><Link {...(familyId ? { to: '/famiglie/$familyId' as const, params: { familyId } } : { to: '/' as const })} className="topbar-brand" aria-label={familyId ? 'Lumi, fai una domanda' : 'Lumi, le tue famiglie'}>lumi<span>.</span></Link><div className="topbar-actions">{notifications.button}<button ref={menuTrigger} className="menu-button" aria-label="Apri menu" aria-haspopup="dialog" aria-expanded={menu} onClick={() => setMenu(true)}><Menu size={20}/><span>Menu</span></button></div></header>
+      <header className="topbar"><Link {...(familyId ? { to: '/spazi/$familyId' as const, params: { familyId } } : { to: '/' as const })} className="topbar-brand" aria-label={familyId ? 'Lumi, fai una domanda' : 'Lumi, i tuoi spazi'}>lumi<span>.</span></Link><div className="topbar-actions">{notifications.button}<button ref={menuTrigger} className="menu-button" aria-label="Apri menu" aria-haspopup="dialog" aria-expanded={menu} onClick={() => setMenu(true)}><Menu size={20}/><span>Menu</span></button></div></header>
       <main id="main">{children}</main>
       <footer className="page-footer"><Heart size={13}/> Un piccolo aiuto, una scoperta alla volta.<span>Lumi è un assistente artificiale.</span></footer>
       {familyId && <nav className="mobile-tabs" aria-label="Il tuo angolino">
-        <Link to="/famiglie/$familyId" params={{ familyId }} className={!inDictionary && (inConversation || location === `/famiglie/${familyId}`) ? 'selected' : ''} aria-current={location === `/famiglie/${familyId}` ? 'page' : undefined}><MessageCircle size={23} aria-hidden="true"/><span>Domanda</span></Link>
+        <Link to="/spazi/$familyId" params={{ familyId }} className={!inDictionary && (inConversation || location === `/spazi/${familyId}`) ? 'selected' : ''} aria-current={location === `/spazi/${familyId}` ? 'page' : undefined}><MessageCircle size={23} aria-hidden="true"/><span>Domanda</span></Link>
         <button ref={discoveriesTrigger} type="button" className={discoveries ? 'selected' : ''} aria-haspopup="dialog" aria-expanded={discoveries} onClick={() => setDiscoveries(true)}><History size={23} aria-hidden="true"/><span>Scoperte</span></button>
-        <Link to="/famiglie/$familyId/dizionario" params={{ familyId }} className={inDictionary ? 'selected' : ''} aria-current={inDictionary ? 'page' : undefined}><BookOpen size={23} aria-hidden="true"/><span>Dizionario</span></Link>
+        <Link to="/spazi/$familyId/dizionario" params={{ familyId }} className={inDictionary ? 'selected' : ''} aria-current={inDictionary ? 'page' : undefined}><BookOpen size={23} aria-hidden="true"/><span>Dizionario</span></Link>
       </nav>}
     </div>
     <Dialog.Root open={menu && !connectionError} onOpenChange={setMenu}><Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="mobile-nav-panel" finalFocus={menuTrigger}><Dialog.Title className="sr-only">Navigazione principale</Dialog.Title><Dialog.Close className="icon-button close-dialog" aria-label="Chiudi menu"><X size={20}/></Dialog.Close><Navigation familyId={familyId} close={() => setMenu(false)}/></Dialog.Popup></Dialog.Portal></Dialog.Root>
@@ -143,7 +143,7 @@ export function ChatPage({ id }: { id?: string }) {
       <section className="portal-card portal-status-card" aria-labelledby="family-setup-title">
         <div className="portal-status-art" aria-hidden="true"><Avatar/></div>
         <h1 id="family-setup-title">Lumi si sta preparando</h1>
-        <p className="portal-status-description">{isAdmin ? 'Apri Admin per preparare Lumi per tutte le famiglie.' : 'Un amministratore sta preparando Lumi. Il tuo angolino ti aspetta.'}</p>
+        <p className="portal-status-description">{isAdmin ? 'Apri Admin per preparare Lumi per tutti gli spazi.' : 'Un amministratore sta preparando Lumi. Il tuo angolino ti aspetta.'}</p>
         <div className="portal-status-actions">
           {isAdmin && <Link className="primary-button" to="/admin" search={{ family: familyId }}><LockKeyhole size={17}/>Apri Admin</Link>}
           <button className={isAdmin ? 'text-button' : 'primary-button'} disabled={status.isFetching} onClick={() => void status.refetch()}>{status.isFetching ? 'Controllo…' : 'Controlla se è pronta'}</button>
@@ -206,7 +206,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
         if (!mounted.current) return;
         qc.setQueryData(['pending-question', familyId, newID], text);
         await qc.invalidateQueries({ queryKey: listConversationsQueryKey({ path: { familyId: familyId } }) });
-        await navigate({ to: '/famiglie/$familyId/domande/$id', params: { familyId: familyId, id: newID } });
+        await navigate({ to: '/spazi/$familyId/domande/$id', params: { familyId: familyId, id: newID } });
         return;
       }
       const requestId = crypto.randomUUID();
@@ -244,7 +244,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
     {!id ? <>
       <section className="welcome"><div className="welcome-art"><Avatar mood={mood}/></div><div className="welcome-copy"><p>Ciao, sono Lumi!</p><h1>Una parola difficile?<br/>Scopriamola insieme.</h1><p>Puoi scrivere o parlare. Ti aiuto un pezzetto alla volta.</p></div></section>
     </> : <>
-      <header className="chat-title"><Avatar mood={mood}/><div><h1>{detail.data?.conversation.title ?? 'La tua domanda'}</h1><p>{subjectLabel(subject)} con Lumi</p></div><Link to="/famiglie/$familyId" params={{ familyId }} className="new-question" aria-label="Fai una nuova domanda"><Plus size={20}/><span>Nuova domanda</span></Link></header>
+      <header className="chat-title"><Avatar mood={mood}/><div><h1>{detail.data?.conversation.title ?? 'La tua domanda'}</h1><p>{subjectLabel(subject)} con Lumi</p></div><Link to="/spazi/$familyId" params={{ familyId }} className="new-question" aria-label="Fai una nuova domanda"><Plus size={20}/><span>Nuova domanda</span></Link></header>
       <div className="chat-reading-area">
       <div ref={readingArea} className="chat-scroll" tabIndex={0} role="region" aria-label="Leggi la conversazione" onScroll={e => { const area = e.currentTarget; const nearBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 100; followAnswer.current = nearBottom; setShowLatest(!nearBottom); }}>
       {detail.isPending && <LoadingSkeleton label="Caricamento della conversazione" variant="messages" rows={2}/>}

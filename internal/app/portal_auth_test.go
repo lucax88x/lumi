@@ -121,9 +121,9 @@ func TestLoginDestinationUsesOnlyActiveFamilyAndPreservesExplicitTargets(t *test
 	}
 	check("/", true, "/")
 	family := createTestFamily(t, p, parent, pc, "Only family")
-	check("/", true, "/famiglie/"+family.Id)
+	check("/", true, "/spazi/"+family.Id)
 	check("/", false, "/")
-	for _, target := range []string{"/invito#secret", "/admin", "/admin/famiglie", "/famiglie/another/domande/saved"} {
+	for _, target := range []string{"/invito#secret", "/admin", "/admin/spazi", "/spazi/another/domande/saved", "/admin/famiglie", "/famiglie/another/domande/saved"} {
 		check(target, true, target)
 	}
 	other := createTestFamily(t, p, parent, pc, "Other family")
@@ -131,7 +131,7 @@ func TestLoginDestinationUsesOnlyActiveFamilyAndPreservesExplicitTargets(t *test
 	if _, err := p.db.Exec(`UPDATE families SET access_enabled=0 WHERE id=?`, other.Id); err != nil {
 		t.Fatal(err)
 	}
-	check("/", true, "/famiglie/"+family.Id)
+	check("/", true, "/spazi/"+family.Id)
 	if _, err := p.db.Exec(`UPDATE families SET access_enabled=0`); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestLoginCallbackRedirectsToSingleFamily(t *testing.T) {
 	}
 	issuer.nonce = u.Query().Get("nonce")
 	callback := portalCall(p, "GET", "/auth/callback?code=good&state="+u.Query().Get("state"), "", start.Result().Cookies()[0], "")
-	if callback.Code != 303 || callback.Header().Get("Location") != "/famiglie/"+family.Id {
+	if callback.Code != 303 || callback.Header().Get("Location") != "/spazi/"+family.Id {
 		t.Fatal(callback.Code, callback.Header().Get("Location"))
 	}
 }

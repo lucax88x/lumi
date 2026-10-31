@@ -16,7 +16,7 @@ export function DictionaryPage() {
   const words = useQuery(listDictionaryWordsOptions({ path: { familyId } }));
   const status = useQuery(getStatusOptions({ path: { familyId } }));
   return <div className="child-page dictionary-page">
-    <Link to="/famiglie/$familyId" params={{ familyId }} className="back-link"><ArrowLeft size={16}/>Il mio angolino</Link>
+    <Link to="/spazi/$familyId" params={{ familyId }} className="back-link"><ArrowLeft size={16}/>Il mio angolino</Link>
     <div className="dictionary-heading"><BookOpen size={30} aria-hidden="true"/><div><h1>Il mio dizionario</h1><p>Le parole che hai scoperto, da ritrovare e ripassare.</p></div></div>
     {words.isPending && <LoadingSkeleton variant="dictionary" label="Caricamento del dizionario" rows={4}/>}
     {words.isError && <p className="notice error-notice" role="alert">{errorMessage(words.error)} <button className="text-button" onClick={() => void words.refetch()}>Riprova</button></p>}
