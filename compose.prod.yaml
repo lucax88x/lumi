@@ -32,6 +32,9 @@ services:
       OIDC_INTERNAL_URL: http://keycloak:8080/keycloak/realms/lumi
       OIDC_CLIENT_ID: lumi
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Run local setup or configure a secret}
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080/keycloak
+      KEYCLOAK_APPROVAL_CLIENT_ID: ${KEYCLOAK_APPROVAL_CLIENT_ID:-lumi-access-approval}
+      KEYCLOAK_APPROVAL_CLIENT_SECRET: ${KEYCLOAK_APPROVAL_CLIENT_SECRET:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       keycloak:

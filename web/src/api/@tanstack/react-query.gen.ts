@@ -3,8 +3,8 @@
 import { queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { acceptInvitation, acceptReceivedInvitation, clearConversations, clearDictionary, completeConnection, createConversation, createFamily, createInvitation, declineInvitation, deleteAdminFamily, deleteConversation, deleteDictionaryWord, disconnect, getAdminSettings, getConnection, getConversation, getSession, getSettings, getStatus, listAdminFamilies, listConversations, listDictionaryWords, listFamilies, listInvitations, listMembers, listModels, listReceivedInvitations, logout, type Options, removeMember, revokeInvitation, searchWordImages, startConnection, transcribe, updateAdminSettings, updateFamilyAccess, updateMember, updateSettings } from '../sdk.gen';
-import type { AcceptInvitationData, AcceptInvitationError, AcceptInvitationResponse, AcceptReceivedInvitationData, AcceptReceivedInvitationError, AcceptReceivedInvitationResponse, ClearConversationsData, ClearConversationsError, ClearConversationsResponse, ClearDictionaryData, ClearDictionaryError, ClearDictionaryResponse, CompleteConnectionData, CompleteConnectionError, CompleteConnectionResponse, CreateConversationData, CreateConversationError, CreateConversationResponse, CreateFamilyData, CreateFamilyError, CreateFamilyResponse, CreateInvitationData, CreateInvitationError, CreateInvitationResponse, DeclineInvitationData, DeclineInvitationError, DeclineInvitationResponse, DeleteAdminFamilyData, DeleteAdminFamilyError, DeleteAdminFamilyResponse, DeleteConversationData, DeleteConversationError, DeleteConversationResponse, DeleteDictionaryWordData, DeleteDictionaryWordError, DeleteDictionaryWordResponse, DisconnectData, DisconnectError, DisconnectResponse, GetAdminSettingsData, GetAdminSettingsError, GetAdminSettingsResponse, GetConnectionData, GetConnectionError, GetConnectionResponse, GetConversationData, GetConversationError, GetConversationResponse, GetSessionData, GetSessionError, GetSessionResponse, GetSettingsData, GetSettingsError, GetSettingsResponse, GetStatusData, GetStatusError, GetStatusResponse, ListAdminFamiliesData, ListAdminFamiliesError, ListAdminFamiliesResponse, ListConversationsData, ListConversationsError, ListConversationsResponse, ListDictionaryWordsData, ListDictionaryWordsError, ListDictionaryWordsResponse, ListFamiliesData, ListFamiliesError, ListFamiliesResponse, ListInvitationsData, ListInvitationsError, ListInvitationsResponse, ListMembersData, ListMembersError, ListMembersResponse, ListModelsData, ListModelsError, ListModelsResponse, ListReceivedInvitationsData, ListReceivedInvitationsError, ListReceivedInvitationsResponse, LogoutData, LogoutError, LogoutResponse, RemoveMemberData, RemoveMemberError, RemoveMemberResponse, RevokeInvitationData, RevokeInvitationError, RevokeInvitationResponse, SearchWordImagesData, SearchWordImagesError, SearchWordImagesResponse, StartConnectionData, StartConnectionError, StartConnectionResponse, TranscribeData, TranscribeError, TranscribeResponse, UpdateAdminSettingsData, UpdateAdminSettingsError, UpdateAdminSettingsResponse, UpdateFamilyAccessData, UpdateFamilyAccessError, UpdateFamilyAccessResponse, UpdateMemberData, UpdateMemberError, UpdateMemberResponse, UpdateSettingsData, UpdateSettingsError, UpdateSettingsResponse } from '../types.gen';
+import { acceptInvitation, acceptReceivedInvitation, clearConversations, clearDictionary, completeConnection, createConversation, createFamily, createInvitation, decideAccessRequest, declineInvitation, deleteAdminFamily, deleteConversation, deleteDictionaryWord, disconnect, getAccessRequest, getAdminSettings, getConnection, getConversation, getSession, getSettings, getStatus, listAccessRequests, listAdminFamilies, listConversations, listDictionaryWords, listFamilies, listInvitations, listMembers, listModels, listReceivedInvitations, logout, type Options, removeMember, requestAccess, revokeInvitation, searchWordImages, startConnection, transcribe, updateAdminSettings, updateFamilyAccess, updateMember, updateSettings } from '../sdk.gen';
+import type { AcceptInvitationData, AcceptInvitationError, AcceptInvitationResponse, AcceptReceivedInvitationData, AcceptReceivedInvitationError, AcceptReceivedInvitationResponse, ClearConversationsData, ClearConversationsError, ClearConversationsResponse, ClearDictionaryData, ClearDictionaryError, ClearDictionaryResponse, CompleteConnectionData, CompleteConnectionError, CompleteConnectionResponse, CreateConversationData, CreateConversationError, CreateConversationResponse, CreateFamilyData, CreateFamilyError, CreateFamilyResponse, CreateInvitationData, CreateInvitationError, CreateInvitationResponse, DecideAccessRequestData, DecideAccessRequestError, DecideAccessRequestResponse, DeclineInvitationData, DeclineInvitationError, DeclineInvitationResponse, DeleteAdminFamilyData, DeleteAdminFamilyError, DeleteAdminFamilyResponse, DeleteConversationData, DeleteConversationError, DeleteConversationResponse, DeleteDictionaryWordData, DeleteDictionaryWordError, DeleteDictionaryWordResponse, DisconnectData, DisconnectError, DisconnectResponse, GetAccessRequestData, GetAccessRequestError, GetAccessRequestResponse, GetAdminSettingsData, GetAdminSettingsError, GetAdminSettingsResponse, GetConnectionData, GetConnectionError, GetConnectionResponse, GetConversationData, GetConversationError, GetConversationResponse, GetSessionData, GetSessionError, GetSessionResponse, GetSettingsData, GetSettingsError, GetSettingsResponse, GetStatusData, GetStatusError, GetStatusResponse, ListAccessRequestsData, ListAccessRequestsError, ListAccessRequestsResponse, ListAdminFamiliesData, ListAdminFamiliesError, ListAdminFamiliesResponse, ListConversationsData, ListConversationsError, ListConversationsResponse, ListDictionaryWordsData, ListDictionaryWordsError, ListDictionaryWordsResponse, ListFamiliesData, ListFamiliesError, ListFamiliesResponse, ListInvitationsData, ListInvitationsError, ListInvitationsResponse, ListMembersData, ListMembersError, ListMembersResponse, ListModelsData, ListModelsError, ListModelsResponse, ListReceivedInvitationsData, ListReceivedInvitationsError, ListReceivedInvitationsResponse, LogoutData, LogoutError, LogoutResponse, RemoveMemberData, RemoveMemberError, RemoveMemberResponse, RequestAccessData, RequestAccessError, RequestAccessResponse, RevokeInvitationData, RevokeInvitationError, RevokeInvitationResponse, SearchWordImagesData, SearchWordImagesError, SearchWordImagesResponse, StartConnectionData, StartConnectionError, StartConnectionResponse, TranscribeData, TranscribeError, TranscribeResponse, UpdateAdminSettingsData, UpdateAdminSettingsError, UpdateAdminSettingsResponse, UpdateFamilyAccessData, UpdateFamilyAccessError, UpdateFamilyAccessResponse, UpdateMemberData, UpdateMemberError, UpdateMemberResponse, UpdateSettingsData, UpdateSettingsError, UpdateSettingsResponse } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
     Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -574,6 +574,64 @@ export const deleteAdminFamilyMutation = (options?: Partial<Options<DeleteAdminF
     const mutationOptions: UseMutationOptions<DeleteAdminFamilyResponse, DeleteAdminFamilyError, Options<DeleteAdminFamilyData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await deleteAdminFamily({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const getAccessRequestQueryKey = (options?: Options<GetAccessRequestData>) => createQueryKey('getAccessRequest', options);
+
+export const getAccessRequestOptions = (options?: Options<GetAccessRequestData>) => queryOptions<GetAccessRequestResponse, GetAccessRequestError, GetAccessRequestResponse, ReturnType<typeof getAccessRequestQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getAccessRequest({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getAccessRequestQueryKey(options)
+});
+
+export const requestAccessMutation = (options?: Partial<Options<RequestAccessData>>): UseMutationOptions<RequestAccessResponse, RequestAccessError, Options<RequestAccessData>> => {
+    const mutationOptions: UseMutationOptions<RequestAccessResponse, RequestAccessError, Options<RequestAccessData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await requestAccess({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+export const listAccessRequestsQueryKey = (options?: Options<ListAccessRequestsData>) => createQueryKey('listAccessRequests', options);
+
+export const listAccessRequestsOptions = (options?: Options<ListAccessRequestsData>) => queryOptions<ListAccessRequestsResponse, ListAccessRequestsError, ListAccessRequestsResponse, ReturnType<typeof listAccessRequestsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listAccessRequests({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listAccessRequestsQueryKey(options)
+});
+
+export const decideAccessRequestMutation = (options?: Partial<Options<DecideAccessRequestData>>): UseMutationOptions<DecideAccessRequestResponse, DecideAccessRequestError, Options<DecideAccessRequestData>> => {
+    const mutationOptions: UseMutationOptions<DecideAccessRequestResponse, DecideAccessRequestError, Options<DecideAccessRequestData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await decideAccessRequest({
                 ...options,
                 ...fnOptions,
                 throwOnError: true

@@ -23,13 +23,22 @@ else:
     print('Created .env.stack.local (private; not tracked).')
 print('Run just dev for Lumi at http://localhost:15173; admin: http://localhost:19090/keycloak/admin/; mail: http://localhost:18025')
 
+# Add the dedicated approval secret to existing local stacks without rotating it.
+p = Path('.env.stack.local')
+stack_text = p.read_text()
+if not any(line.startswith('KEYCLOAK_APPROVAL_CLIENT_SECRET=') and line.split('=', 1)[1] for line in stack_text.splitlines()):
+    stack_text = '\n'.join(line for line in stack_text.splitlines() if not line.startswith('KEYCLOAK_APPROVAL_CLIENT_SECRET='))
+    stack_text += '\nKEYCLOAK_APPROVAL_CLIENT_SECRET=' + secrets.token_urlsafe(32) + '\n'
+    p.write_text(stack_text)
+    p.chmod(0o600)
+
 # Fill only missing native-development OIDC settings, preserving existing preferences.
 p=Path('.env.local')
 existing=p.read_text() if p.exists() else Path('.env.local.example').read_text()
 stack=dict(line.split('=',1) for line in Path('.env.stack.local').read_text().splitlines() if line and not line.startswith('#'))
 keys={line.split('=',1)[0] for line in existing.splitlines() if '=' in line and not line.startswith('#')}
-defaults={'PUBLIC_ORIGIN':stack.get('NATIVE_ORIGIN','http://localhost:15173'),'OIDC_ISSUER_URL':stack['PUBLIC_ORIGIN']+'/keycloak/realms/lumi','OIDC_INTERNAL_URL':'http://localhost:19090/keycloak/realms/lumi','OIDC_CLIENT_ID':'lumi','OIDC_CLIENT_SECRET':stack['OIDC_CLIENT_SECRET']}
+defaults={'PUBLIC_ORIGIN':stack.get('NATIVE_ORIGIN','http://localhost:15173'),'OIDC_ISSUER_URL':stack['PUBLIC_ORIGIN']+'/keycloak/realms/lumi','OIDC_INTERNAL_URL':'http://localhost:19090/keycloak/realms/lumi','OIDC_CLIENT_ID':'lumi','OIDC_CLIENT_SECRET':stack['OIDC_CLIENT_SECRET'],'KEYCLOAK_ADMIN_URL':'http://localhost:19090/keycloak','KEYCLOAK_APPROVAL_CLIENT_ID':stack.get('KEYCLOAK_APPROVAL_CLIENT_ID','lumi-access-approval'),'KEYCLOAK_APPROVAL_CLIENT_SECRET':stack['KEYCLOAK_APPROVAL_CLIENT_SECRET']}
 for key,val in defaults.items():
  if key not in keys:existing+='\n'+key+'='+val
- elif key=='OIDC_CLIENT_SECRET' and any(line==key+'=' for line in existing.splitlines()):existing=existing.replace(key+'=\n',key+'='+val+'\n')
+ elif key in ('OIDC_CLIENT_SECRET', 'KEYCLOAK_APPROVAL_CLIENT_SECRET') and any(line==key+'=' for line in existing.splitlines()):existing=existing.replace(key+'=\n',key+'='+val+'\n')
 p.write_text(existing.rstrip()+'\n');p.chmod(0o600)

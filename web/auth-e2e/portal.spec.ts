@@ -8,7 +8,11 @@ const keycloak = 'http://localhost:19090/keycloak';
 let admin: APIRequestContext;
 let adminToken = '';
 async function adminRequest(path: string, method = 'GET', data?: unknown) {
-  const response = await admin.fetch(`${keycloak}/admin/realms/lumi${path}`, { method, data, headers: { Authorization: `Bearer ${adminToken}` } });
+  let response = await admin.fetch(`${keycloak}/admin/realms/lumi${path}`, { method, data, headers: { Authorization: `Bearer ${adminToken}` } });
+  if (response.status() === 401) {
+    await refreshAdminToken();
+    response = await admin.fetch(`${keycloak}/admin/realms/lumi${path}`, { method, data, headers: { Authorization: `Bearer ${adminToken}` } });
+  }
   expect(response.ok(), `Keycloak setup ${method} ${path}: ${response.status()}`).toBe(true);
   return response;
 }
@@ -34,10 +38,13 @@ async function appRequest(page: Page, path: string, method = 'GET', body?: unkno
     return { status: r.status, body: r.status === 204 ? null : await r.json() };
   }, { path, method, body, csrf: s.csrfToken });
 }
-test.beforeAll(async () => {
-  admin = await request.newContext();
+async function refreshAdminToken() {
   const token = await admin.post(`${keycloak}/realms/master/protocol/openid-connect/token`, { form: { grant_type: 'password', client_id: 'admin-cli', username: env.KEYCLOAK_ADMIN_USER, password: env.KEYCLOAK_ADMIN_PASSWORD } });
   expect(token.ok(), 'Private administrator sign-in').toBe(true); adminToken = (await token.json()).access_token;
+}
+test.beforeAll(async () => {
+  admin = await request.newContext();
+  await refreshAdminToken();
 });
 test.afterAll(async () => { await admin?.dispose(); });
 
@@ -61,7 +68,7 @@ test('shared Admin requires the explicit portal-admin realm role', async ({ page
     expect((await session(page)).admin).toBe(true);
     expect((await appRequest(page, '/api/v1/admin/connection')).status).toBe(200);
     expect((await session(page)).families).toHaveLength(0);
-    await expect(page.getByRole('button', { name: 'Continue with ChatGPT' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Collega ChatGPT' })).toBeVisible();
     await expect(page.locator('input[type="password"]')).toHaveCount(0);
   } finally {
     await adminRequest(`/users/${id}`, 'DELETE');
@@ -158,4 +165,62 @@ test('administrator console login remains entirely on loopback', async ({ page }
   await page.locator('#username').fill(env.KEYCLOAK_ADMIN_USER); await page.locator('#password').fill(env.KEYCLOAK_ADMIN_PASSWORD); await page.locator('#kc-login').click();
   await expect(page.getByRole('heading', { name: 'master realm', exact: true })).toBeVisible();
   expect(new URL(page.url()).port).toBe('19090');
+});
+
+test('access request survives restart and an administrator approves through Lumi using restricted Keycloak credentials', async ({ page, browser, nativeLumi }, info) => {
+  const applicantEmail = `applicant-${randomUUID()}@example.test`;
+  const administratorEmail = `approver-${randomUUID()}@example.test`;
+  const password = `Lumi-${randomUUID()}!`;
+  const ids: string[] = [];
+  const adminContext = await browser.newContext();
+  try {
+    const applicantID = await seedAccount(applicantEmail, password); ids.push(applicantID);
+    const administratorID = await seedAccount(administratorEmail, password); ids.push(administratorID);
+    await approve(administratorID);
+    const adminRole = await (await adminRequest('/roles/portal-admin')).json();
+    await adminRequest(`/users/${administratorID}/role-mappings/realm`, 'POST', [adminRole]);
+    await page.goto(origin + '/auth/login?return=' + encodeURIComponent('/invito#saved-invitation'));
+    await page.locator('#username').fill(applicantEmail); await page.locator('#password').fill(password); await page.locator('#kc-login').click();
+    await page.getByRole('button', { name: 'Richiedi accesso', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Richiesta inviata', exact: true })).toBeDisabled();
+    expect((await appRequest(page, '/api/v1/access-request', 'POST')).status).toBe(200);
+    expect((await appRequest(page, '/api/v1/families')).status).toBe(403);
+    await nativeLumi.restart();
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Richiesta inviata', exact: true })).toBeDisabled();
+    const administrator = await adminContext.newPage();
+    await login(administrator, administratorEmail, password);
+    await expect(administrator.getByRole('heading', { name: 'I tuoi spazi' })).toBeVisible();
+    const requests = await appRequest(administrator, '/api/v1/admin/access-requests');
+    expect(requests.status).toBe(200);
+    expect(requests.body.filter((item: { email: string }) => item.email === applicantEmail)).toHaveLength(1);
+    await administrator.getByRole('button', { name: /^Notifiche/ }).click();
+    const entry = administrator.getByRole('dialog', { name: 'Notifiche' }).getByRole('article', { name: applicantEmail });
+    await entry.getByRole('button', { name: 'Approva', exact: true }).click();
+    await expect(administrator.getByRole('status')).toHaveText(`Accesso approvato per ${applicantEmail}.`);
+    await expect(page.getByRole('heading', { name: 'Un invito per te' })).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(origin + '/invito#saved-invitation');
+    const applicantSession = await session(page);
+    expect(applicantSession.portalAccess).toBe(true); expect(applicantSession.admin).toBe(false); expect(applicantSession.families).toHaveLength(0);
+    const roles = await (await adminRequest(`/users/${applicantID}/role-mappings/realm`)).json();
+    expect(roles.map((role: { name: string }) => role.name)).toContain('portal-access');
+    expect(roles.map((role: { name: string }) => role.name)).not.toContain('portal-admin');
+    // Service JWTs remain in Node, never in the browser. Prove Keycloak itself
+    // refuses broader role assignments and user/password/realm modifications.
+    const privateHTTP = await request.newContext();
+    try {
+      const response = await privateHTTP.post(`${keycloak}/realms/lumi/protocol/openid-connect/token`, { form: { grant_type: 'client_credentials', client_id: env.KEYCLOAK_APPROVAL_CLIENT_ID || 'lumi-access-approval', client_secret: env.KEYCLOAK_APPROVAL_CLIENT_SECRET } });
+      expect(response.ok()).toBe(true);
+      const serviceToken = (await response.json()).access_token;
+      const headers = { Authorization: `Bearer ${serviceToken}` };
+      expect((await privateHTTP.post(`${keycloak}/admin/realms/lumi/users/${applicantID}/role-mappings/realm`, { headers, data: [adminRole] })).status()).toBe(403);
+      expect((await privateHTTP.put(`${keycloak}/admin/realms/lumi/users/${applicantID}`, { headers, data: { email: applicantEmail } })).status()).toBe(403);
+      expect((await privateHTTP.put(`${keycloak}/admin/realms/lumi/users/${applicantID}/reset-password`, { headers, data: { type: 'password', value: `unused-${randomUUID()}`, temporary: false } })).status()).toBe(403);
+      expect((await privateHTTP.put(`${keycloak}/admin/realms/lumi`, { headers, data: { displayName: 'lumi.' } })).status()).toBe(403);
+    } finally { await privateHTTP.dispose(); }
+    await administrator.screenshot({ path: `auth-test-results/access-approved-${info.project.name}.png`, fullPage: true });
+  } finally {
+    await adminContext.close();
+    for (const id of ids) await adminRequest(`/users/${id}`, 'DELETE');
+  }
 });

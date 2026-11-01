@@ -536,3 +536,15 @@ button svg, a svg { flex-shrink: 0; }
 .received-invitation .button-row { margin-top: 16px; }
 .danger-button { background: #a23d46; }
 .danger-button:hover { background: #892e38; }
+
+.access-request-gate { display: grid; gap: 12px; }
+.access-request-gate p { margin: 0; color: #665571; font-size: 14px; line-height: 1.6; }
+.access-request-gate > .primary-button { width: 100%; }
+.invitation-dialog > section { margin-top: 24px; }
+.invitation-dialog > section > h3 { font-size: 17px; margin-bottom: 12px; }
+.received-invitation h4 { font-size: 16px; margin: 0; color: #604878; }
+.received-invitation .button-row > button { min-height: 48px; }
+
+.invitation-dialog > .notice { font-size: 14px; }
+.invitation-dialog > .success-notice { color: #3f653b; }
+.invitation-dialog > .error-notice { color: #8c3737; }

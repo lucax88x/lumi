@@ -113,6 +113,11 @@ ssh-keycloak-admin:
 ssh-keycloak-admin-credentials:
     ssh -t lumi-server 'sudo grep -E "^(KEYCLOAK_ADMIN_USER|KEYCLOAK_ADMIN_PASSWORD)=" /home/serviceman/lumi/config/.env'
 
+# Generate the approval secret on the VPS only if absent; never print it.
+[group('deployment')]
+ssh-keycloak-approval-secret:
+    python3 scripts/setup-approval-secret.py
+
 # Prepare serviceman's private deployment directories and verify Docker.
 [group('deployment')]
 deploy-setup:

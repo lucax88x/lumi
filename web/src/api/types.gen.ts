@@ -230,6 +230,25 @@ export type ReceivedInvitation = {
     expiresAt: string;
 };
 
+export type AccessRequestState = {
+    status: 'not_requested' | 'pending' | 'approved' | 'rejected';
+    requestedAt?: string;
+    decidedAt?: string;
+    retryAfter?: string;
+};
+
+export type PendingAccessRequest = {
+    id: string;
+    email: string;
+    requestedAt: string;
+    attempt: number;
+};
+
+export type AccessDecision = {
+    decision: 'approve' | 'reject';
+    attempt: number;
+};
+
 export type GetStatusData = {
     body?: never;
     path: {
@@ -1960,3 +1979,153 @@ export type DeleteAdminFamilyResponses = {
 };
 
 export type DeleteAdminFamilyResponse = DeleteAdminFamilyResponses[keyof DeleteAdminFamilyResponses];
+
+export type GetAccessRequestData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/access-request';
+};
+
+export type GetAccessRequestErrors = {
+    /**
+     * Sign in required
+     */
+    401: Error;
+    /**
+     * Verified email required
+     */
+    403: Error;
+};
+
+export type GetAccessRequestError = GetAccessRequestErrors[keyof GetAccessRequestErrors];
+
+export type GetAccessRequestResponses = {
+    /**
+     * OK
+     */
+    200: AccessRequestState;
+};
+
+export type GetAccessRequestResponse = GetAccessRequestResponses[keyof GetAccessRequestResponses];
+
+export type RequestAccessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/access-request';
+};
+
+export type RequestAccessErrors = {
+    /**
+     * No request body accepted
+     */
+    400: Error;
+    /**
+     * Sign in required
+     */
+    401: Error;
+    /**
+     * Verified email and CSRF required
+     */
+    403: Error;
+    /**
+     * Wait until retryAfter before requesting again
+     */
+    429: AccessRequestState;
+};
+
+export type RequestAccessError = RequestAccessErrors[keyof RequestAccessErrors];
+
+export type RequestAccessResponses = {
+    /**
+     * OK
+     */
+    200: AccessRequestState;
+    /**
+     * OK
+     */
+    201: AccessRequestState;
+};
+
+export type RequestAccessResponse = RequestAccessResponses[keyof RequestAccessResponses];
+
+export type ListAccessRequestsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/access-requests';
+};
+
+export type ListAccessRequestsErrors = {
+    /**
+     * Sign in required
+     */
+    401: Error;
+    /**
+     * Administrator required
+     */
+    403: Error;
+};
+
+export type ListAccessRequestsError = ListAccessRequestsErrors[keyof ListAccessRequestsErrors];
+
+export type ListAccessRequestsResponses = {
+    /**
+     * Pending requests, oldest first
+     */
+    200: Array<PendingAccessRequest>;
+};
+
+export type ListAccessRequestsResponse = ListAccessRequestsResponses[keyof ListAccessRequestsResponses];
+
+export type DecideAccessRequestData = {
+    body: AccessDecision;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/access-requests/{requestId}/decision';
+};
+
+export type DecideAccessRequestErrors = {
+    /**
+     * Invalid decision
+     */
+    400: Error;
+    /**
+     * Sign in required
+     */
+    401: Error;
+    /**
+     * Administrator required
+     */
+    403: Error;
+    /**
+     * Request not found
+     */
+    404: Error;
+    /**
+     * Request changed; refresh the list
+     */
+    409: Error;
+    /**
+     * Keycloak operation failed
+     */
+    502: Error;
+    /**
+     * Keycloak approval is not configured
+     */
+    503: Error;
+};
+
+export type DecideAccessRequestError = DecideAccessRequestErrors[keyof DecideAccessRequestErrors];
+
+export type DecideAccessRequestResponses = {
+    /**
+     * OK
+     */
+    200: AccessRequestState;
+};
+
+export type DecideAccessRequestResponse = DecideAccessRequestResponses[keyof DecideAccessRequestResponses];

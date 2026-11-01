@@ -29,6 +29,31 @@ if args[:2] == ['config', 'credentials']:
     state['issuerChanged'] = False
 elif state.get('issuerChanged'):
     sys.exit('HTTP 401 Unauthorized: issuer changed before remaining admin calls')
+elif args[:2] == ['get', 'clients']:
+    query = next((args[i+1].split('=',1)[1] for i,arg in enumerate(args[:-1]) if arg=='-q'), '')
+    client = state.get('clients', {}).get(query)
+    if client: print(client['id'])
+elif args[:2] == ['create', 'clients']:
+    body=json.loads(pathlib.Path(args[args.index('-f')+1]).read_text())
+    body['id']='approval-client'
+    state.setdefault('clients', {})[body['clientId']]=body
+    print(body['id'])
+elif args[0]=='get' and args[1].endswith('/service-account-user'):
+    print('approval-user')
+elif args[:2]==['get', 'roles/portal-access']:
+    print('access-role')
+elif args[0]=='update' and args[1]=='clients/approval-client':
+    body=json.loads(pathlib.Path(args[args.index('-f')+1]).read_text()); body['id']='approval-client'
+    state.setdefault('clients', {})[body['clientId']]=body
+elif '/authz/resource-server/' in args[1]:
+    resources=state.setdefault('authorization', {})
+    if args[0]=='get':
+        name=next((args[i+1].split('=',1)[1] for i,arg in enumerate(args[:-1]) if arg=='-q'), '')
+        if name in resources: print(resources[name]['id'])
+    elif args[0] in ('create','update'):
+        body=json.loads(pathlib.Path(args[args.index('-f')+1]).read_text())
+        body['id']=resources.get(body['name'], {}).get('id', 'resource-'+str(len(resources)+1))
+        resources[body['name']]=body
 elif args[:2] == ['update', 'realms/lumi']:
     for i, arg in enumerate(args):
         if arg != '-s': continue
@@ -38,6 +63,8 @@ elif args[:2] == ['update', 'realms/lumi']:
             state['realm'].setdefault('smtpServer', {})[name.split('.', 1)[1]] = value
         else:
             state['realm'][name] = value
+            if name=='adminPermissionsEnabled' and value:
+                state.setdefault('clients', {})['admin-permissions']={'id':'permissions-client'}
 elif args[:2] == ['update', 'realms/master']:
     state['issuerChanged'] = True
 path.write_text(json.dumps(state))
@@ -46,7 +73,7 @@ path.write_text(json.dumps(state))
         script = (ROOT / 'deploy/keycloak/init.sh').read_text()
         self.script = self.directory / 'init.sh'
         self.script.write_text(script.replace('kc=/opt/keycloak/bin/kcadm.sh', 'kc=' + shlex.quote(str(fake))))
-        self.env = {key: value for key, value in os.environ.items() if not key.startswith(('SMTP_', 'GOOGLE_'))}
+        self.env = {key: value for key, value in os.environ.items() if not key.startswith(('SMTP_', 'GOOGLE_', 'KEYCLOAK_APPROVAL_'))}
         self.env.update(TEST_KEYCLOAK_STATE=str(self.state), KEYCLOAK_ADMIN_USER='test-admin',
                         KEYCLOAK_ADMIN_PASSWORD='test-only-password', KEYCLOAK_ADMIN_ORIGIN='http://localhost:19090')
 
@@ -84,6 +111,28 @@ path.write_text(json.dumps(state))
         self.assertFalse(realm['registrationAllowed'])
         self.assertFalse(realm['resetPasswordAllowed'])
         self.assertTrue(realm['verifyEmail'])
+
+    def test_approval_client_is_idempotent_and_only_maps_portal_access(self):
+        for secret in ('test-only-approval-secret', 'rotated-test-only-secret'):
+            result = self.run_init(KEYCLOAK_APPROVAL_CLIENT_SECRET=secret)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn(secret, result.stdout + result.stderr)
+            state = json.loads(self.state.read_text())
+            client = state['clients']['lumi-access-approval']
+            self.assertEqual(client['secret'], secret)
+            self.assertTrue(client['serviceAccountsEnabled'])
+            self.assertFalse(client['standardFlowEnabled'])
+            self.assertFalse(client['directAccessGrantsEnabled'])
+            self.assertFalse(client['fullScopeAllowed'])
+            self.assertTrue(state['realm']['adminPermissionsEnabled'])
+            permissions = state['authorization']
+            self.assertEqual(len(permissions), 3)
+            self.assertEqual(permissions['lumi-access-approval-service']['users'], ['approval-user'])
+            self.assertEqual(permissions['lumi-access-approval-users']['scopes'], ['view', 'map-roles'])
+            self.assertEqual(permissions['lumi-access-approval-role']['resources'], ['access-role'])
+            self.assertEqual(permissions['lumi-access-approval-role']['scopes'], ['map-role'])
+            self.assertNotIn('manage-users', json.dumps(state['calls']))
+            self.assertEqual(state['calls'][-1][:2], ['update', 'realms/master'])
 
     def test_enabled_email_requires_host_and_sender_before_contacting_keycloak(self):
         for values in ({'SMTP_HOST': 'mail.test'}, {'SMTP_FROM': 'lumi@example.test'}):

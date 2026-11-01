@@ -10,6 +10,7 @@ import { Avatar, type Mood } from './Avatar';
 import type { Family } from './api/types.gen';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { AppShell } from './pages';
+import { AccessRequestGate } from './AccessRequestGate';
 
 function login() { window.location.assign(`/auth/login?return=${encodeURIComponent(window.location.pathname + window.location.hash)}`); }
 
@@ -32,7 +33,7 @@ export function PortalRoot() {
   const requestedFamily = useRouterState({ select: s => s.location.search.family });
   const [expired, setExpired] = useState(false); const [error, setError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
-  const session = useQuery({ ...getSessionOptions(), enabled: !expired && !signingOut, retry: false, staleTime: 0, refetchInterval: 60_000 });
+  const session = useQuery({ ...getSessionOptions(), enabled: !expired && !signingOut, retry: false, staleTime: 0, refetchInterval: query => query.state.data?.portalAccess === false ? 10_000 : 60_000 });
   const currentFamilyId = pathname.match(/^\/spazi\/([^/]+)/)?.[1] ?? '';
   const inFamily = Boolean(currentFamilyId) && session.data?.portalAccess && session.data.families.some(f => f.id === currentFamilyId && f.accessEnabled !== false);
   useEffect(() => {
@@ -68,7 +69,7 @@ export function PortalRoot() {
   const account = <footer className="portal-account"><span>{session.data.email}</span><button className="text-button" disabled={signingOut} onClick={() => void signout()}>Esci</button></footer>;
   return <SessionContext.Provider value={session.data}>
     <AccountContext.Provider value={{ signout, signingOut }}>
-      {!session.data.portalAccess ? <PortalStatus title="Il tuo angolino ti aspetta" description="Accesso in attesa di approvazione. Un amministratore deve abilitare il tuo account prima di entrare." footer={account}><button className="primary-button" disabled={session.isFetching} onClick={login}>Controlla l’accesso</button></PortalStatus> : <AppShell familyId={shellFamilyId} checkConnection={Boolean(inFamily)}><Outlet/></AppShell>}
+      {!session.data.portalAccess ? <PortalStatus title="Il tuo angolino ti aspetta" description="L’accesso a Lumi richiede l’approvazione di un amministratore." footer={account}><AccessRequestGate/><button className="text-button" disabled={session.isFetching} onClick={login}>Controlla l’accesso</button></PortalStatus> : <AppShell familyId={shellFamilyId} checkConnection={Boolean(inFamily)}><Outlet/></AppShell>}
     </AccountContext.Provider>
   </SessionContext.Provider>;
 }

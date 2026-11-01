@@ -28,14 +28,14 @@ async function mockInvitations(page: Page, initial: ReceivedInvitation[] = [invi
   return state;
 }
 
-function bell(page: Page) { return page.getByRole('button', { name: /^Inviti ricevuti/ }); }
+function bell(page: Page) { return page.getByRole('button', { name: /^Notifiche/ }); }
 
 test('recipient with no families accepts from the bell and can still switch families', async ({ page }, info) => {
   const state = await mockInvitations(page);
   await page.goto('/');
-  await expect(bell(page)).toHaveAccessibleName('Inviti ricevuti: 1');
+  await expect(bell(page)).toHaveAccessibleName('Notifiche: 1');
   await bell(page).focus(); await page.keyboard.press('Enter');
-  const dialog = page.getByRole('dialog', { name: 'Inviti ricevuti' });
+  const dialog = page.getByRole('dialog', { name: 'Notifiche' });
   await expect(dialog.getByRole('heading', { name: family.name })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `test-results/invitations-${info.project.name}.png`, fullPage: true });
@@ -43,7 +43,7 @@ test('recipient with no families accepts from the bell and can still switch fami
   await expect(page).toHaveURL(/\/spazi\/alba$/);
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   await expect(dialog).toHaveCount(0);
-  await expect(bell(page)).toHaveAccessibleName('Inviti ricevuti');
+  await expect(bell(page)).toHaveAccessibleName('Notifiche');
   expect(state.accepts).toBe(1);
   const menu = page.getByRole('button', { name: 'Apri menu' });
   if (await menu.isVisible()) await menu.click();
@@ -54,7 +54,7 @@ test('recipient with no families accepts from the bell and can still switch fami
 test('recipient declines, sees the empty state and focus returns to the bell', async ({ page }) => {
   const state = await mockInvitations(page);
   await page.goto('/'); await bell(page).click();
-  const dialog = page.getByRole('dialog', { name: 'Inviti ricevuti' });
+  const dialog = page.getByRole('dialog', { name: 'Notifiche' });
   await dialog.getByRole('button', { name: 'Rifiuta' }).click();
   await expect(dialog.getByText('Non hai inviti in attesa.')).toBeVisible();
   expect(state.declines).toBe(1);
@@ -62,20 +62,20 @@ test('recipient declines, sees the empty state and focus returns to the bell', a
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(bell(page)).toBeFocused();
-  await expect(bell(page)).toHaveAccessibleName('Inviti ricevuti');
+  await expect(bell(page)).toHaveAccessibleName('Notifiche');
 });
 
 test('new invitations appear while the app is open and stale acceptance refreshes the list', async ({ page }) => {
   await page.clock.install();
   const state = await mockInvitations(page, []);
-  await page.goto('/'); await expect(bell(page)).toHaveAccessibleName('Inviti ricevuti');
+  await page.goto('/'); await expect(bell(page)).toHaveAccessibleName('Notifiche');
   await expect.poll(() => state.lists).toBeGreaterThan(0);
   state.invitations = [invitation];
   await page.clock.fastForward(60_100);
-  await expect(bell(page)).toHaveAccessibleName('Inviti ricevuti: 1');
+  await expect(bell(page)).toHaveAccessibleName('Notifiche: 1');
   await bell(page).click();
   state.unavailable = true;
-  const dialog = page.getByRole('dialog', { name: 'Inviti ricevuti' });
+  const dialog = page.getByRole('dialog', { name: 'Notifiche' });
   await dialog.getByRole('button', { name: 'Accetta', exact: true }).click();
   await expect(dialog.getByRole('alert')).toHaveText('L’invito è scaduto o non è più disponibile.');
   await expect(dialog.getByText('Non hai inviti in attesa.')).toBeVisible();
@@ -87,7 +87,7 @@ test('opening the bell refreshes invitations and list errors can be retried', as
   await page.goto('/'); await expect.poll(() => state.lists).toBeGreaterThan(0);
   state.invitations = [invitation];
   await bell(page).click();
-  const dialog = page.getByRole('dialog', { name: 'Inviti ricevuti' });
+  const dialog = page.getByRole('dialog', { name: 'Notifiche' });
   await expect(dialog.getByRole('heading', { name: family.name })).toBeVisible();
   await page.keyboard.press('Escape');
   state.failList = true;

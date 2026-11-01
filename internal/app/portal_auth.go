@@ -302,6 +302,10 @@ func (p *Portal) GetSession(w http.ResponseWriter, r *http.Request) {
 	sess := currentSession(r)
 	families := []api.Family{}
 	if sess.Access && sess.Verified {
+		if err := p.reconcileAccessRequest(sess); err != nil {
+			internalError(w, err)
+			return
+		}
 		var err error
 		families, err = p.userFamilies(sess.UserID)
 		if err != nil {

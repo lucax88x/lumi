@@ -29,6 +29,8 @@ type Portal struct {
 	families   map[string]*Server
 	admin      *Server    // One ChatGPT grant and model shared by every family.
 	sessionMu  sync.Mutex // Serialize rotating refresh-token use across concurrent browser requests.
+	accessMu   sync.Mutex // Serialize request attempts and decisions without holding SQLite during HTTP.
+	approvals  *keycloakApprovals
 }
 type portalSession struct {
 	Hash, CSRF, UserID, Email    string
@@ -85,7 +87,12 @@ func NewPortal(ctx context.Context, c Config) (*Portal, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &Portal{config: c, db: db, provider: provider, client: client, families: map[string]*Server{}}
+	approvals, err := newKeycloakApprovals(c)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	p := &Portal{config: c, db: db, provider: provider, client: client, families: map[string]*Server{}, approvals: approvals}
 	p.admin, err = newSharedServer(c)
 	if err != nil {
 		db.Close()
@@ -301,8 +308,9 @@ func (p *Portal) Handler() http.Handler {
 			problem(w, 403, "csrf", "Sessione non valida. Ricarica la pagina.")
 			return
 		}
-		// Only session metadata and logout are available before administrator approval.
-		if strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/v1/session" && r.URL.Path != "/api/v1/logout" && (!sess.Access || !sess.Verified) {
+		// A verified identity may request access, but cannot use any portal features yet.
+		personalAccessRequest := r.URL.Path == "/api/v1/access-request" && (r.Method == "GET" || r.Method == "POST") && sess.Verified
+		if strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/v1/session" && r.URL.Path != "/api/v1/logout" && !personalAccessRequest && (!sess.Access || !sess.Verified) {
 			problem(w, 403, "approval_required", "L’accesso deve essere approvato da un amministratore.")
 			return
 		}

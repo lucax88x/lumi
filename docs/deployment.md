@@ -201,6 +201,30 @@ In locale usa il progetto `lumi-local`, sostituisci `compose.prod.yaml` con `com
 
 La riuscita dei test con password non dimostra il funzionamento del client Google. Verifica un consenso reale prima di dichiarare pronto quel metodo.
 
+## Approvazioni di accesso da Lumi
+
+Il primo amministratore deve avere `portal-access` e `portal-admin` assegnati manualmente in Keycloak. Le altre persone, dopo il login con email verificata, possono usare **Richiedi accesso**. Tutti gli amministratori ricevono la richiesta nella campanella **Notifiche**; il contatore comprende richieste pendenti e inviti agli spazi. **Approva** assegna esclusivamente `portal-access`, **Rifiuta** impone 24 ore prima di un nuovo invio. Una richiesta è unica per identità, anche fra più sessioni; le decisioni sono registrate nel database di controllo.
+
+Per preparare il secret sulla VPS Contabo, esegui dal computer:
+
+```sh
+just ssh-keycloak-approval-secret
+```
+
+Il comando usa `ssh -tt lumi-server` e la sessione autenticata `serviceman`, come il deploy. Genera 32 byte casuali direttamente sulla VPS e salva `KEYCLOAK_APPROVAL_CLIENT_SECRET` in `$HOME/lumi/config/.env` con permessi `0600`, senza mostrare il valore o leggere i file ambiente locali. Se il secret esiste già, lo conserva. Il comando condivide il lock del deploy e aggiorna il file atomicamente. Poi esegui `just deploy` per applicare la configurazione a Keycloak e Lumi.
+
+Il client predefinito è `lumi-access-approval`, personalizzabile con `KEYCLOAK_APPROVAL_CLIENT_ID`. Il segreto è distinto da `OIDC_CLIENT_SECRET` e viene passato soltanto a Lumi e al servizio `keycloak-init`; non va inserito nel realm JSON o nel frontend. In Compose `KEYCLOAK_ADMIN_URL` è il collegamento privato `http://keycloak:8080/keycloak`; per il backend nativo è `http://localhost:19090/keycloak`.
+
+Esegui il normale aggiornamento dopo aver configurato il segreto. L’inizializzatore riconcilia il client anche su realm esistenti: abilita il service account, disabilita login browser e password grant, abilita FGAP v2 e configura una policy per il solo service account. La policy consente `view` e `map-roles` sugli utenti e `map-role` sul solo ruolo `portal-access`. Non vengono concessi `manage-users`, `realm-admin`, modifica password o assegnazione di `portal-admin`. La ricerca dei ruoli assegnabili usa l’endpoint dei mapping disponibili per evitare permessi di lettura del realm più ampi. Il gateway continua a bloccare `/keycloak/admin/`: il browser parla soltanto con le API Lumi.
+
+Senza credenziali, Lumi resta operativo e conserva le richieste; **Approva** restituisce un errore di configurazione e lascia la richiesta pendente. Errori di Keycloak o di rete consentono di riprovare. Se l’assegnazione su Keycloak è riuscita ma la risposta o il salvataggio locale falliscono, il nuovo tentativo verifica i ruoli effettivi e completa l’operazione senza duplicarla. I token di servizio rimangono in memoria nel backend e vengono rinnovati alla scadenza.
+
+Dopo l’approvazione, Lumi forza il rinnovo delle sessioni dell’utente e verifica il nuovo access token firmato. Lo stato locale della richiesta non autorizza mai l’accesso; la revoca del ruolo continua a essere recepita con il normale rinnovo OIDC. Una richiesta pendente viene riconciliata anche se `portal-access` è assegnato manualmente e rilevato in un token valido.
+
+Per ruotare il segreto, aggiorna `KEYCLOAK_APPROVAL_CLIENT_SECRET` in `config/.env` e riesegui il deploy: l’inizializzatore aggiorna il client e il backend riceve il nuovo valore. Il setup locale aggiunge solo valori mancanti e non ruota i segreti esistenti. Verifica con `just test-auth`: i test reali provano richiesta, persistenza dopo riavvio, approvazione senza nuovo login e rifiuto da parte di Keycloak di assegnare `portal-admin`, modificare account/password o cambiare il realm. Non vengono chiamati modelli OpenAI.
+
+La migrazione di controllo `004_access_requests.sql` viene applicata automaticamente. Includi `portal/control.db` nei normali backup; le credenziali rimangono nel file ambiente privato.
+
 ## Dati, aggiornamenti e backup
 
 La migrazione `005_dictionary.sql` aggiunge le schede delle parole ai messaggi e un dizionario indipendente in ogni database di spazio. Si applica automaticamente all’avvio, senza importare le conversazioni precedenti. Le nuove spiegazioni completate aggiornano il dizionario; eliminare una conversazione non elimina le parole. I coach possono eliminare singole parole o svuotare il dizionario dall’area coach. Includi questi database nei normali backup.

@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 from pathlib import Path
 import shlex
 import shutil
@@ -471,6 +472,76 @@ class RemoteTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('Another deployment', result.stderr)
             self.assertNoActivation()
+
+    def test_approval_secret_is_generated_privately_and_preserved_on_retry(self):
+        self.setup()
+        config = self.root / 'config/.env'
+        original = '# Keep existing settings\nPRIVATE_TEST_SECRET=local-only'
+        config.write_text(original)
+        result = self.invoke('approval-secret')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        content = config.read_text()
+        self.assertTrue(content.startswith(original + '\n'))
+        secret = content.split('KEYCLOAK_APPROVAL_CLIENT_SECRET=', 1)[1].strip()
+        self.assertRegex(secret, r'\A[0-9a-f]{64}\Z')
+        self.assertNotIn(secret, result.stdout + result.stderr)
+        self.assertNotIn('local-only', result.stdout + result.stderr)
+        self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+        result = self.invoke('approval-secret')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(config.read_text(), content)
+        self.assertNotIn(secret, result.stdout + result.stderr)
+        self.assertFalse(list(config.parent.glob('.approval-secret-*')))
+        self.assertNoActivation()
+
+    def test_approval_secret_fills_empty_values_without_rewriting_other_settings(self):
+        self.setup()
+        config = self.root / 'config/.env'
+        for empty in ('', '"" # not configured', "''"):
+            with self.subTest(empty=empty):
+                config.write_text('KEEP=unchanged\nexport KEYCLOAK_APPROVAL_CLIENT_SECRET=' + empty + '\nOTHER="also unchanged"\n')
+                result = self.invoke('approval-secret')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                content = config.read_text()
+                self.assertTrue(content.startswith('KEEP=unchanged\n'))
+                self.assertTrue(content.endswith('OTHER="also unchanged"\n'))
+                self.assertEqual(len(re.findall(r'^KEYCLOAK_APPROVAL_CLIENT_SECRET=[0-9a-f]{64}$', content, re.M)), 1)
+        original = 'export KEYCLOAK_APPROVAL_CLIENT_SECRET="existing-private-value" # keep\n'
+        config.write_text(original)
+        result = self.invoke('approval-secret')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(config.read_text(), original)
+        self.assertNotIn('existing-private-value', result.stdout + result.stderr)
+
+    def test_approval_secret_refuses_ambiguous_or_unsafe_config_and_deploy_lock(self):
+        self.setup()
+        config = self.root / 'config/.env'
+        duplicate = 'KEYCLOAK_APPROVAL_CLIENT_SECRET=\nKEYCLOAK_APPROVAL_CLIENT_SECRET=private-existing\n'
+        config.write_text(duplicate)
+        result = self.invoke('approval-secret')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(config.read_text(), duplicate)
+        self.assertNotIn('private-existing', result.stdout + result.stderr)
+        config.write_text('KEEP=unchanged\n')
+        config.chmod(0o644)
+        self.assertNotEqual(self.invoke('approval-secret').returncode, 0)
+        self.assertEqual(config.read_text(), 'KEEP=unchanged\n')
+        config.chmod(0o600)
+        target = config.with_name('original.env')
+        config.rename(target)
+        config.symlink_to(target)
+        self.assertNotEqual(self.invoke('approval-secret').returncode, 0)
+        self.assertEqual(target.read_text(), 'KEEP=unchanged\n')
+        config.unlink()
+        self.assertNotEqual(self.invoke('approval-secret').returncode, 0)
+        target.rename(config)
+        with (self.root / '.deployment.lock').open('w') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = self.invoke('approval-secret')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Another deployment', result.stderr)
+            self.assertEqual(config.read_text(), 'KEEP=unchanged\n')
+        self.assertNoActivation()
 
     def test_release_cannot_be_overwritten(self):
         self.setup()

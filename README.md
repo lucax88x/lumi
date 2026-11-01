@@ -23,7 +23,7 @@ Apri **http://localhost:15173**. Go e Vite girano sul computer con `just dev`; C
 
 - Keycloak admin: **http://localhost:19090/keycloak/admin/**. Utente e password sono in `.env.stack.local`.
 - Email di verifica e recupero password: **http://localhost:18025** (Mailpit).
-- Registrati, verifica l’email in Mailpit e assegna `portal-access` al nuovo utente dal realm **lumi**, in **Users → Role mapping → Assign role**.
+- Registrati e verifica l’email in Mailpit. Per il primo amministratore assegna manualmente `portal-access` e `portal-admin` dal realm **lumi**, in **Users → Role mapping → Assign role**. Le altre persone usano **Richiedi accesso** e vengono approvate dalla campanella **Notifiche** di Lumi.
 - Assegna anche `portal-admin` ai soli amministratori che devono gestire il collegamento condiviso. Rientra in Lumi e apri **Admin** per collegare ChatGPT una volta per tutti gli spazi.
 - Per Google, configura le credenziali come descritto nella [guida operativa](docs/deployment.md). Senza credenziali il pulsante Google non appare.
 
@@ -43,6 +43,14 @@ Un account approvato può creare più spazi e far parte di altri. La persona che
 I membri condividono le scoperte del proprio spazio. Solo i coach possono modificare le preferenze didattiche e vocali, gestire la cronologia e invitare o rimuovere persone. Una persona può essere coach in uno spazio e membro in un altro. Non si può rimuovere o declassare l’ultimo coach. Il ruolo Keycloak **`portal-admin`**, assegnato esplicitamente oltre a `portal-access`, abilita la sezione **Admin** (`/admin`): essere coach non concede accesso alle connessioni condivise e gli amministratori non ottengono accesso alle conversazioni degli altri spazi.
 
 Le pagine degli spazi usano `/spazi/ID` e `/spazi/ID/coach`; la gestione amministrativa usa `/admin/spazi`. I vecchi link vengono aggiornati automaticamente conservando query e frammenti. Le API e i dati conservano i nomi tecnici `families` e `parent` per compatibilità: nell’interfaccia corrispondono a spazi e coach.
+
+### Richiedere e approvare l’accesso
+
+Dopo il login con email verificata, chi non ha `portal-access` può premere **Richiedi accesso**. La campanella **Notifiche** degli amministratori raccoglie le richieste insieme agli inviti agli spazi. **Approva** assegna soltanto `portal-access` su Keycloak; la sessione viene aggiornata automaticamente, senza un nuovo login e conservando l’eventuale invito aperto. Gli spazi e il ruolo `portal-admin` restano separati.
+
+Ogni account ha una sola richiesta, anche da schede o dispositivi diversi. **Rifiuta** consente un nuovo invio dopo 24 ore; il backend riapre la stessa richiesta e conserva il registro delle decisioni. Una revoca successiva di `portal-access` rimane efficace: la vecchia approvazione non concede accesso.
+
+`just local-up` prepara il segreto privato `KEYCLOAK_APPROVAL_CLIENT_SECRET` e il client di servizio `lumi-access-approval` con permessi amministrativi granulari. In produzione configura lo stesso segreto nell’ambiente di Lumi e di `keycloak-init`; Compose usa l’indirizzo privato `http://keycloak:8080/keycloak`. Nel backend nativo configura `KEYCLOAK_ADMIN_URL=http://localhost:19090/keycloak`. Il client di login conserva le sue credenziali separate. Senza il segreto, le richieste vengono conservate ma l’approvazione mostra un errore di configurazione. Vedi la [guida operativa](docs/deployment.md#approvazioni-di-accesso-da-lumi).
 
 Gli inviti sono link copiabili, validi sette giorni e utilizzabili una sola volta dall’indirizzo email verificato indicato. Un invito non concede `portal-access`: l’approvazione resta all’amministratore Keycloak.
 

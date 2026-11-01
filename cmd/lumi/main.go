@@ -19,7 +19,7 @@ func env(key, fallback string) string {
 	return fallback
 }
 func main() {
-	server, err := app.NewPortal(context.Background(), app.Config{DataDir: env("DATA_DIR", "data"), Origin: env("PUBLIC_ORIGIN", "http://127.0.0.1:5173"), WebDir: env("WEB_DIR", "web/dist"), OpenAIAPIKey: os.Getenv("OPENAI_API_KEY"), OIDCIssuer: os.Getenv("OIDC_ISSUER_URL"), OIDCInternalURL: os.Getenv("OIDC_INTERNAL_URL"), OIDCClientID: os.Getenv("OIDC_CLIENT_ID"), OIDCClientSecret: os.Getenv("OIDC_CLIENT_SECRET")})
+	server, err := app.NewPortal(context.Background(), app.Config{DataDir: env("DATA_DIR", "data"), Origin: env("PUBLIC_ORIGIN", "http://127.0.0.1:5173"), WebDir: env("WEB_DIR", "web/dist"), OpenAIAPIKey: os.Getenv("OPENAI_API_KEY"), OIDCIssuer: os.Getenv("OIDC_ISSUER_URL"), OIDCInternalURL: os.Getenv("OIDC_INTERNAL_URL"), OIDCClientID: os.Getenv("OIDC_CLIENT_ID"), OIDCClientSecret: os.Getenv("OIDC_CLIENT_SECRET"), KeycloakAdminURL: os.Getenv("KEYCLOAK_ADMIN_URL"), KeycloakApprovalClientID: env("KEYCLOAK_APPROVAL_CLIENT_ID", "lumi-access-approval"), KeycloakApprovalClientSecret: os.Getenv("KEYCLOAK_APPROVAL_CLIENT_SECRET")})
 	if err != nil {
 		slog.Error("startup failed", "error", err)
 		os.Exit(1)

@@ -11,7 +11,8 @@ case "${SMTP_ENABLED:-false}" in
   *) echo 'SMTP_ENABLED must be true or false.' >&2; exit 1 ;;
 esac
 config=$(mktemp)
-trap 'rm -f "$config"' EXIT
+payload=$(mktemp)
+trap 'rm -f "$config" "$payload"' EXIT
 kc=/opt/keycloak/bin/kcadm.sh
 # Keycloak may report readiness while asynchronous realm bootstrap is finishing.
 ready=false
@@ -44,6 +45,57 @@ json_string() {
   value=${value//$'\f'/\\f}
   printf '"%s"' "$value"
 }
+# Provision a separate service account with FGAP v2 permissions, never the
+# coarse manage-users/realm-admin roles. All calls finish before master issuer changes.
+if [[ -n ${KEYCLOAK_APPROVAL_CLIENT_SECRET:-} ]]; then
+  approval_client=${KEYCLOAK_APPROVAL_CLIENT_ID:-lumi-access-approval}
+  client_id=$("$kc" get clients -r lumi --config "$config" -q "clientId=$approval_client" --fields id --format csv --noquotes)
+  cat > "$payload" <<JSON
+{"clientId":$(json_string "$approval_client"),"name":"Lumi access approvals","enabled":true,"protocol":"openid-connect","publicClient":false,"secret":$(json_string "$KEYCLOAK_APPROVAL_CLIENT_SECRET"),"serviceAccountsEnabled":true,"standardFlowEnabled":false,"directAccessGrantsEnabled":false,"fullScopeAllowed":false,"defaultClientScopes":["basic","roles"]}
+JSON
+  if [[ -z $client_id ]]; then
+    client_id=$("$kc" create clients -r lumi --config "$config" -f "$payload" -i)
+  else
+    "$kc" update "clients/$client_id" -r lumi --config "$config" -f "$payload"
+  fi
+  service_id=$("$kc" get "clients/$client_id/service-account-user" -r lumi --config "$config" --fields id --format csv --noquotes)
+  "$kc" update realms/lumi --config "$config" -s adminPermissionsEnabled=true
+  permissions_id=$("$kc" get clients -r lumi --config "$config" -q clientId=admin-permissions --fields id --format csv --noquotes)
+  access_role_id=$("$kc" get roles/portal-access -r lumi --config "$config" --fields id --format csv --noquotes)
+  if [[ -z $service_id || -z $permissions_id || -z $access_role_id ]]; then
+    echo 'Keycloak access-approval permissions could not be initialized.' >&2
+    exit 1
+  fi
+  permissions="clients/$permissions_id/authz/resource-server"
+  policy_name=lumi-access-approval-service
+  policy_id=$("$kc" get "$permissions/policy" -r lumi --config "$config" -q "name=$policy_name" --fields id --format csv --noquotes)
+  cat > "$payload" <<JSON
+{"name":"$policy_name","type":"user","logic":"POSITIVE","users":["$service_id"]}
+JSON
+  if [[ -z $policy_id ]]; then
+    "$kc" create "$permissions/policy/user" -r lumi --config "$config" -f "$payload" >/dev/null
+    policy_id=$("$kc" get "$permissions/policy" -r lumi --config "$config" -q "name=$policy_name" --fields id --format csv --noquotes)
+  else
+    "$kc" update "$permissions/policy/user/$policy_id" -r lumi --config "$config" -f "$payload"
+  fi
+  for permission_name in lumi-access-approval-users lumi-access-approval-role; do
+    permission_id=$("$kc" get "$permissions/permission/scope" -r lumi --config "$config" -q "name=$permission_name" --fields id --format csv --noquotes)
+    if [[ $permission_name == lumi-access-approval-users ]]; then
+      cat > "$payload" <<JSON
+{"name":"$permission_name","resourceType":"Users","scopes":["view","map-roles"],"policies":["$policy_id"]}
+JSON
+    else
+      cat > "$payload" <<JSON
+{"name":"$permission_name","resourceType":"Roles","resources":["$access_role_id"],"scopes":["map-role"],"policies":["$policy_id"]}
+JSON
+    fi
+    if [[ -z $permission_id ]]; then
+      "$kc" create "$permissions/permission/scope" -r lumi --config "$config" -f "$payload" >/dev/null
+    else
+      "$kc" update "$permissions/permission/scope/$permission_id" -r lumi --config "$config" -f "$payload"
+    fi
+  done
+fi
 if [[ ${SMTP_ENABLED:-false} == true ]]; then
   "$kc" update realms/lumi --config "$config" \
     -s registrationAllowed=true -s resetPasswordAllowed=true -s verifyEmail=true \

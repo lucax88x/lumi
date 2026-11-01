@@ -14,7 +14,7 @@ case $mode in
     check-auto) mode=check; automatic=1 ;;
     deploy-auto) mode=deploy; automatic=1 ;;
 esac
-[[ $mode == setup || $mode == check || $mode == deploy || $mode == rollback ]] || fail 'Unknown operation.'
+[[ $mode == setup || $mode == check || $mode == deploy || $mode == rollback || $mode == approval-secret ]] || fail 'Unknown operation.'
 for tool in docker flock curl python3 systemctl loginctl; do
     command -v "$tool" >/dev/null || fail "Missing prerequisite: $tool (no packages were installed)."
 done
@@ -201,11 +201,66 @@ OPENAI_API_KEY=
 # Optional Google identity broker; both values are required to show the button.
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+
+# Dedicated Keycloak service account for access approvals; keep the secret private.
+KEYCLOAK_APPROVAL_CLIENT_ID=lumi-access-approval
+KEYCLOAK_APPROVAL_CLIENT_SECRET=
 ENV
         )
     fi
     docker_prerequisites
     printf 'Setup ready at %s. Fill config/.env and log in to ghcr.io inside this shell.\n' "$root"
+    exit 0
+fi
+
+if [[ $mode == approval-secret ]]; then
+    python3 -I - "$root/config/.env" <<'PY'
+import os, pathlib, re, secrets, shlex, stat, sys, tempfile
+
+path = pathlib.Path(sys.argv[1])
+if not path.exists():
+    sys.exit('Manca config/.env. Esegui prima just deploy-setup.')
+info = path.lstat()
+if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+    sys.exit('config/.env deve essere un file regolare di serviceman con permessi 0600.')
+key = 'KEYCLOAK_APPROVAL_CLIENT_SECRET'
+original = path.read_bytes().decode('utf-8')
+lines = original.splitlines(keepends=True)
+definitions = [(index, match.group(1)) for index, line in enumerate(lines)
+               if (match := re.match(r'^\s*(?:export\s+)?' + key + r'\s*=(.*)$', line.rstrip('\r\n')))]
+if len(definitions) > 1:
+    sys.exit('KEYCLOAK_APPROVAL_CLIENT_SECRET è definito più volte: correggi config/.env prima di riprovare.')
+if definitions:
+    index, raw = definitions[0]
+    try:
+        values = shlex.split(raw, comments=True)
+    except ValueError:
+        sys.exit('La definizione di KEYCLOAK_APPROVAL_CLIENT_SECRET non è valida.')
+    if any(values):
+        print('Secret già presente sulla VPS: conservato senza modificarlo.')
+        sys.exit(0)
+    ending = '\r\n' if lines[index].endswith('\r\n') else '\n'
+    lines[index] = key + '=' + secrets.token_hex(32) + ending
+    content = ''.join(lines)
+else:
+    content = original + ('' if not original or original.endswith('\n') else '\n')
+    content += key + '=' + secrets.token_hex(32) + '\n'
+
+temporary = None
+try:
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.approval-secret-', delete=False) as output:
+        temporary = pathlib.Path(output.name)
+        os.fchmod(output.fileno(), 0o600)
+        output.write(content.encode('utf-8'))
+        output.flush()
+        os.fsync(output.fileno())
+    os.replace(temporary, path)
+finally:
+    if temporary is not None:
+        temporary.unlink(missing_ok=True)
+print('Secret creato e salvato in config/.env sulla VPS (0600). Il valore non viene mostrato.')
+print('Esegui just deploy per applicarlo a Keycloak e Lumi.')
+PY
     exit 0
 fi
 

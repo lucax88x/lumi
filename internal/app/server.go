@@ -19,7 +19,10 @@ import (
 	"lumi/internal/api"
 )
 
-type Config struct{ DataDir, Origin, WebDir, OpenAIAPIKey, OIDCIssuer, OIDCInternalURL, OIDCClientID, OIDCClientSecret string }
+type Config struct {
+	DataDir, Origin, WebDir, OpenAIAPIKey, OIDCIssuer, OIDCInternalURL, OIDCClientID, OIDCClientSecret string
+	KeycloakAdminURL, KeycloakApprovalClientID, KeycloakApprovalClientSecret                           string
+}
 type Server struct {
 	store     *Store
 	auth      *OAuth
