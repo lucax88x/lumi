@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 180" fill="none">
+  <!-- Lumi's firefly, with the same face and colors as the in-app Avatar. -->
+  <ellipse cx="170" cy="96" rx="106" ry="78" fill="#eae2f4"/>
+  <path d="M65 131C32 132 26 109 44 100C58 93 73 102 61 112C47 124 25 117 16 105" stroke="#c9b5e1" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 6"/>
+  <g transform="translate(77 -8) scale(.72)">
+    <circle cx="130" cy="174" r="64" fill="#f3d878" opacity=".2"/>
+    <ellipse cx="130" cy="237" rx="37" ry="6" fill="#69449a" opacity=".08"/>
+    <ellipse cx="89" cy="146" rx="30" ry="47" transform="rotate(-36 89 146)" fill="#faf9ff" stroke="#d9cdea" stroke-width="2.5"/>
+    <path d="M69 121Q90 145 105 166" stroke="#e5dcef" stroke-width="2.5" stroke-linecap="round"/>
+    <ellipse cx="171" cy="146" rx="30" ry="47" transform="rotate(36 171 146)" fill="#faf9ff" stroke="#d9cdea" stroke-width="2.5"/>
+    <path d="M191 121Q170 145 155 166" stroke="#e5dcef" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M112 92Q107 64 94 58M147 92Q153 64 165 58" stroke="#847099" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="92" cy="56" r="7" fill="#b8a0de"/>
+    <circle cx="167" cy="56" r="7" fill="#b8a0de"/>
+    <ellipse cx="130" cy="162" rx="41" ry="55" fill="#c7afe2"/>
+    <path d="M92 181Q130 204 168 181C163 207 148 221 130 221C112 221 97 207 92 181Z" fill="#f3d878"/>
+    <ellipse cx="130" cy="121" rx="51" ry="43" fill="#d9c6f0"/>
+    <ellipse cx="111" cy="120" rx="5" ry="7" fill="#493458"/>
+    <ellipse cx="149" cy="120" rx="5" ry="7" fill="#493458"/>
+    <circle cx="113" cy="118" r="1.7" fill="white"/>
+    <circle cx="151" cy="118" r="1.7" fill="white"/>
+    <ellipse cx="98" cy="132" rx="9" ry="5" fill="#eea6b1" opacity=".65"/>
+    <ellipse cx="162" cy="132" rx="9" ry="5" fill="#eea6b1" opacity=".65"/>
+    <path d="M120 134Q130 145 140 134" stroke="#634877" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M104 169Q95 174 91 168M156 169Q166 174 169 168" stroke="#aa90cd" stroke-width="5" stroke-linecap="round"/>
+    <path d="m130 177 2 5 5 1-4 3 1 5-4-3-4 3 1-5-4-3 5-1Z" fill="#fff8d5"/>
+  </g>
+  <path d="m72 36 3 9 9 3-9 3-3 9-3-9-9-3 9-3Z" fill="#d9b85f"/>
+  <path d="m276 107 3 8 8 3-8 3-3 8-3-8-8-3 8-3Z" fill="#d9b85f"/>
+  <circle cx="263" cy="48" r="4" fill="#b8a0de"/>
+  <circle cx="91" cy="153" r="3" fill="#b8a0de"/>
+</svg>

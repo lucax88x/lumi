@@ -1,70 +1,352 @@
 :root {
   color-scheme: light;
-  --keycloak-card-top-color: #c7afe2;
-  --pf-v5-global--primary-color--100: #79599c;
-  --pf-v5-global--primary-color--200: #604878;
-  --pf-v5-global--primary-color--dark-100: #79599c;
-  --pf-v5-global--primary-color--dark-200: #604878;
-  --pf-v5-global--active-color--100: #79599c;
-  --pf-v5-global--link--Color: #79599c;
-  --pf-v5-global--link--Color--hover: #604878;
-  --pf-v5-global--link--Color--dark: #79599c;
-  --pf-v5-global--link--Color--dark--hover: #604878;
-  --pf-v5-global--Color--dark-100: #3b3444;
-  --pf-v5-global--Color--dark-200: #796f81;
-  --pf-v5-global--BackgroundColor--100: #fffdfb;
-  --pf-v5-global--BackgroundColor--200: #f9f7f2;
-  --pf-v5-global--BackgroundColor--light-100: #fffdfb;
-  --pf-v5-global--BorderColor--100: #e8e0ed;
+  --lumi-mist: #f5f3fa;
+  --lumi-paper: #ffffff;
+  --lumi-ink: #30283f;
+  --lumi-plum: #69449a;
+  --lumi-plum-hover: #533479;
+  --lumi-lilac: #eae2f4;
+  --lumi-line: #d9cde6;
+  --lumi-muted: #70617d;
+  --lumi-font: 'Trebuchet MS', 'Avenir Next', 'Segoe UI', sans-serif;
+  --pf-v5-global--primary-color--100: var(--lumi-plum);
+  --pf-v5-global--primary-color--200: var(--lumi-plum-hover);
+  --pf-v5-global--active-color--100: var(--lumi-plum);
+  --pf-v5-global--danger-color--100: #a04f58;
+  --pf-v5-global--link--Color: var(--lumi-plum);
+  --pf-v5-global--link--Color--hover: var(--lumi-plum-hover);
+  --pf-v5-global--Color--dark-100: var(--lumi-ink);
+  --pf-v5-global--Color--dark-200: var(--lumi-muted);
+  --pf-v5-global--BackgroundColor--100: var(--lumi-paper);
+  --pf-v5-global--BackgroundColor--200: var(--lumi-mist);
+  --pf-v5-global--BackgroundColor--light-100: var(--lumi-paper);
+  --pf-v5-global--BorderColor--100: var(--lumi-line);
   --pf-v5-global--BorderColor--200: #9778b8;
-  --pf-v5-global--BorderColor--300: #d6c6e7;
-  --pf-v5-global--BorderColor--dark-100: #e8e0ed;
-  --pf-v5-global--FontFamily--text: 'Trebuchet MS', 'Segoe UI', sans-serif;
-  --pf-v5-global--FontFamily--heading: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  --pf-v5-global--BorderColor--300: var(--lumi-line);
+  --pf-v5-global--BorderColor--dark-100: var(--lumi-line);
+  --pf-v5-global--FontFamily--text: var(--lumi-font);
+  --pf-v5-global--FontFamily--heading: var(--lumi-font);
 }
-html, body, .login-pf, .login-pf body { min-height: 100%; background: #f9f7f2 !important; color: #3b3444; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; }
-.pf-v5-c-login { background: radial-gradient(ellipse at 20% 15%, #eee7f6, transparent 55%), #f9f7f2; }
-.pf-v5-c-login__container { max-width: 500px; margin: 30px auto; }
-.pf-v5-c-login__header { text-align: center; padding-top: 12px; }
-.pf-v5-c-login__header::before { content: ''; display: block; width: 130px; height: 130px; margin: 0 auto 18px; background: url('../img/lumi.svg') center/contain no-repeat; }
-#kc-header-wrapper { color: #79599c; font-size: 38px; font-weight: 700; letter-spacing: -1px; }
-.pf-v5-c-login__main { border-radius: 24px; border: 1px solid #e8e0ed; box-shadow: 0 12px 48px #79599c12; overflow: hidden; background: #fffdfb; }
-.pf-v5-c-login__main-header { text-align: center; padding-top: 30px; }
-.pf-v5-c-title { color: #604878; font-size: 24px; line-height: 1.4; }
-.pf-v5-c-button { border-radius: 12px; min-height: 46px; font-weight: 600; }
-.pf-v5-c-button.pf-m-primary { --pf-v5-c-button--m-primary--BackgroundColor: #79599c; }
-.pf-v5-c-button.pf-m-control {
-  --pf-v5-c-button--m-control--BackgroundColor: #eee7f6;
-  --pf-v5-c-button--m-control--Color: #604878;
-  --pf-v5-c-button--m-control--hover--BackgroundColor: #e8def3;
-  --pf-v5-c-button--m-control--hover--Color: #604878;
-  --pf-v5-c-button--m-control--focus--BackgroundColor: #e8def3;
-  --pf-v5-c-button--m-control--focus--Color: #604878;
-  --pf-v5-c-button--m-control--active--BackgroundColor: #e8def3;
-  --pf-v5-c-button--m-control--active--Color: #604878;
+
+html, body, .login-pf, .login-pf body {
+  min-height: 100%;
+  background: var(--lumi-mist);
+  color: var(--lumi-ink);
+  font-family: var(--lumi-font);
+  -webkit-font-smoothing: antialiased;
 }
-.pf-v5-c-form-control { border-radius: 10px; background: #fffdfb; min-height: 46px; }
-a { color: #79599c; }
-a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #9778b8 !important; outline-offset: 3px; }
-.pf-v5-c-login__main-footer,
-.pf-v5-c-login__main-footer-band { background: transparent; }
-.pf-v5-c-login__main-footer-band { border-top: 0; }
-.pf-v5-c-login__main-footer-band-item { padding-top: 16px; padding-bottom: 16px; }
-.pf-v5-c-login__main-footer:empty { display: none; }
-#kc-social-providers .pf-v5-c-button.pf-m-tertiary {
+
+/* Keep Keycloak's shared layout and forms for every authentication step. */
+.pf-v5-c-login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 32px 20px 48px;
+  background: var(--lumi-mist);
+}
+
+.pf-v5-c-login__container {
+  width: 100%;
+  max-width: 464px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin: auto;
+  padding: 0;
+}
+
+.pf-v5-c-login__header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+#kc-header-wrapper {
+  /* The parent theme sets the brand color with !important. */
+  color: var(--lumi-plum) !important;
+  font-family: var(--lumi-font);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -2px;
+  line-height: 1.15;
+  text-transform: none;
+  margin: 0;
+}
+
+.pf-v5-c-login__header::after {
+  content: '';
+  display: block;
+  width: min(100%, 300px);
+  height: 160px;
+  background: url('../img/lumi-welcome.svg') center / contain no-repeat;
+}
+
+.pf-v5-c-login__main {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--lumi-line);
+  border-radius: 32px 32px 32px 12px;
+  background: var(--lumi-paper);
+  box-shadow: 0 6px 0 var(--lumi-lilac);
+}
+
+.pf-v5-c-login__main-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 28px 32px 24px;
+  border-top: 0;
+  text-align: center;
+}
+
+#kc-page-title {
+  color: var(--lumi-ink);
+  font-family: var(--lumi-font);
+  font-size: clamp(24px, 4vw, 28px);
+  font-weight: 700;
+  letter-spacing: -.7px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.pf-v5-c-login__main-header-utilities {
+  align-self: center;
+  width: auto;
+  max-width: 100%;
+}
+
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control {
+  min-height: 36px;
+  border-color: transparent;
+  border-radius: 12px;
+  background: var(--lumi-mist);
+  font-size: 14px;
+}
+
+.pf-v5-c-login__main-body {
+  min-width: 0;
+  padding: 0 32px 32px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.pf-v5-c-form {
+  --pf-v5-c-form--GridGap: 20px;
+}
+
+.pf-v5-c-form__label {
+  color: #55465f;
+  font-size: 15px;
+}
+
+/* PatternFly draws input borders with pseudo-elements; use one rounded border. */
+.pf-v5-c-form-control {
+  align-items: stretch;
+  min-height: 50px;
+  border: 1px solid var(--lumi-line);
+  border-radius: 12px;
+  background: #faf8fd;
+  color: var(--lumi-ink);
+}
+
+.pf-v5-c-form-control::before,
+.pf-v5-c-form-control::after {
+  display: none;
+}
+
+.pf-v5-c-form-control:is(:hover, :focus-within) {
+  border-color: #9778b8;
+}
+
+.pf-v5-c-form-control:focus-within {
+  outline: 3px solid #9778b8;
+  outline-offset: 3px;
+}
+
+.pf-v5-c-form-control.pf-m-error,
+.pf-v5-c-form-control:has(> [aria-invalid='true']) {
+  border-color: #b34759;
+  background: #fff7f8;
+}
+
+.pf-v5-c-form-control > :is(input, select, textarea) {
+  height: 100%;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font-family: var(--lumi-font);
+  font-size: 16px;
+}
+
+.pf-v5-c-form-control > :is(input, select, textarea):focus-visible {
+  outline: none;
+}
+
+.pf-v5-c-input-group {
+  gap: 6px;
+}
+
+.pf-v5-c-input-group__item {
+  min-width: 0;
+}
+
+.pf-v5-c-button {
   --pf-v5-c-button--after--BorderRadius: 12px;
-  --pf-v5-c-button--m-tertiary--Color: #604878;
-  --pf-v5-c-button--m-tertiary--BackgroundColor: #fffdfb;
-  --pf-v5-c-button--m-tertiary--after--BorderColor: #d6c6e7;
-  min-height: 48px;
+  min-height: 50px;
+  border-radius: 12px;
+  font-family: var(--lumi-font);
+  font-size: 16px;
+  font-weight: 700;
+  white-space: normal;
 }
+
+.pf-v5-c-button.pf-m-primary {
+  --pf-v5-c-button--m-primary--BackgroundColor: var(--lumi-plum);
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: var(--lumi-plum-hover);
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: var(--lumi-plum-hover);
+  --pf-v5-c-button--m-primary--active--BackgroundColor: var(--lumi-plum-hover);
+  box-shadow: 0 3px 0 #4c2f70;
+}
+
+.pf-v5-c-button.pf-m-control {
+  --pf-v5-c-button--m-control--BackgroundColor: var(--lumi-lilac);
+  --pf-v5-c-button--m-control--Color: var(--lumi-plum);
+  --pf-v5-c-button--m-control--hover--BackgroundColor: #dfd3ee;
+  --pf-v5-c-button--m-control--hover--Color: var(--lumi-plum-hover);
+  --pf-v5-c-button--m-control--focus--BackgroundColor: #dfd3ee;
+  --pf-v5-c-button--m-control--focus--Color: var(--lumi-plum-hover);
+  --pf-v5-c-button--m-control--active--BackgroundColor: #dfd3ee;
+  --pf-v5-c-button--m-control--active--Color: var(--lumi-plum-hover);
+  min-width: 50px;
+}
+
+.pf-v5-c-button.pf-m-control::after {
+  border: 0;
+}
+
+.pf-v5-c-button.pf-m-secondary,
+#kc-social-providers .pf-v5-c-button.pf-m-tertiary {
+  --pf-v5-c-button--m-secondary--Color: var(--lumi-plum);
+  --pf-v5-c-button--m-secondary--after--BorderColor: var(--lumi-line);
+  --pf-v5-c-button--m-tertiary--Color: var(--lumi-plum);
+  --pf-v5-c-button--m-tertiary--BackgroundColor: var(--lumi-paper);
+  --pf-v5-c-button--m-tertiary--after--BorderColor: var(--lumi-line);
+}
+
 #kc-social-providers .pf-v5-c-button.pf-m-tertiary:is(:hover, :focus, :active):not([aria-disabled='true']) {
-  --pf-v5-c-button--m-tertiary--BackgroundColor: #eee7f6;
+  --pf-v5-c-button--m-tertiary--BackgroundColor: var(--lumi-mist);
   --pf-v5-c-button--after--BorderColor: #9778b8;
 }
-.kc-login-divider { color: #796f81; }
+
+a {
+  color: var(--lumi-plum);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--lumi-plum-hover);
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid #9778b8;
+  outline-offset: 3px;
+}
+
+.pf-v5-c-check__input {
+  accent-color: var(--lumi-plum);
+}
+
+.pf-v5-c-check__label,
+.kc-login-divider {
+  color: var(--lumi-muted);
+  font-size: 14px;
+}
+
+.pf-v5-c-login__main-footer,
+.pf-v5-c-login__main-footer-band {
+  background: transparent;
+}
+
+.pf-v5-c-login__main-footer:empty {
+  display: none;
+}
+
+#kc-info {
+  padding: 16px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--lumi-mist);
+  color: var(--lumi-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+#kc-info-wrapper {
+  padding: 0;
+}
+
+#kc-registration a {
+  display: inline-block;
+  margin-inline-start: 4px;
+  padding-block: 4px;
+  font-weight: 700;
+}
+
 .kc-login-divider::before,
-.kc-login-divider::after { border-bottom-color: #e8e0ed; }
-@media(max-width: 600px) { .pf-v5-c-login__container { margin: 16px; width: auto; }.pf-v5-c-login__header::before { width: 100px; height: 100px; }.pf-v5-c-login__main { border-radius: 18px; } }
-#kc-header-wrapper { color: #79599c !important; text-transform: none !important; }
-body, .pf-v5-c-title, .pf-v5-c-button, input, label { font-family: 'Trebuchet MS', 'Segoe UI', sans-serif !important; }
+.kc-login-divider::after {
+  border-bottom-color: var(--lumi-line);
+}
+
+.pf-v5-c-alert {
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.pf-v5-c-alert__title {
+  line-height: 1.6;
+}
+
+@media (max-width: 600px) {
+  .pf-v5-c-login {
+    padding: 20px 16px 32px;
+  }
+
+  .pf-v5-c-login__container {
+    margin-block: 0;
+    row-gap: 12px;
+  }
+
+  #kc-header-wrapper {
+    font-size: 34px;
+  }
+
+  .pf-v5-c-login__header::after {
+    width: 244px;
+    height: 128px;
+  }
+
+  .pf-v5-c-login__main {
+    border-radius: 26px 26px 26px 10px;
+  }
+
+  .pf-v5-c-login__main-header {
+    padding: 24px 24px 20px;
+  }
+
+  .pf-v5-c-login__main-body {
+    padding: 0 24px 24px;
+  }
+}
+
+@media (max-width: 359px) {
+  .pf-v5-c-login__main-header {
+    padding-inline: 20px;
+  }
+
+  .pf-v5-c-login__main-body {
+    padding-inline: 20px;
+  }
+}
