@@ -5,7 +5,7 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog } from '@base-ui/react/dialog';
 import { ArrowDown, ArrowRightLeft, BookOpen, Flower2, Heart, History, House, LockKeyhole, LogOut, Menu, MessageCircle, Plus, Send, Sparkles, Square, UsersRound, Volume2, WifiOff, X } from 'lucide-react';
-import { listConversationsOptions, listConversationsQueryKey, listDictionaryWordsQueryKey, getConversationOptions, getConversationQueryKey, getStatusOptions } from './api/@tanstack/react-query.gen';
+import { listConversationsQueryKey, listDictionaryWordsQueryKey, getConversationOptions, getConversationQueryKey, getStatusOptions } from './api/@tanstack/react-query.gen';
 import { createConversation } from './api/sdk.gen';
 import type { Message, SendMessage, PublicStatus, Subject } from './api/types.gen';
 import { Avatar, type Mood } from './Avatar';
@@ -16,19 +16,9 @@ import { TopicMap } from './TopicMap';
 import { WordExplanation } from './WordExplanation';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { useInvitationNotifications } from './InvitationNotifications';
+import { ConversationHistory } from './ConversationHistory';
 import { useSpeech } from './speech';
-import { errorMessage, messageSpeechParts, readStream, shortDate } from './lib';
-
-function ConversationHistory({ familyId, close }: { familyId: string; close?: () => void }) {
-  const chats = useQuery(listConversationsOptions({ path: { familyId } }));
-  const pathname = useRouterState({ select: s => s.location.pathname });
-  return <div className="sidebar-history">
-    {chats.isPending && <LoadingSkeleton label="Caricamento delle scoperte" rows={3}/>}
-    {chats.data?.length === 0 && <div className="history-empty"><MessageCircle size={28} aria-hidden="true"/><p>Qui ritrovi le tue domande.<br/>Cominciamo dalla prima?</p><Link className="soft-button" to="/spazi/$familyId" params={{ familyId }} onClick={close}><Plus size={18}/>Fai una domanda</Link></div>}
-    {chats.isError && <div className="notice error-notice" role="alert"><p>Non riesco a caricare le tue scoperte.</p><button className="soft-button" onClick={() => void chats.refetch()}>Riprova</button></div>}
-    {chats.data?.map(c => <Link key={c.id} to="/spazi/$familyId/domande/$id" params={{ familyId, id: c.id }} onClick={close} aria-current={pathname === `/spazi/${familyId}/domande/${c.id}` ? 'page' : undefined} className={`history-item ${pathname === `/spazi/${familyId}/domande/${c.id}` ? 'active' : ''}`}><MessageCircle size={18} aria-hidden="true"/><span>{c.title}<small>{subjectLabel(c.subject)}<span>{shortDate(c.createdAt)}</span></small></span></Link>)}
-  </div>;
-}
+import { errorMessage, messageSpeechParts, readStream } from './lib';
 
 function Navigation({ familyId, close, notifications }: { familyId: string; close?: () => void; notifications?: ReactNode }) {
   const session = useSession();
@@ -37,20 +27,19 @@ function Navigation({ familyId, close, notifications }: { familyId: string; clos
   const pathname = useRouterState({ select: s => s.location.pathname });
   const homeLink = familyId ? { to: '/spazi/$familyId' as const, params: { familyId } } : { to: '/' as const };
   return <>
-    <Link className="brand" {...homeLink} onClick={close}><span className="brand-symbol"><Sparkles size={24}/></span><span>lumi<span className="brand-dot">.</span></span></Link>
+    <div className="sidebar-header"><Link className="brand" {...homeLink} onClick={close} aria-label="Lumi"><span className="brand-symbol"><Sparkles size={24} aria-hidden="true"/></span><span>lumi<span className="brand-dot">.</span></span></Link>{notifications}</div>
     <p className="brand-tagline">Una piccola luce per imparare</p>
     <nav aria-label="Navigazione principale" className="main-nav">
       {familyId ? <Link className={`nav-item ${pathname === `/spazi/${familyId}` ? 'selected' : ''}`} aria-current={pathname === `/spazi/${familyId}` ? 'page' : undefined} {...homeLink} onClick={close}><House size={20}/>Il mio angolino</Link> : <Link to="/" onClick={close} className={`nav-item ${pathname === '/' ? 'selected' : ''}`}><UsersRound size={20}/>I tuoi spazi</Link>}
       {familyId && <Link to="/spazi/$familyId/dizionario" params={{ familyId }} aria-current={pathname === `/spazi/${familyId}/dizionario` ? 'page' : undefined} onClick={close} className={`nav-item ${pathname === `/spazi/${familyId}/dizionario` ? 'selected' : ''}`}><BookOpen size={20}/>Il mio dizionario</Link>}
     </nav>
-    {notifications}
-    {familyId && <><div className="history-heading"><span>Le mie scoperte</span><History size={17} aria-hidden="true"/></div><ConversationHistory familyId={familyId} close={close}/></>}
+    {familyId && <section className="sidebar-discoveries" aria-label="Le mie scoperte"><div className="history-heading"><h2>Le mie scoperte</h2><Link to="/spazi/$familyId" params={{ familyId }} onClick={close} className="history-new" aria-label="Fai una nuova domanda" title="Fai una nuova domanda"><Plus size={18} aria-hidden="true"/></Link></div><ConversationHistory familyId={familyId} close={close}/></section>}
     <div className="sidebar-bottom">
-      {family?.role === 'parent' && <Link to="/spazi/$familyId/coach" params={{ familyId }} className="sidebar-action" onClick={close}><LockKeyhole size={17}/>Area coach</Link>}
-      {session.admin && <nav aria-label="Amministrazione">
+      <div className="sidebar-management">{family?.role === 'parent' && <Link to="/spazi/$familyId/coach" params={{ familyId }} aria-current={pathname === `/spazi/${familyId}/coach` ? 'page' : undefined} className={`sidebar-action ${pathname === `/spazi/${familyId}/coach` ? 'selected' : ''}`} onClick={close}><LockKeyhole size={17}/>Area coach</Link>}
+      {session.admin && <nav className="sidebar-admin" aria-label="Amministrazione">
         <Link to="/admin" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin' ? 'selected' : ''}`} onClick={close}><LockKeyhole size={17}/>Admin</Link>
         <Link to="/admin/spazi" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin/spazi' ? 'selected' : ''}`} onClick={close}><UsersRound size={17}/>Spazi gestiti</Link>
-      </nav>}
+      </nav>}</div>
       <nav className="sidebar-account" aria-label="Account e spazio">
         <div className="sidebar-identity">
           <UsersRound size={17} aria-hidden="true"/>

@@ -298,7 +298,7 @@ test('a question opens its own chat and follow-ups stay there', async ({ page })
   await page.getByRole('button', { name: 'Più facile', exact: true }).click();
   await expect(page.getByText('Proviamo con parole più semplici.')).toBeVisible();
   expect(state.chats).toHaveLength(1); expect(state.messages.get(state.chats[0].id)).toHaveLength(4);
-  await page.getByRole('link', { name: 'Fai una nuova domanda', exact: true }).click();
+  await page.getByRole('main').getByRole('link', { name: 'Fai una nuova domanda', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill('Che cosa significa gentile?');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.getByText('Meraviglia è una bella sorpresa, come quando vedi un arcobaleno.')).toBeVisible();
@@ -411,6 +411,55 @@ test('home preserves its layout and account actions live in the sidebar', async 
   await page.getByRole('link', { name: /Il nostro spazio/ }).click();
   await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('sidebar groups discoveries by last activity and keeps account actions visible', async ({ page }, testInfo) => {
+  const api = await mockAPI(page);
+  const now = new Date('2026-11-01T12:00:00Z');
+  await page.clock.setFixedTime(now);
+  const earlier = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+  const saved: Conversation[] = [
+    { id: 'old', title: 'Gli animali del bosco', subject: 'italian', createdAt: earlier(20), updatedAt: earlier(20) },
+    { id: 'yesterday', title: 'Perché le foglie cambiano colore?', subject: 'italian', createdAt: earlier(1), updatedAt: earlier(1) },
+    { id: 'resumed', title: 'Una parola che abbiamo ripreso insieme', subject: 'italian', createdAt: earlier(30), updatedAt: new Date(now.getTime() - 3_600_000).toISOString() },
+    { id: 'week', title: 'La differenza tra il Sole e le stelle', subject: 'italian', createdAt: earlier(4), updatedAt: earlier(4) },
+    { id: 'latest', title: 'Come si racconta in inglese una passeggiata nel bosco?', subject: 'english', createdAt: now.toISOString(), updatedAt: now.toISOString() },
+  ];
+  for (let index = 0; index < 24; index++) saved.push({ id: `older-${index}`, title: `Una scoperta da ritrovare ${index + 1}`, subject: 'italian', createdAt: earlier(40 + index), updatedAt: earlier(40 + index) });
+  api.chats.push(...saved);
+  for (const conversation of saved) api.messages.set(conversation.id, []);
+  await page.goto('/spazi/test');
+  await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
+  await openNavigation(page);
+  const navigation = page.locator('.sidebar:visible, .mobile-nav-panel');
+  const history = navigation.getByRole('region', { name: 'Le mie scoperte', exact: true });
+  await expect(history.getByRole('heading', { level: 3 })).toHaveText(['Oggi', 'Ieri', 'Ultimi 7 giorni', 'Più tempo fa']);
+  await expect(history.getByRole('region', { name: 'Oggi', exact: true }).getByRole('link')).toHaveText([
+    /Come si racconta in inglese.*Inglese/,
+    /Una parola che abbiamo ripreso insieme.*Italiano/,
+  ]);
+  await expect(history.getByRole('button', { name: /^Notifiche/ })).toHaveCount(0);
+  const account = navigation.getByRole('navigation', { name: 'Account e spazio' });
+  await expect(account.getByRole('button', { name: 'Esci', exact: true })).toBeInViewport();
+  await page.screenshot({ path: `test-results/sidebar-organized-${testInfo.project.name}.png`, fullPage: true });
+  await history.getByRole('link', { name: /Una scoperta da ritrovare 24/ }).scrollIntoViewIfNeeded();
+  await expect(account.getByRole('link', { name: 'Cambia spazio' })).toBeInViewport();
+  await expect(navigation.getByRole('link', { name: 'Area coach', exact: true })).toBeInViewport();
+  await expect(history.getByRole('link', { name: 'Fai una nuova domanda', exact: true })).toBeInViewport();
+  await history.getByRole('link', { name: /Come si racconta in inglese/ }).click();
+  await expect(page).toHaveURL(/\/domande\/latest$/);
+  await openNavigation(page);
+  const selected = history.getByRole('link', { name: /Come si racconta in inglese/ });
+  await expect(selected).toHaveAttribute('aria-current', 'page');
+  await selected.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `test-results/sidebar-selected-${testInfo.project.name}.png`, fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  if (testInfo.project.name === 'desktop') {
+    await page.setViewportSize({ width: 1000, height: 640 });
+    await expect(account.getByRole('button', { name: 'Esci', exact: true })).toBeInViewport();
+    await expect(selected).toBeInViewport();
+    await page.screenshot({ path: 'test-results/sidebar-compact-desktop.png', fullPage: true });
+  }
 });
 
 test('connection failures retain the written question', async ({ page }) => {
