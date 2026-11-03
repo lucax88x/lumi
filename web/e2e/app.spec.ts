@@ -907,6 +907,131 @@ test('discoveries retry failures, scroll long history and reopen the current cha
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 700 }, { width: 820, height: 900 }, { width: 740, height: 390 }]) {
+  test(`compact mobile chrome leaves room for reading at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const api = await mockAPI(page);
+    const date = new Date().toISOString();
+    const title = 'Una domanda molto lunga per scoprire insieme tutte le parole che incontriamo';
+    api.chats.push({ id: 'compact', title, subject: 'italian', createdAt: date, updatedAt: date });
+    api.messages.set('compact', [{ id: 'compact-answer', conversationId: 'compact', role: 'assistant', status: 'completed', text: 'Una parola alla volta, scopriamo qualcosa di nuovo.', createdAt: date }]);
+    await page.goto('/spazi/test/domande/compact');
+    const heading = page.getByRole('heading', { name: title, exact: true });
+    await expect(heading).toBeVisible();
+    await expect(page.locator('.question-heading')).toBeHidden();
+    await expect(page.locator('.chat-disclosure')).toBeHidden();
+    await expect(page.locator('.page-footer')).toBeHidden();
+    const header = (await page.locator('.chat-title').boundingBox())!;
+    const topbar = (await page.locator('.topbar').boundingBox())!;
+    expect(header.height).toBe(52);
+    expect(topbar.y).toBe(header.y);
+    expect(topbar.height).toBe(header.height);
+    const newQuestion = page.getByRole('link', { name: 'Fai una nuova domanda', exact: true });
+    const notifications = page.locator('.topbar').getByRole('button', { name: 'Notifiche', exact: true });
+    const menu = page.getByRole('button', { name: 'Apri menu' });
+    const titleBox = (await heading.boundingBox())!;
+    const controls = [newQuestion, notifications, menu];
+    let previousRight = titleBox.x + titleBox.width;
+    for (const control of controls) {
+      const box = (await control.boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.x).toBeGreaterThanOrEqual(previousRight);
+      previousRight = box.x + box.width;
+    }
+    expect(previousRight).toBeLessThanOrEqual(viewport.width);
+    const tabs = page.getByRole('navigation', { name: 'Il tuo angolino' });
+    expect((await tabs.boundingBox())!.height).toBe(52);
+    await expect(tabs.getByRole('link', { name: 'Domanda', exact: true })).toBeVisible();
+    await expect(tabs.getByRole('button', { name: 'Scoperte', exact: true })).toBeVisible();
+    await expect(tabs.getByRole('link', { name: 'Dizionario', exact: true })).toBeVisible();
+    // Labels remain accessible, but do not consume a second visual row.
+    expect(await tabs.locator('span').evaluateAll(labels => labels.every(label => label.getBoundingClientRect().height <= 1))).toBe(true);
+    const readingHeight = await page.getByRole('region', { name: 'Leggi la conversazione' }).evaluate(area => area.clientHeight);
+    expect(readingHeight).toBeGreaterThanOrEqual(viewport.width === 390 ? 440 : 100);
+    await expect(page.getByLabel('Scrivi una parola o una frase')).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'Parla con Lumi' })).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'Scopriamo!' })).toBeInViewport();
+    expect((await page.getByRole('button', { name: 'Parla con Lumi' }).boundingBox())!.height).toBe(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/compact-chat-${viewport.width}-${testInfo.project.name}.png` });
+    await notifications.click();
+    await expect(page.getByRole('dialog', { name: 'Notifiche', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Chiudi notifiche' }).click();
+    await expect(notifications).toBeFocused();
+    await menu.click();
+    await expect(page.getByRole('dialog', { name: 'Navigazione principale' })).toBeVisible();
+    await page.getByRole('button', { name: 'Chiudi menu' }).click();
+    await expect(menu).toBeFocused();
+    await newQuestion.click();
+    await expect(page).toHaveURL(/\/spazi\/test$/);
+    await expect(page.getByRole('heading', { name: 'Che cosa scopriamo oggi?' })).toBeVisible();
+    await expect(page.locator('.page-footer')).toBeHidden();
+    expect((await page.locator('.topbar').boundingBox())!.height).toBe(52);
+  });
+}
+
+test('compact composer keeps recording, transcript review, and retry feedback visible', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } });
+    Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: class {
+      static isTypeSupported() { return true; }
+      state = 'inactive'; mimeType = 'audio/webm';
+      ondataavailable?: (event: { data: Blob }) => void;
+      onstop?: () => void;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['audio']) }); this.onstop?.(); }
+    } });
+  });
+  const api = await mockAPI(page);
+  const date = new Date().toISOString();
+  api.chats.push({ id: 'voice', title: 'Una domanda a voce', subject: 'italian', createdAt: date, updatedAt: date });
+  api.messages.set('voice', []);
+  await page.route('**/api/v1/families/test/transcriptions*', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ text: 'Una parola da scoprire' }) }));
+  let fail = true;
+  await page.route('**/api/v1/families/test/conversations/voice/messages', route => fail ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'La risposta non è disponibile. Riprova.' }) }) : route.fallback());
+  await page.goto('/spazi/test/domande/voice');
+  await page.getByRole('button', { name: 'Parla con Lumi' }).click();
+  const stop = page.getByRole('button', { name: /Ho finito/ });
+  await expect(stop).toBeInViewport();
+  const question = page.getByLabel('Scrivi una parola o una frase');
+  await expect(question).toBeDisabled();
+  await stop.click();
+  await expect(question).toHaveValue('Una parola da scoprire');
+  await expect(page.getByRole('status')).toContainText('Puoi correggerlo');
+  await expect(page.getByRole('status')).toBeInViewport();
+  const send = page.getByRole('button', { name: 'Scopriamo!' });
+  await expect(send).toBeInViewport();
+  await send.click();
+  await expect(page.getByRole('alert')).toContainText('La risposta non è disponibile');
+  await expect(page.getByRole('alert')).toBeInViewport();
+  await expect(question).toHaveValue('Una parola da scoprire');
+  await expect(send).toBeInViewport();
+  fail = false;
+  await send.click();
+  await expect(page.locator('.message.assistant')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('desktop retains its conversation header and composer guidance', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  const api = await mockAPI(page);
+  const date = new Date().toISOString();
+  api.chats.push({ id: 'desktop', title: 'La nostra scoperta', subject: 'english', createdAt: date, updatedAt: date });
+  api.messages.set('desktop', []);
+  await page.goto('/spazi/test/domande/desktop');
+  await expect(page.getByRole('heading', { name: 'La nostra scoperta' })).toBeVisible();
+  await expect(page.getByText('Inglese con Lumi', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Continuiamo?' })).toBeVisible();
+  await expect(page.getByText('Scrivi o parla con Lumi', { exact: true })).toBeVisible();
+  await expect(page.locator('.chat-disclosure')).toBeVisible();
+  await expect(page.locator('.topbar')).toBeHidden();
+  await expect(page.locator('.mobile-tabs')).toBeHidden();
+  await page.goto('/spazi/test');
+  await expect(page.locator('.page-footer')).toBeVisible();
+});
+
 test('long streaming answers respect reading position and keep the composer in view', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 700 });
   await page.clock.install();

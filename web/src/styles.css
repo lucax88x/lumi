@@ -391,22 +391,37 @@ button svg, a svg { flex-shrink: 0; }
 @media (max-width: 900px) {
   .sidebar { display: none; }
   .main-shell { margin-left: 0; width: 100%; }
-  .topbar { display: flex; min-height: calc(64px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 24px 0; }
+  .topbar { display: flex; min-height: calc(52px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); }
+  .topbar-brand { font-size: 26px; }
+  .topbar-actions { gap: 4px; }
+  .topbar .menu-button { width: 44px; padding: 10px; }
+  .topbar .menu-button > span { display: none; }
   .child-page { padding: 28px 32px 20px; }
-  .family-shell { --tabs-height: calc(72px + env(safe-area-inset-bottom)); }
+  .family-shell { --tabs-height: calc(52px + env(safe-area-inset-bottom)); }
   .family-shell .main-shell { padding-bottom: var(--tabs-height); }
-  .mobile-tabs { position: fixed; inset: auto 0 0; z-index: 25; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); height: var(--tabs-height); padding: 5px max(12px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(12px, env(safe-area-inset-left)); background: #fff; border-top: 1px solid #ded4e9; }
-  .mobile-tabs > a, .mobile-tabs > button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; margin: 0 4px 5px; padding: 7px 4px; min-height: 56px; border-radius: 14px; background: transparent; color: #756581; font-size: 13px; font-weight: 600; }
+  .mobile-tabs { position: fixed; inset: auto 0 0; z-index: 25; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); height: var(--tabs-height); padding: 3px max(12px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: #fff; border-top: 1px solid #ded4e9; }
+  .mobile-tabs > a, .mobile-tabs > button { display: flex; align-items: center; justify-content: center; margin: 0 4px; padding: 10px 4px; min-height: 44px; border-radius: 11px; background: transparent; color: #756581; }
+  .mobile-tabs > a > span, .mobile-tabs > button > span, .chat-title .chat-subject { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
   .mobile-tabs > .selected { color: #69449a; background: #eee7f6; }
-  .chat-shell .main-shell { padding-bottom: 0; }
+  .chat-shell .main-shell { position: relative; padding-bottom: 0; }
+  /* Share the title row with shell actions without moving chat state or its avatar. */
+  .chat-shell:has(.chat-title) .topbar { position: absolute; top: 0; right: max(12px, env(safe-area-inset-right)); z-index: 1; height: calc(52px + env(safe-area-inset-top)); padding-right: 0; padding-left: 0; border: 0; background: transparent; }
+  .chat-shell:has(.chat-title) .topbar-brand { display: none; }
   .chat-shell .mobile-tabs { position: static; flex-shrink: 0; }
   .family-shell.keyboard-open .mobile-tabs { display: none; }
   .family-shell.keyboard-open .main-shell { padding-bottom: 0; }
-  .conversation-page { padding: 0 24px; }
+  .child-page.conversation-page { padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); }
+  .chat-title { height: calc(52px + env(safe-area-inset-top)); gap: 8px; padding: env(safe-area-inset-top) 100px 0 0; }
+  .chat-title .lumi-avatar { width: 32px; height: 32px; }
+  .chat-title h1 { display: block; margin: 0; font-size: 16px; white-space: nowrap; text-overflow: ellipsis; }
+  .chat-title .new-question { width: 44px; min-height: 44px; padding: 10px; }
+  .new-question > span { display: none; }
+  .conversation-page .question-card { padding: 10px; margin-bottom: 8px; border-radius: 14px; }
+  .conversation-page .question-heading, .chat-disclosure, .page-footer { display: none; }
+  .conversation-page .composer-bottom { gap: 8px; margin-top: 8px; }
+  .conversation-page .mic-button, .conversation-page .send-button { min-height: 44px; padding: 10px 12px; }
 }
 @media (max-width: 600px) {
-  .topbar { padding-right: 16px; padding-left: 20px; min-height: calc(60px + env(safe-area-inset-top)); }
-  .topbar-brand { font-size: 29px; }
   .child-page, .admin-page { padding: 24px 20px 16px; }
   .welcome { gap: 0; margin-bottom: 24px; }
   .welcome-art { width: 105px; height: 140px; margin-right: -12px; }
@@ -422,15 +437,6 @@ button svg, a svg { flex-shrink: 0; }
   .send-button { min-width: 0; }
   .gentle-note { align-items: flex-start; text-align: left; font-size: 12px; margin-top: 20px; }
   .gentle-note svg { flex-shrink: 0; margin-top: 2px; }
-  .page-footer { font-size: 11px; padding: 12px 20px 24px; color: #756581; }
-  .page-footer > span { width: 100%; text-align: center; margin: 2px 0; }
-  .conversation-page { padding: 0 12px; }
-  .chat-title { gap: 4px; padding: 8px 0; }
-  .chat-title .lumi-avatar { width: 48px; height: 48px; }
-  .chat-title h1 { font-size: 16px; margin-bottom: 3px; }
-  .chat-title p { font-size: 12px; }
-  .new-question { margin-left: 8px; padding: 10px; }
-  .new-question > span { display: none; }
   .chat-scroll { padding: 16px 4px 8px; }
   .messages { gap: 16px; margin-bottom: 16px; }
   .message { padding: 18px 16px; max-width: 100%; }
@@ -438,10 +444,6 @@ button svg, a svg { flex-shrink: 0; }
   .message p { font-size: 18px; line-height: 1.75; }
   .followups { flex-direction: column; gap: 8px; margin-bottom: 16px; }
   .followups button, .message-tools .listen-button { width: 100%; min-height: 48px; justify-content: center; font-size: 16px; padding: 12px 14px; }
-  .conversation-page .question-card { padding: 12px; margin-bottom: 8px; border-radius: 14px; }
-  .conversation-page .question-heading { margin-bottom: 8px; }
-  .composer-hint { font-size: 11px; }
-  .chat-disclosure { font-size: 10px; margin-top: 8px; }
   .conversation-page .notice { max-height: 100px; overflow-y: auto; margin-bottom: 0; }
   .discoveries-panel { padding-right: 20px; padding-left: 20px; }
   .admin-heading { gap: 12px; }.admin-heading h1 { font-size: 26px; }.admin-heading p { font-size: 11px; }.admin-badge { width: 44px; height: 44px; border-radius: 13px; }.admin-heading .eyebrow { font-size: 8px; }.admin-card { padding: 20px 17px; }.section-heading { gap: 10px; flex-wrap: wrap; }.section-heading h2 { font-size: 16px; }.section-heading p { font-size: 11px; }.section-icon { width: 37px; height: 37px; }.connection-pill { font-size: 9px; }.tab-list { gap: 0; justify-content: space-between; }.tab-list button { font-size: 10px; gap: 5px; padding: 13px 4px; }.tab-list svg { width: 14px; }.oauth-flow { padding: 17px; }.login-card { margin: 30px auto; }.dialog-panel { padding: 24px; }.field-hint { font-size: 11px; } }
@@ -452,13 +454,8 @@ button svg, a svg { flex-shrink: 0; }
   .welcome-art { width: 78px; }
   .composer-bottom { gap: 8px; }
   .mic-button, .send-button { padding: 12px 10px; font-size: 13px; }
+  .conversation-page .mic-button, .conversation-page .send-button { padding: 10px 8px; font-size: 13px; gap: 6px; }
   .composer-hint { display: none; }
-}
-@media (max-height: 560px) and (max-width: 900px) {
-  .chat-shell .chat-title .lumi-avatar { width: 38px; height: 38px; }
-  .chat-shell .question-heading, .chat-shell .chat-disclosure { display: none; }
-  .chat-shell .question-card { padding: 8px; }
-  .chat-shell .topbar { min-height: 48px; }
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 

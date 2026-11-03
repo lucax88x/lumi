@@ -233,7 +233,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
     {!id ? <>
       <section className="welcome"><div className="welcome-art"><Avatar mood={mood}/></div><div className="welcome-copy"><p>Ciao, sono Lumi!</p><h1>Una parola difficile?<br/>Scopriamola insieme.</h1><p>Puoi scrivere o parlare. Ti aiuto un pezzetto alla volta.</p></div></section>
     </> : <>
-      <header className="chat-title"><Avatar mood={mood}/><div><h1>{detail.data?.conversation.title ?? 'La tua domanda'}</h1><p>{subjectLabel(subject)} con Lumi</p></div><Link to="/spazi/$familyId" params={{ familyId }} className="new-question" aria-label="Fai una nuova domanda"><Plus size={20}/><span>Nuova domanda</span></Link></header>
+      <header className="chat-title"><Avatar mood={mood}/><div><h1 title={detail.data?.conversation.title}>{detail.data?.conversation.title ?? 'La tua domanda'}</h1><p className="chat-subject">{subjectLabel(subject)} con Lumi</p></div><Link to="/spazi/$familyId" params={{ familyId }} className="new-question" aria-label="Fai una nuova domanda"><Plus size={20}/><span>Nuova domanda</span></Link></header>
       <div className="chat-reading-area">
       <div ref={readingArea} className="chat-scroll" tabIndex={0} role="region" aria-label="Leggi la conversazione" onScroll={e => { const area = e.currentTarget; const nearBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 100; followAnswer.current = nearBottom; setShowLatest(!nearBottom); }}>
       {detail.isPending && <LoadingSkeleton label="Caricamento della conversazione" variant="messages" rows={2}/>}
