@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Message, WordImage, SentenceMap, DictionaryEntry, Conversation } from '../src/api/types.gen';
+import type { Message, WordImage, SentenceMap, DictionaryEntry, Conversation, WordClarification, WordExplanation } from '../src/api/types.gen';
 import spaceMap from './fixtures/space-map.json' with { type: 'json' };
 
 const spaceQuestion = 'mi fai la mappa mentale con tutti i pianeti e i nomi stellari? tipo meteorite, asteroide, etc';
@@ -22,6 +22,42 @@ const animalsMap = { title: 'Gli animali', labelLanguage: 'en' as const, branche
   { label: 'Pets', explanation: 'Animali domestici.', items: [{ label: 'Dog', explanation: 'Cane.' }] },
   { label: 'Farm animals', explanation: 'Animali della fattoria.', items: [{ label: 'Cow', explanation: 'Mucca.' }] },
 ] };
+
+const clarificationCases: { subject: 'italian' | 'english'; question: string; clarification: WordClarification; words: WordExplanation[] }[] = [
+  {
+    subject: 'italian', question: 'Cosa significa formato?',
+    clarification: { word: 'formato', language: 'it', question: 'Mi scrivi o mi dici la frase in cui hai trovato “formato”?', examples: [
+      { sentence: 'Il formato del foglio è A4.', meaning: 'La forma e le dimensioni del foglio.' },
+      { sentence: 'Il gruppo è formato da tre persone.', meaning: 'Il gruppo è composto da tre persone.' },
+    ] },
+    words: [
+      { word: 'formato', meaning: 'La forma e le dimensioni.', example: 'Il formato del foglio è A4.' },
+      { word: 'formato', meaning: 'composto', example: 'Il gruppo è formato da tre persone.' },
+    ],
+  },
+  {
+    subject: 'english', question: 'Cosa significa bank?',
+    clarification: { word: 'bank', language: 'en', question: 'In quale frase hai trovato “bank”?', examples: [
+      { sentence: 'I go to the bank.', meaning: 'La banca dove si tengono i soldi.' },
+      { sentence: 'I sit on the river bank.', meaning: 'La riva del fiume.' },
+    ] },
+    words: [
+      { word: 'bank', meaning: 'banca', example: 'I go to the bank.', exampleTranslation: 'Vado in banca.', sourceWord: 'bank', sourceLanguage: 'en' },
+      { word: 'bank', meaning: 'riva', example: 'I sit on the river bank.', exampleTranslation: 'Mi siedo sulla riva del fiume.', sourceWord: 'bank', sourceLanguage: 'en' },
+    ],
+  },
+  {
+    subject: 'english', question: 'Come si dice pesca?',
+    clarification: { word: 'pesca', language: 'it', question: 'Mi dici una frase con “pesca”?', examples: [
+      { sentence: 'Mangio una pesca.', meaning: 'Il frutto.' },
+      { sentence: 'La pesca è il mio passatempo.', meaning: 'L’attività di prendere i pesci.' },
+    ] },
+    words: [
+      { word: 'peach', meaning: 'pesca, il frutto', example: 'I eat a peach.', exampleTranslation: 'Mangio una pesca.', sourceWord: 'pesca', sourceLanguage: 'it' },
+      { word: 'fishing', meaning: 'pesca, prendere i pesci', example: 'I like fishing.', exampleTranslation: 'Mi piace pescare.', sourceWord: 'pesca', sourceLanguage: 'it' },
+    ],
+  },
+];
 
 async function mockAPI(page: Page, autoRead = false) {
   const chats: Conversation[] = [];
@@ -65,6 +101,8 @@ async function mockAPI(page: Page, autoRead = false) {
         message.text = ''; message.images = []; message.wordExplanation = vigorousWord;
       }
       if (request.postDataJSON().subject === 'english') { message.text = ''; message.images = []; message.wordExplanation = dogWord; }
+      const contextCase = clarificationCases.find(item => item.question === request.postDataJSON().text);
+      if (contextCase) { message.text = ''; message.images = []; message.wordExplanation = undefined; message.wordClarification = { ...contextCase.clarification, examples: [] }; }
       return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'images', message: { ...message, text: '', status: 'streaming' } })}\n\ndata: ${JSON.stringify({ type: 'completed', message })}\n\n` });
     }
     if (path === '/admin/settings') { const selected = new URL(request.url()).searchParams.get('subject') === 'english' ? englishSettings : settings; if (method === 'PUT') Object.assign(selected, request.postDataJSON()); return json(selected); }
@@ -102,8 +140,23 @@ async function mockAPI(page: Page, autoRead = false) {
         if (body.text === englishCatMap.sentence) { answer.sentenceMap = englishCatMap; answer.text = 'Il gatto è sul tappeto. Partiamo da chi si parla.'; }
         if (body.text === 'Mappa degli animali in inglese') { answer.topicMap = animalsMap; answer.text = 'Scegli un animale per scoprire il suo nome.'; }
       }
+      const contextCase = clarificationCases.find(item => item.question === body.text);
+      const pendingContext = history.at(-1)?.wordClarification;
+      if (contextCase) {
+        answer.text = ''; answer.wordClarification = { ...contextCase.clarification, examples: [] };
+      } else if (pendingContext) {
+        const item = clarificationCases.find(item => item.clarification.word === pendingContext.word)!;
+        answer.text = '';
+        if (body.text.startsWith('Non ho una frase')) answer.wordClarification = item.clarification;
+        else if (body.text === 'Nessuno di questi.') answer.text = 'Questa parola ha più significati. Può indicare cose diverse: quando trovi una frase, possiamo capirla insieme.';
+        else {
+          const selected = body.text.includes(item.clarification.examples[1].sentence) ? 1 : 0;
+          answer.wordExplanation = item.words[selected];
+          dictionary.unshift({ subject: item.subject, id: `context-${pendingContext.word}`, ...answer.wordExplanation, firstAskedAt: date, lastAskedAt: date });
+        }
+      }
       history.push(user, answer);
-      return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'started', message: { ...answer, wordExplanation: undefined, topicMap: undefined, sentenceMap: undefined, images: [], text: '', status: 'streaming' } })}\n\n${answer.wordExplanation ? `data: ${JSON.stringify({ type: 'word_explanation', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.topicMap ? `data: ${JSON.stringify({ type: 'topic_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.sentenceMap ? `data: ${JSON.stringify({ type: 'sentence_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.images ? `data: ${JSON.stringify({ type: 'images', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}data: ${JSON.stringify({ type: 'delta', delta: answer.text })}\n\ndata: ${JSON.stringify({ type: 'completed', message: answer })}\n\n` });
+      return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'started', message: { ...answer, wordClarification: undefined, wordExplanation: undefined, topicMap: undefined, sentenceMap: undefined, images: [], text: '', status: 'streaming' } })}\n\n${answer.wordClarification ? `data: ${JSON.stringify({ type: 'word_clarification', message: { ...answer, status: 'streaming' } })}\n\n` : ''}${answer.wordExplanation ? `data: ${JSON.stringify({ type: 'word_explanation', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.topicMap ? `data: ${JSON.stringify({ type: 'topic_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.sentenceMap ? `data: ${JSON.stringify({ type: 'sentence_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.images ? `data: ${JSON.stringify({ type: 'images', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}data: ${JSON.stringify({ type: 'delta', delta: answer.text })}\n\ndata: ${JSON.stringify({ type: 'completed', message: answer })}\n\n` });
     }
     return json({ message: 'Not found' }, 404);
   });
@@ -114,6 +167,88 @@ async function openNavigation(page: Page) {
   const menu = page.getByRole('button', { name: 'Apri menu' });
   if (await menu.isVisible()) await menu.click();
 }
+
+for (const item of clarificationCases) {
+  test(`word context for ${item.clarification.word} resumes after reload and selects the intended meaning`, async ({ page }, testInfo) => {
+    const api = await mockAPI(page);
+    await page.goto('/spazi/test');
+    if (item.subject === 'english') await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+    await page.getByLabel('Scrivi una parola o una frase').fill(item.question);
+    await page.getByRole('button', { name: 'Scopriamo!' }).click();
+    const clarification = page.getByRole('region', { name: `Il contesto di ${item.clarification.word}` }).last();
+    await expect(clarification).toContainText(item.clarification.question);
+    await expect(page.getByRole('button', { name: 'Non ho una frase', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Più facile', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Fammi un esempio', exact: true })).toHaveCount(0);
+    await expect(page.locator('.word-explanation')).toHaveCount(0);
+    await expect(page.getByText('La risposta non è arrivata. Puoi riprovare.')).toHaveCount(0);
+    expect(api.dictionary).toHaveLength(0);
+    await page.reload();
+    await expect(page.getByLabel('Scrivi una parola o una frase')).toHaveAttribute('placeholder', `Scrivi la frase con «${item.clarification.word}»…`);
+    await page.getByRole('button', { name: 'Non ho una frase', exact: true }).click();
+    const choice = page.getByRole('button', { name: item.clarification.examples[1].sentence });
+    await expect(choice).toBeVisible();
+    expect(api.dictionary).toHaveLength(0);
+    await page.screenshot({ path: `test-results/word-context-${item.clarification.word}-${testInfo.project.name}.png`, fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.reload();
+    await expect(choice).toBeVisible();
+    await choice.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.word-heading')).toHaveText(item.words[1].word);
+    await expect(page.locator('.word-card-meaning > p')).toHaveText(item.words[1].meaning);
+    await expect(page.locator('.sentence-map')).toHaveCount(0);
+    await expect(choice).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Più facile', exact: true })).toBeVisible();
+    expect(api.dictionary).toHaveLength(1);
+    expect(api.messages.get(api.chats[0].id)!.at(-2)!.text).toBe(`Per «${item.clarification.word}», intendo questo esempio: «${item.clarification.examples[1].sentence}»`);
+    await page.reload();
+    await expect(page.locator('.word-heading')).toHaveText(item.words[1].word);
+    await expect(choice).toHaveCount(0);
+  });
+}
+
+test('word context accepts a typed sentence without starting a sentence map', async ({ page }) => {
+  const api = await mockAPI(page);
+  await page.goto('/spazi/test');
+  await page.getByLabel('Scrivi una parola o una frase').fill('Cosa significa formato?');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.getByRole('button', { name: 'Non ho una frase', exact: true })).toBeVisible();
+  await page.getByLabel('Scrivi una parola o una frase').fill('Il formato del foglio è A4.');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.locator('.word-card-meaning > p')).toHaveText('La forma e le dimensioni.');
+  await expect(page.getByRole('region', { name: 'Mappa della frase' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Non ho una frase', exact: true })).toHaveCount(0);
+  expect(api.dictionary).toHaveLength(1);
+});
+
+test('word context allows rejecting all examples without saving an arbitrary meaning', async ({ page }) => {
+  const api = await mockAPI(page);
+  await page.goto('/spazi/test');
+  await page.getByLabel('Scrivi una parola o una frase').fill('Cosa significa formato?');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await page.getByRole('button', { name: 'Non ho una frase', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Il formato del foglio è A4/ })).toBeVisible();
+  await page.getByLabel('Scrivi una parola o una frase').fill('Nessuno di questi.');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.locator('.message.assistant').last()).toContainText('Questa parola ha più significati.');
+  expect(api.dictionary).toHaveLength(0);
+  await expect(page.locator('.word-explanation')).toHaveCount(0);
+});
+
+test('word context is visible in coach previews and clears on the next preview', async ({ page }) => {
+  await mockAPI(page);
+  await page.goto('/spazi/test/coach');
+  await page.getByRole('tab', { name: 'Come insegna' }).click();
+  await page.getByLabel('Parola o frase di prova').fill('Cosa significa formato?');
+  await page.getByRole('button', { name: 'Prova le istruzioni', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Il contesto di formato' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Non ho una frase', exact: true })).toHaveCount(0);
+  await page.getByLabel('Parola o frase di prova').fill('vigoroso');
+  await page.getByRole('button', { name: 'Prova le istruzioni', exact: true }).click();
+  await expect(page.locator('.word-heading')).toHaveText('vigoroso');
+  await expect(page.getByRole('region', { name: 'Il contesto di formato' })).toHaveCount(0);
+});
 
 test('word cards survive reload, save one dictionary entry, and support practice', async ({ page }, testInfo) => {
   const api = await mockAPI(page);

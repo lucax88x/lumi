@@ -50,3 +50,22 @@ Le voci si scelgono nelle impostazioni del coach e dipendono dal dispositivo. L�
 La migrazione `006_subjects.sql` assegna Italiano a conversazioni e dizionario esistenti, preservando gli identificativi. I nuovi profili si registrano nella struttura degli assistenti; Matematica resta un’estensione futura e non è disponibile nell’interfaccia o nelle API.
 
 Queste verifiche didattiche richiedono una prova esplicita con il modello configurato e consumano il piano. I test automatici usano risposte simulate e non misurano la correttezza linguistica del modello reale.
+
+## Parole con più significati
+
+Lumi usa il contesto della conversazione e chiede una frase soltanto quando serve. La richiesta compare nella chat e il campo di scrittura invita a fornire la frase; il microfono funziona come nelle altre domande. «Non ho una frase» fa proporre due o tre esempi selezionabili, ciascuno con una breve spiegazione italiana. Si può anche rispondere liberamente o dire che nessun esempio va bene. Gli esempi sono ipotesi: il dizionario riceve soltanto la spiegazione finale completata.
+
+| Domanda o azione | Cosa verificare |
+| --- | --- |
+| «Cosa significa formato?» | Chiede la frase prima di scegliere fra dimensioni, composizione e altri sensi plausibili. Non mostra una definizione definitiva. |
+| Rispondi «Il gruppo è formato da tre persone.» | Spiega «formato» come «composto», senza avviare una mappa dell'intera frase. |
+| «Non ho una frase» | Propone due o tre esempi diversi; il tocco seleziona il contesto della parola iniziale. |
+| «Cosa significa bank?» in Inglese | Domanda in italiano, esempi inglesi con significati italiani; la lettura degli esempi usa la voce inglese. |
+| «Come si dice pesca?» in Inglese | Mantiene «pesca» come parola originale e distingue frutto e attività prima della traduzione inglese. |
+| «Cosa significa formato nella frase “Il gruppo è formato da tre persone”?» | Risponde direttamente usando il contesto già presente. |
+| Ricarica prima della risposta o della scelta | Conserva domanda ed esempi. Solo l'ultimo chiarimento completato in attesa di risposta offre pulsanti attivi. |
+| Scrivi «Nessuno di questi» dopo gli esempi | Aiuta con le alternative senza insistere o salvare un significato arbitrario. |
+
+La migrazione `007_word_clarifications.sql` aggiunge un allegato facoltativo ai messaggi e conserva le conversazioni e il dizionario esistenti. Le istruzioni condivise si applicano anche ai prompt personalizzati già salvati, senza sovrascriverli. Riavvia il server dopo l'aggiornamento e distribuisci insieme backend e frontend per il nuovo evento di streaming.
+
+La suite opt-in `TestLiveWordClarification` copre «formato», «bank», la traduzione di «pesca» e risposte con contesto già sufficiente. Si abilita con `LUMI_LIVE_TEST_DATA_DIR` e consuma il piano configurato; non salva conversazioni e non migra il database. La correttezza dei significati richiede anche la valutazione del coach.

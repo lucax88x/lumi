@@ -568,3 +568,12 @@ button svg, a svg { flex-shrink: 0; }
 .invitation-dialog > .notice { font-size: 14px; }
 .invitation-dialog > .success-notice { color: #3f653b; }
 .invitation-dialog > .error-notice { color: #8c3737; }
+
+.word-clarification { margin-top: 8px; }
+.clarification-question { color: var(--color-ink); line-height: 1.6; }
+.clarification-examples { display: flex; flex-direction: column; gap: 10px; }
+.clarification-example { display: flex; flex-direction: column; gap: 6px; width: 100%; min-height: 56px; padding: 14px 16px; border: 1px solid #d7cae4; border-radius: 12px; background: #fff; color: var(--color-ink); text-align: left; line-height: 1.5; overflow-wrap: anywhere; }
+button.clarification-example:hover:not(:disabled) { background: var(--color-lilac); border-color: var(--color-plum); }
+.clarification-meaning { color: #655b70; font-size: 14px; }
+.clarification-hint { margin: 12px 0 0; color: #655b70; font-size: 14px; line-height: 1.5; }
+.no-context-button { margin-top: 12px; min-height: 44px; }

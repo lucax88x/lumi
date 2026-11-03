@@ -39,7 +39,7 @@ export async function readStream(path: string, body: unknown, onEvent: (event: S
         const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
         if (!data) continue;
         const event = JSON.parse(data) as StreamEvent;
-        if (!['started', 'delta', 'images', 'sentence_map', 'topic_map', 'word_explanation', 'completed', 'failed'].includes(event.type)) throw new Error('Evento del server non valido.');
+        if (!['started', 'delta', 'images', 'sentence_map', 'topic_map', 'word_explanation', 'word_clarification', 'completed', 'failed'].includes(event.type)) throw new Error('Evento del server non valido.');
         onEvent(event);
         if (event.type === 'completed' || event.type === 'failed') terminal = true;
       }
@@ -55,12 +55,22 @@ export function shortDate(value: string) {
 }
 
 export function messageSpeechText(message: Message): string {
+  const clarification = message.wordClarification;
+  if (clarification) return [message.text, clarification.question, ...clarification.examples.flatMap(example => [example.sentence, example.meaning])].filter(Boolean).join('\n');
   const word = message.wordExplanation;
   return word ? [message.text, `${word.word}. ${word.meaning}`, word.example].filter(Boolean).join('\n') : message.text;
 }
 
 // Keep language boundaries for automatic reading and replay.
 export function messageSpeechParts(message: Message): import('./speech').SpeechInput {
+  const clarification = message.wordClarification;
+  if (clarification) return [
+    ...[message.text, clarification.question].filter(Boolean).map(text => ({ text, language: 'it' as const })),
+    ...clarification.examples.flatMap(example => [
+      { text: example.sentence, language: clarification.language },
+      { text: example.meaning, language: 'it' as const },
+    ]),
+  ];
   const word = message.wordExplanation;
   if (!word?.exampleTranslation) {
     const map = message.sentenceMap;

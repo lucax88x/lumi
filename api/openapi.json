@@ -3572,6 +3572,9 @@
           },
           "wordExplanation": {
             "$ref": "#/components/schemas/WordExplanation"
+          },
+          "wordClarification": {
+            "$ref": "#/components/schemas/WordClarification"
           }
         },
         "required": [
@@ -3864,6 +3867,7 @@
               "sentence_map",
               "topic_map",
               "word_explanation",
+              "word_clarification",
               "completed",
               "failed"
             ]
@@ -4434,6 +4438,62 @@
             "minimum": 1
           }
         }
+      },
+      "WordClarification": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "word": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "it",
+              "en"
+            ]
+          },
+          "examples": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/WordClarificationExample"
+            }
+          }
+        },
+        "required": [
+          "word",
+          "question",
+          "language",
+          "examples"
+        ]
+      },
+      "WordClarificationExample": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sentence": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "meaning": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        },
+        "required": [
+          "sentence",
+          "meaning"
+        ]
       }
     },
     "securitySchemes": {

@@ -4,6 +4,15 @@ import type { StreamEvent } from './api/types.gen';
 
 afterEach(() => { vi.unstubAllGlobals(); setCSRF(''); });
 describe('streaming without retries', () => {
+  it('delivers a clarification before an interrupted continuation without retrying', async () => {
+    const message = { id: 'context', conversationId: 'chat', role: 'assistant', status: 'streaming', text: '', createdAt: '', wordClarification: { word: 'formato', language: 'it', question: 'Mi dici la frase?', examples: [] } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(`data: ${JSON.stringify({ type: 'word_clarification', message })}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } })));
+    const events: StreamEvent[] = [];
+    await expect(readStream('/test', {}, e => events.push(e), new AbortController().signal)).rejects.toThrow('interrotta');
+    expect(events[0].message?.wordClarification).toEqual(message.wordClarification);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('keeps word cards when their continuation is interrupted', async () => {
     const message = { id: 'word', conversationId: 'chat', role: 'assistant', status: 'streaming', text: '', createdAt: '', wordExplanation: { word: 'vigoroso', meaning: 'forte', example: 'Un calcio vigoroso.' } };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(`data: ${JSON.stringify({ type: 'word_explanation', message })}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } })));

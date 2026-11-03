@@ -28,6 +28,7 @@ export type Message = {
     sentenceMap?: SentenceMap;
     topicMap?: TopicMap;
     wordExplanation?: WordExplanation;
+    wordClarification?: WordClarification;
 };
 
 export type ConversationDetail = {
@@ -103,7 +104,7 @@ export type PromptPreview = {
 };
 
 export type StreamEvent = {
-    type: 'started' | 'delta' | 'images' | 'sentence_map' | 'topic_map' | 'word_explanation' | 'completed' | 'failed';
+    type: 'started' | 'delta' | 'images' | 'sentence_map' | 'topic_map' | 'word_explanation' | 'word_clarification' | 'completed' | 'failed';
     message?: Message;
     delta?: string;
     error?: Error;
@@ -247,6 +248,18 @@ export type PendingAccessRequest = {
 export type AccessDecision = {
     decision: 'approve' | 'reject';
     attempt: number;
+};
+
+export type WordClarification = {
+    word: string;
+    question: string;
+    language: 'it' | 'en';
+    examples: Array<WordClarificationExample>;
+};
+
+export type WordClarificationExample = {
+    sentence: string;
+    meaning: string;
 };
 
 export type GetStatusData = {

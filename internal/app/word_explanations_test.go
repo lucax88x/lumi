@@ -79,7 +79,7 @@ func TestWordToolStreamsWithoutDuplicateProseAndPreservesContext(t *testing.T) {
 		body := requestBody(t, r)
 		if calls == 1 {
 			tools := body["tools"].([]any)[0].(map[string]any)["tools"].([]any)
-			if len(tools) != 4 || tools[3].(map[string]any)["name"] != "show_word_explanation" || tools[3].(map[string]any)["strict"] != true {
+			if len(tools) != 5 || tools[3].(map[string]any)["name"] != "show_word_explanation" || tools[3].(map[string]any)["strict"] != true {
 				t.Fatal("missing strict word tool")
 			}
 			input := body["input"].([]any)
