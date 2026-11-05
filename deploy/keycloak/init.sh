@@ -32,6 +32,8 @@ fi
 if ! "$kc" get roles/portal-admin -r lumi --config "$config" >/dev/null 2>&1; then
   "$kc" create roles -r lumi --config "$config" -s name=portal-admin -s 'description=Manage shared Lumi connections and model'
 fi
+# Realm imports only run once; select the email theme on existing installs too.
+"$kc" update realms/lumi --config "$config" -s 'emailTheme="lumi"'
 # Keep SMTP optional for fresh and existing realms. Email verification remains
 # required by Lumi; without email, administrators provision verified accounts.
 json_string() {

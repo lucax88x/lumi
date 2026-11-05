@@ -89,6 +89,24 @@ path.write_text(json.dumps(state))
         self.assertFalse(realm['registrationAllowed'])
         self.assertFalse(realm['resetPasswordAllowed'])
         self.assertTrue(realm['verifyEmail'])
+        self.assertEqual(realm['emailTheme'], 'lumi')
+
+    def test_email_theme_is_selected_for_fresh_and_existing_realms_idempotently(self):
+        imported = json.loads((ROOT / 'deploy/keycloak/lumi-realm.json').read_text())
+        self.assertEqual(imported['emailTheme'], 'lumi')
+        for previous in (None, 'keycloak', 'lumi'):
+            state = json.loads(self.state.read_text())
+            if previous is None:
+                state['realm'].pop('emailTheme', None)
+            else:
+                state['realm']['emailTheme'] = previous
+            self.state.write_text(json.dumps(state))
+            for _ in range(2):
+                result = self.run_init()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                state = json.loads(self.state.read_text())
+                self.assertEqual(state['realm']['emailTheme'], 'lumi')
+                self.assertEqual(state['calls'][-1][:2], ['update', 'realms/master'])
 
     def test_can_enable_email_and_disable_it_again_for_an_existing_realm(self):
         password = 'test-only-"quoted"\\password\nwith\tspaces'
@@ -100,6 +118,7 @@ path.write_text(json.dumps(state))
         self.assertTrue(state['realm']['registrationAllowed'])
         self.assertTrue(state['realm']['resetPasswordAllowed'])
         self.assertTrue(state['realm']['verifyEmail'])
+        self.assertEqual(state['realm']['emailTheme'], 'lumi')
         self.assertEqual(state['realm']['smtpServer'], {'host': 'mail.test', 'port': '2525',
                          'from': 'lumi@example.test', 'auth': 'true', 'user': 'smtp-test-user',
                          'password': password, 'starttls': 'true', 'ssl': 'false'})
@@ -111,6 +130,7 @@ path.write_text(json.dumps(state))
         self.assertFalse(realm['registrationAllowed'])
         self.assertFalse(realm['resetPasswordAllowed'])
         self.assertTrue(realm['verifyEmail'])
+        self.assertEqual(realm['emailTheme'], 'lumi')
 
     def test_approval_client_is_idempotent_and_only_maps_portal_access(self):
         for secret in ('test-only-approval-secret', 'rotated-test-only-secret'):

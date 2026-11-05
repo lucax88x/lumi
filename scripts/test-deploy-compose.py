@@ -131,6 +131,7 @@ def main():
 
         def verify_email(enabled):
             realm = keycloak_admin('GET', '')
+            assert realm['emailTheme'] == 'lumi'
             assert realm['registrationAllowed'] is enabled
             assert realm['resetPasswordAllowed'] is enabled
             assert realm['verifyEmail'] is True

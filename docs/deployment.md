@@ -50,6 +50,8 @@ Senza SMTP, `keycloak-init` disabilita registrazione autonoma e recupero passwor
 
 Quando serviranno le email, imposta `SMTP_ENABLED=true` e compila host, porta, mittente, autenticazione e STARTTLS/SSL nel file sul server, poi riesegui il deploy. Con SMTP abilitato, host e mittente sono obbligatori; `keycloak-init` aggiorna il realm e riabilita registrazione autonoma e recupero password. In sviluppo locale SMTP rimane abilitato tramite Mailpit.
 
+Le email Keycloak usano il tema **lumi**, con lo stesso stile lilla della pagina di accesso. Il layout comune si applica anche alle notifiche e alle email di prova; verifica email, recupero password, azioni richieste dall’amministratore, collegamento account, modifica email e verifica con codice hanno contenuti dedicati in italiano e inglese, con alternativa testuale. La lingua segue le preferenze Keycloak dell’utente (italiano predefinito). Il tema non richiede immagini o font esterni. `keycloak-init` seleziona `emailTheme=lumi` anche sui realm esistenti, indipendentemente da SMTP. Per applicare modifiche a template o traduzioni, pubblica una nuova immagine ed esegui un deploy completo (`just deploy`, oppure `just deploy --auto-update`): l’aggiornamento automatico della sola applicazione non aggiorna i file Keycloak. La ricreazione di Keycloak nel deploy rinnova anche la cache dei template.
+
 Configura manualmente il Caddy host prima del primo deploy: conserva il blocco globale e i siti già presenti, poi aggiungi il blocco in `deploy/Caddyfile.example`:
 
 ```caddyfile
