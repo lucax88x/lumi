@@ -58,7 +58,7 @@ export function useInvitationNotifications(enabled: boolean) {
       void requests.refetch();
     } finally { lock.current = false; setBusy(false); }
   }
-  const button = <button type="button" className="notification-button" aria-label={count ? `Notifiche: ${count}` : 'Notifiche'} aria-haspopup="dialog" aria-expanded={open && enabled} onClick={e => {
+  const button = <button type="button" className="notification-button" title={count ? `Notifiche: ${count}` : 'Notifiche'} aria-label={count ? `Notifiche: ${count}` : 'Notifiche'} aria-haspopup="dialog" aria-expanded={open && enabled} onClick={e => {
     trigger.current = e.currentTarget; setError(''); setNotice(''); setOpen(true); void invitations.refetch(); if (admin) void requests.refetch();
   }}><Bell size={20} aria-hidden="true"/><span className="notification-label">Notifiche</span>{count > 0 && <span className="notification-count" aria-hidden="true">{count}</span>}</button>;
   const dialog = <Dialog.Root open={open && enabled} onOpenChange={value => { if (!lock.current) setOpen(value); }}>

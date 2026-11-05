@@ -597,6 +597,77 @@ test('sidebar groups discoveries by last activity and keeps account actions visi
   }
 });
 
+test('sidebar collapses, preserves drafts and remembers its width across navigation and reload', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Desktop sidebar; mobile uses its own drawer.');
+  await mockAPI(page);
+  await page.route('**/api/v1/invitations', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ id: 'invite', familyId: 'alba', familyName: 'Spazio Alba', expiresAt: '2027-01-01T00:00:00Z' }]) }));
+  await page.goto('/spazi/test');
+  const sidebar = page.getByRole('complementary', { name: 'Menu laterale' });
+  const question = page.getByLabel('Scrivi una parola o una frase');
+  await question.fill('Una domanda da finire');
+  await expect(sidebar.locator('.sidebar-bottom').getByRole('button', { name: 'Notifiche: 1' })).toBeVisible();
+  await sidebar.getByRole('button', { name: 'Comprimi menu laterale' }).focus();
+  await page.keyboard.press('Enter');
+  const expand = sidebar.getByRole('button', { name: 'Espandi menu laterale' });
+  await expect(expand).toHaveAttribute('aria-expanded', 'false');
+  await expect(sidebar).toHaveCSS('width', '76px');
+  await expect(question).toHaveValue('Una domanda da finire');
+  const discoveries = sidebar.getByRole('button', { name: 'Le mie scoperte', exact: true });
+  await discoveries.click();
+  await expect(page.getByRole('dialog', { name: 'Le mie scoperte' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(discoveries).toBeFocused();
+  await expect(question).toHaveValue('Una domanda da finire');
+  const notifications = sidebar.getByRole('button', { name: 'Notifiche: 1' });
+  await expect(notifications.locator('.notification-count')).toBeInViewport();
+  await notifications.click();
+  await expect(page.getByRole('dialog', { name: 'Notifiche', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(notifications).toBeFocused();
+  await sidebar.getByRole('link', { name: 'Il mio dizionario' }).click();
+  await expect(page.getByRole('heading', { name: 'Il mio dizionario' })).toBeVisible();
+  await expect(sidebar).toHaveCSS('width', '76px');
+  await page.reload();
+  await expect(sidebar).toHaveCSS('width', '76px');
+  await expect(sidebar.getByRole('link', { name: 'Il mio dizionario' })).toHaveAttribute('aria-current', 'page');
+  await page.screenshot({ path: 'test-results/sidebar-collapsed-desktop.png', fullPage: true });
+  await expand.click();
+  await expect(sidebar).toHaveCSS('width', '272px');
+  await page.screenshot({ path: 'test-results/sidebar-expanded-desktop.png', fullPage: true });
+  // A stored desktop preference must not remove labels from the phone menu.
+  await sidebar.getByRole('button', { name: 'Comprimi menu laterale' }).click();
+  await page.setViewportSize({ width: 390, height: 720 });
+  await page.getByRole('button', { name: 'Apri menu' }).click();
+  const menu = page.getByRole('dialog', { name: 'Navigazione principale' });
+  await expect(menu.getByText('Il mio dizionario', { exact: true })).toBeVisible();
+  await expect(menu.getByRole('button', { name: 'Esci', exact: true })).toBeInViewport();
+  await page.screenshot({ path: 'test-results/sidebar-mobile-after-collapse.png' });
+});
+
+test('sidebar scrolls conversations while keeping account and notifications visible', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Desktop sidebar; mobile history is covered separately.');
+  await page.setViewportSize({ width: 1024, height: 720 });
+  const api = await mockAPI(page);
+  const date = new Date().toISOString();
+  for (let index = 0; index < 30; index++) {
+    const id = `sidebar-${index}`;
+    api.chats.push({ id, title: `La mia scoperta numero ${index + 1}`, subject: 'italian', createdAt: date, updatedAt: date });
+    api.messages.set(id, []);
+  }
+  await page.goto('/spazi/test');
+  const sidebar = page.getByRole('complementary', { name: 'Menu laterale' });
+  const last = sidebar.getByRole('link', { name: /La mia scoperta numero 30/ });
+  await last.scrollIntoViewIfNeeded();
+  await expect(last).toBeInViewport();
+  await expect(sidebar.getByRole('button', { name: 'Notifiche', exact: true })).toBeInViewport();
+  await expect(sidebar.getByRole('button', { name: 'Esci', exact: true })).toBeInViewport();
+  await page.screenshot({ path: 'test-results/sidebar-long-history-desktop.png', fullPage: true });
+  await last.click();
+  await expect(page).toHaveURL(/\/domande\/sidebar-29$/);
+  await expect(last).toHaveAttribute('aria-current', 'page');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('connection failures retain the written question', async ({ page }) => {
   await mockAPI(page);
   await page.route('**/api/v1/families/test/conversations/*/messages', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'unavailable', message: 'Il piano ChatGPT non è disponibile.' }) }));

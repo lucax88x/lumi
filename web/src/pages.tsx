@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog } from '@base-ui/react/dialog';
-import { ArrowDown, ArrowRightLeft, BookOpen, Flower2, Heart, History, House, LockKeyhole, LogOut, Menu, MessageCircle, Plus, Send, Sparkles, Square, UsersRound, Volume2, WifiOff, X } from 'lucide-react';
+import { ArrowDown, ArrowRightLeft, BookOpen, Flower2, Heart, History, House, LockKeyhole, LogOut, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Send, ShieldCheck, Sparkles, Square, UsersRound, Volume2, WifiOff, X } from 'lucide-react';
 import { listConversationsQueryKey, listDictionaryWordsQueryKey, getConversationOptions, getConversationQueryKey, getStatusOptions } from './api/@tanstack/react-query.gen';
 import { createConversation } from './api/sdk.gen';
 import type { Message, SendMessage, PublicStatus, Subject } from './api/types.gen';
@@ -21,36 +21,45 @@ import { ConversationHistory } from './ConversationHistory';
 import { useSpeech } from './speech';
 import { errorMessage, messageSpeechParts, readStream } from './lib';
 
-function Navigation({ familyId, close, notifications }: { familyId: string; close?: () => void; notifications?: ReactNode }) {
+function Navigation({ familyId, close, notifications, collapsed = false, toggleCollapsed, openDiscoveries }: { familyId: string; close?: () => void; notifications?: ReactNode; collapsed?: boolean; toggleCollapsed?: () => void; openDiscoveries?: (trigger: HTMLButtonElement) => void }) {
   const session = useSession();
   const family = session.families.find(f => f.id === familyId);
   const { signout, signingOut } = useAccount();
   const pathname = useRouterState({ select: s => s.location.pathname });
   const homeLink = familyId ? { to: '/spazi/$familyId' as const, params: { familyId } } : { to: '/' as const };
   return <>
-    <div className="sidebar-header"><Link className="brand" {...homeLink} onClick={close} aria-label="Lumi"><span className="brand-symbol"><Sparkles size={24} aria-hidden="true"/></span><span>lumi<span className="brand-dot">.</span></span></Link>{notifications}</div>
+    <div className="sidebar-header">
+      <Link className="brand" {...homeLink} onClick={close} aria-label="Lumi" title={collapsed ? 'Lumi' : undefined}><span className="brand-symbol"><Sparkles size={24} aria-hidden="true"/></span><span className="brand-word">lumi<span className="brand-dot">.</span></span></Link>
+      {toggleCollapsed && <button type="button" className="sidebar-toggle" onClick={toggleCollapsed} aria-label={collapsed ? 'Espandi menu laterale' : 'Comprimi menu laterale'} title={collapsed ? 'Espandi menu laterale' : 'Comprimi menu laterale'} aria-expanded={!collapsed} aria-controls="sidebar-navigation">{collapsed ? <PanelLeftOpen size={19}/> : <PanelLeftClose size={19}/>}</button>}
+    </div>
     <p className="brand-tagline">Una piccola luce per imparare</p>
+    <div className="sidebar-navigation" id={toggleCollapsed ? 'sidebar-navigation' : undefined}>
     <nav aria-label="Navigazione principale" className="main-nav">
-      {familyId ? <Link className={`nav-item ${pathname === `/spazi/${familyId}` ? 'selected' : ''}`} aria-current={pathname === `/spazi/${familyId}` ? 'page' : undefined} {...homeLink} onClick={close}><House size={20}/>Il mio angolino</Link> : <Link to="/" onClick={close} className={`nav-item ${pathname === '/' ? 'selected' : ''}`}><UsersRound size={20}/>I tuoi spazi</Link>}
-      {familyId && <Link to="/spazi/$familyId/dizionario" params={{ familyId }} aria-current={pathname === `/spazi/${familyId}/dizionario` ? 'page' : undefined} onClick={close} className={`nav-item ${pathname === `/spazi/${familyId}/dizionario` ? 'selected' : ''}`}><BookOpen size={20}/>Il mio dizionario</Link>}
+      {familyId ? <Link className={`nav-item ${pathname === `/spazi/${familyId}` ? 'selected' : ''}`} aria-label="Il mio angolino" title={collapsed ? 'Il mio angolino' : undefined} aria-current={pathname === `/spazi/${familyId}` ? 'page' : undefined} {...homeLink} onClick={close}><House size={20} aria-hidden="true"/><span className="sidebar-label">Il mio angolino</span></Link> : <Link to="/" onClick={close} aria-label="I tuoi spazi" title={collapsed ? 'I tuoi spazi' : undefined} className={`nav-item ${pathname === '/' ? 'selected' : ''}`}><UsersRound size={20} aria-hidden="true"/><span className="sidebar-label">I tuoi spazi</span></Link>}
+      {familyId && <Link to="/spazi/$familyId/dizionario" params={{ familyId }} aria-label="Il mio dizionario" title={collapsed ? 'Il mio dizionario' : undefined} aria-current={pathname === `/spazi/${familyId}/dizionario` ? 'page' : undefined} onClick={close} className={`nav-item ${pathname === `/spazi/${familyId}/dizionario` ? 'selected' : ''}`}><BookOpen size={20} aria-hidden="true"/><span className="sidebar-label">Il mio dizionario</span></Link>}
+      {familyId && collapsed && <button type="button" className="nav-item" aria-label="Le mie scoperte" title="Le mie scoperte" aria-haspopup="dialog" onClick={event => openDiscoveries?.(event.currentTarget)}><History size={20} aria-hidden="true"/></button>}
     </nav>
-    {familyId && <section className="sidebar-discoveries" aria-label="Le mie scoperte"><div className="history-heading"><h2>Le mie scoperte</h2><Link to="/spazi/$familyId" params={{ familyId }} onClick={close} className="history-new" aria-label="Fai una nuova domanda" title="Fai una nuova domanda"><Plus size={18} aria-hidden="true"/></Link></div><ConversationHistory familyId={familyId} close={close}/></section>}
+    {familyId && !collapsed && <section className="sidebar-discoveries" aria-label="Le mie scoperte"><div className="history-heading"><h2>Le mie scoperte</h2><Link to="/spazi/$familyId" params={{ familyId }} onClick={close} className="history-new" aria-label="Fai una nuova domanda" title="Fai una nuova domanda"><Plus size={18} aria-hidden="true"/></Link></div><ConversationHistory familyId={familyId} close={close}/></section>}
     <div className="sidebar-bottom">
-      <div className="sidebar-management">{family?.role === 'parent' && <Link to="/spazi/$familyId/coach" params={{ familyId }} aria-current={pathname === `/spazi/${familyId}/coach` ? 'page' : undefined} className={`sidebar-action ${pathname === `/spazi/${familyId}/coach` ? 'selected' : ''}`} onClick={close}><LockKeyhole size={17}/>Area coach</Link>}
+      <div className="sidebar-tools">
+      {notifications}
+      {family?.role === 'parent' && <Link to="/spazi/$familyId/coach" params={{ familyId }} className={`sidebar-action ${pathname === `/spazi/${familyId}/coach` ? 'selected' : ''}`} aria-label="Area coach" title={collapsed ? 'Area coach' : undefined} aria-current={pathname === `/spazi/${familyId}/coach` ? 'page' : undefined} onClick={close}><LockKeyhole size={19} aria-hidden="true"/><span className="sidebar-label">Area coach</span></Link>}
       {session.admin && <nav className="sidebar-admin" aria-label="Amministrazione">
-        <Link to="/admin" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin' ? 'selected' : ''}`} onClick={close}><LockKeyhole size={17}/>Admin</Link>
-        <Link to="/admin/spazi" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin/spazi' ? 'selected' : ''}`} onClick={close}><UsersRound size={17}/>Spazi gestiti</Link>
-      </nav>}</div>
+        <Link to="/admin" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin' ? 'selected' : ''}`} aria-label="Admin" title={collapsed ? 'Admin' : undefined} aria-current={pathname === '/admin' ? 'page' : undefined} onClick={close}><ShieldCheck size={19} aria-hidden="true"/><span className="sidebar-label">Admin</span></Link>
+        <Link to="/admin/spazi" search={{ family: familyId || undefined }} className={`sidebar-action ${pathname === '/admin/spazi' ? 'selected' : ''}`} aria-label="Spazi gestiti" title={collapsed ? 'Spazi gestiti' : undefined} aria-current={pathname === '/admin/spazi' ? 'page' : undefined} onClick={close}><UsersRound size={19} aria-hidden="true"/><span className="sidebar-label">Spazi gestiti</span></Link>
+      </nav>}
+      </div>
       <nav className="sidebar-account" aria-label="Account e spazio">
         <div className="sidebar-identity">
           <UsersRound size={17} aria-hidden="true"/>
           <div><span className="sidebar-family" title={family?.name}>{family?.name ?? 'Lumi'}</span><span className="sidebar-email" title={session.email}>{session.email}</span></div>
         </div>
         <div className="sidebar-account-actions">
-          {familyId && <Link to="/" className="sidebar-action" onClick={close}><ArrowRightLeft size={17}/>Cambia spazio</Link>}
-          <button type="button" className="sidebar-action" disabled={signingOut} onClick={() => void signout()}><LogOut size={17}/>Esci</button>
+          {familyId && <Link to="/" className="sidebar-action" aria-label="Cambia spazio" title={collapsed ? 'Cambia spazio' : undefined} onClick={close}><ArrowRightLeft size={19} aria-hidden="true"/><span className="sidebar-label">Cambia spazio</span></Link>}
+          <button type="button" className="sidebar-action" aria-label="Esci" title={collapsed ? 'Esci' : undefined} disabled={signingOut} onClick={() => void signout()}><LogOut size={19} aria-hidden="true"/><span className="sidebar-label">Esci</span></button>
         </div>
       </nav>
+    </div>
     </div>
   </>;
 }
@@ -58,6 +67,18 @@ function Navigation({ familyId, close, notifications }: { familyId: string; clos
 export function AppShell({ familyId, checkConnection, children }: { familyId: string; checkConnection: boolean; children: ReactNode }) {
   const [menu, setMenu] = useState(false);
   const [discoveries, setDiscoveries] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('lumi-sidebar-collapsed') === 'true'; } catch { return false; }
+  });
+  function toggleSidebar() {
+    const collapsed = !sidebarCollapsed;
+    setSidebarCollapsed(collapsed);
+    try { localStorage.setItem('lumi-sidebar-collapsed', String(collapsed)); } catch { /* The menu also works when storage is unavailable. */ }
+  }
+  function openDiscoveries(trigger: HTMLButtonElement) {
+    discoveriesTrigger.current = trigger;
+    setDiscoveries(true);
+  }
   const menuTrigger = useRef<HTMLButtonElement>(null);
   const discoveriesTrigger = useRef<HTMLButtonElement>(null);
   const [online, setOnline] = useState(navigator.onLine);
@@ -102,15 +123,15 @@ export function AppShell({ familyId, checkConnection, children }: { familyId: st
       <div role="alert"><WifiOff size={40} aria-hidden="true"/><h1 id="connection-error-title">Non riesco a raggiungere Lumi.</h1><p>Controlla la connessione e riprova.</p></div>
       <button className="primary-button" disabled={!online || status.isFetching} onClick={() => void status.refetch()}>{status.isFetching ? 'Riprovo…' : 'Riprova'}</button>
     </main>}
-    <div ref={shell} className={`app-shell ${familyId ? 'family-shell' : ''} ${inConversation ? 'chat-shell' : ''}`} hidden={connectionError} inert={connectionError}>
-    <aside className="sidebar"><Navigation familyId={familyId} notifications={notifications.button}/></aside>
+    <div ref={shell} className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${familyId ? 'family-shell' : ''} ${inConversation ? 'chat-shell' : ''}`} hidden={connectionError} inert={connectionError}>
+    <aside className="sidebar" aria-label="Menu laterale"><Navigation familyId={familyId} notifications={notifications.button} collapsed={sidebarCollapsed} toggleCollapsed={toggleSidebar} openDiscoveries={openDiscoveries}/></aside>
     <div className="main-shell">
       <header className="topbar"><Link {...(familyId ? { to: '/spazi/$familyId' as const, params: { familyId } } : { to: '/' as const })} className="topbar-brand" aria-label={familyId ? 'Lumi, fai una domanda' : 'Lumi, i tuoi spazi'}>lumi<span>.</span></Link><div className="topbar-actions">{notifications.button}<button ref={menuTrigger} className="menu-button" aria-label="Apri menu" aria-haspopup="dialog" aria-expanded={menu} onClick={() => setMenu(true)}><Menu size={20}/><span>Menu</span></button></div></header>
       <main id="main">{children}</main>
       <footer className="page-footer"><Heart size={13}/> Un piccolo aiuto, una scoperta alla volta.<span>Lumi è un assistente artificiale.</span></footer>
       {familyId && <nav className="mobile-tabs" aria-label="Il tuo angolino">
         <Link to="/spazi/$familyId" params={{ familyId }} className={!inDictionary && (inConversation || location === `/spazi/${familyId}`) ? 'selected' : ''} aria-current={location === `/spazi/${familyId}` ? 'page' : undefined}><MessageCircle size={23} aria-hidden="true"/><span>Domanda</span></Link>
-        <button ref={discoveriesTrigger} type="button" className={discoveries ? 'selected' : ''} aria-haspopup="dialog" aria-expanded={discoveries} onClick={() => setDiscoveries(true)}><History size={23} aria-hidden="true"/><span>Scoperte</span></button>
+        <button type="button" className={discoveries ? 'selected' : ''} aria-haspopup="dialog" aria-expanded={discoveries} onClick={event => openDiscoveries(event.currentTarget)}><History size={23} aria-hidden="true"/><span>Scoperte</span></button>
         <Link to="/spazi/$familyId/dizionario" params={{ familyId }} className={inDictionary ? 'selected' : ''} aria-current={inDictionary ? 'page' : undefined}><BookOpen size={23} aria-hidden="true"/><span>Dizionario</span></Link>
       </nav>}
     </div>
