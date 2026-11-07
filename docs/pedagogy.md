@@ -69,3 +69,46 @@ Lumi usa il contesto della conversazione e chiede una frase soltanto quando serv
 La migrazione `007_word_clarifications.sql` aggiunge un allegato facoltativo ai messaggi e conserva le conversazioni e il dizionario esistenti. Le istruzioni condivise si applicano anche ai prompt personalizzati già salvati, senza sovrascriverli. Riavvia il server dopo l'aggiornamento e distribuisci insieme backend e frontend per il nuovo evento di streaming.
 
 La suite opt-in `TestLiveWordClarification` copre «formato», «bank», la traduzione di «pesca» e risposte con contesto già sufficiente. Si abilita con `LUMI_LIVE_TEST_DATA_DIR` e consuma il piano configurato; non salva conversazioni e non migra il database. La correttezza dei significati richiede anche la valutazione del coach.
+
+## Storia, Geografia, Scienze e Geometria
+
+Su telefono le schede mostrano una sola spiegazione alla volta, con il primo punto
+già aperto. Gli angoli si confrontano scegliendo una figura; i nodi dei cicli sono
+pulsanti accessibili anche da tastiera. Toccando un punto, la spiegazione viene
+portata in vista. Le nuove schede si aprono dall'inizio, senza saltare il titolo.
+Il richiamo all'ultima risposta non copre una scheda che si sta esplorando.
+
+Le quattro materie partono dal livello prima–seconda primaria. Ogni materia ha
+istruzioni separate in **Come insegna**; il coach può adattare il livello tramite
+il prompt. Modello, lettura automatica e velocità restano condivisi.
+
+Lumi sceglie il formato: non chiede alla bambina se vuole una mappa o un disegno.
+Chiede invece quale parte studiare quando l'argomento è ampio, con pochi pulsanti
+e la possibilità di scrivere o parlare liberamente. «Non lo so» deve portare a una
+piccola introduzione, senza ripetere il chiarimento. Una domanda già precisa non
+richiede ulteriori scelte.
+
+| Domanda o azione | Cosa verificare |
+| --- | --- |
+| «Gli Egiziani» → «Il Nilo» | Prima una sola domanda con scelte pertinenti, poi contenuto sul Nilo; nessuna analisi della frase e nessuna richiesta di formato. |
+| «I Cretesi» → «La loro vita» | Piccola mappa mentale con pochi rami e spiegazioni brevi, senza una lezione piena di date. |
+| «I Cretesi» → «Dove vivevano» | Cartina con Creta riconoscibile; non evidenziare tutta la Grecia come se fosse l'isola. |
+| «I tipi di angoli» | Chiede quali sta studiando o un esempio; non sceglie una classificazione senza contesto. |
+| «Spiegami l'angolo retto» | Risposta diretta con disegno di 90°, spiegazione ed esempio quotidiano. |
+| «Non lo so» durante un chiarimento | Una piccola introduzione; niente ripetizione della stessa domanda. |
+| «Come funziona il ciclo dell'acqua?» | Poche fasi, frecce coerenti e ritorno alla prima fase, spiegazioni apribili singolarmente. |
+| «Raccontami cosa succede prima e dopo» | Sequenza o breve linea del tempo con etichette leggibili anche su telefono. |
+| Tocca un elemento → «Più facile», «Fammi un esempio», «Continua» | Riparte dal punto selezionato, senza duplicare automaticamente la visuale. |
+| Ricarica una chat con una visuale o un chiarimento | Mantiene materia, disegno e contenuti; soltanto l'ultimo chiarimento completato ha scelte attive. |
+| Un luogo manca nel catalogo | Lo dichiara e continua con una spiegazione o uno schema; non inventa cartine. |
+
+Le cartine illustrano la geografia attuale: non rappresentano i confini degli
+antichi popoli. Derivano da Natural Earth e sono distribuite con l'app. Le figure
+geometriche derivano da parametri verificati dal server, non da immagini generate.
+I nuovi argomenti restano nella cronologia; il dizionario continua a raccogliere
+le parole di Italiano e Inglese.
+
+I test automatici usano risposte simulate per verificare strumenti, contratti,
+streaming, salvataggio e interazione. La qualità delle scelte e delle spiegazioni
+va valutata con questi esempi nell'anteprima coach. Le prove automatiche con un
+modello reale restano opt-in tramite `LUMI_LIVE_TEST_DATA_DIR`.

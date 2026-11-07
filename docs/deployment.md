@@ -229,6 +229,14 @@ La migrazione di controllo `004_access_requests.sql` viene applicata automaticam
 
 ## Dati, aggiornamenti e backup
 
+La migrazione `008_study_subjects.sql` aggiunge Storia, Geografia, Scienze e
+Geometria e salva chiarimenti e visuali nei messaggi. Ricostruisce la tabella delle
+conversazioni ampliando il vincolo delle materie, conservando i messaggi e
+verificando le chiavi esterne prima del commit. Si applica automaticamente ai
+database all'apertura; le istruzioni personalizzate esistenti restano conservate.
+Le cartine sono risorse statiche versionate incluse nell'immagine, senza nuove
+chiavi o servizi esterni; vedi [Dati delle cartine](geography-data.md).
+
 La migrazione `005_dictionary.sql` aggiunge le schede delle parole ai messaggi e un dizionario indipendente in ogni database di spazio. Si applica automaticamente all’avvio, senza importare le conversazioni precedenti. Le nuove spiegazioni completate aggiornano il dizionario; eliminare una conversazione non elimina le parole. I coach possono eliminare singole parole o svuotare il dizionario dall’area coach. Includi questi database nei normali backup.
 
 Il volume `lumi-data` contiene `portal/control.db` per sessioni, spazi e inviti, `chatgpt.json` per l’unico grant ChatGPT, `lumi.db` per il modello condiviso e `families/ID/` con SQLite, cronologia e preferenze di ciascuno spazio. Un grant globale già presente viene conservato; in assenza di questo, un singolo grant collegato per spazio viene promosso insieme al modello. Con più grant preesistenti, Admin deve collegare l’account scelto. I vecchi file degli spazi restano conservati ma non vengono più caricati: evita avvii paralleli o rollback che riutilizzino copie obsolete dei refresh token. `keycloak-db` contiene il database PostgreSQL. Directory e database Lumi hanno permessi privati. I backup contengono credenziali e token: conservali cifrati e fuori dal VPS.

@@ -19,8 +19,12 @@ type assistantProfile struct {
 }
 
 var assistantProfiles = map[api.Subject]assistantProfile{
-	api.Italian: {promptFile: "prompt.txt"},
-	api.English: {promptFile: "prompt_english.txt", instructions: englishInstructions},
+	api.Italian:   {promptFile: "prompt.txt"},
+	api.English:   {promptFile: "prompt_english.txt", instructions: englishInstructions},
+	api.History:   {promptFile: "prompt_history.txt", instructions: studyInstructions},
+	api.Geography: {promptFile: "prompt_geography.txt", instructions: studyInstructions},
+	api.Science:   {promptFile: "prompt_science.txt", instructions: studyInstructions},
+	api.Geometry:  {promptFile: "prompt_geometry.txt", instructions: studyInstructions},
 }
 
 const englishInstructions = `Sei Lumi e aiuti chi parla italiano a imparare l'inglese. Parla sempre in italiano semplice, con pazienza. L'inglese è il materiale da imparare: mettilo nelle schede e nelle mappe, non ripeterlo nel testo narrativo italiano. Preferisci 40–80 parole di spiegazione, frasi brevi, nessuna tabella o Markdown. Una sola domanda e un piccolo passo per turno, senza voti o pressione. Non fare i compiti al suo posto.
@@ -40,7 +44,7 @@ func normalizeSubject(subject api.Subject) (api.Subject, bool) {
 func requestSubject(w http.ResponseWriter, r *http.Request) (api.Subject, bool) {
 	subject, ok := normalizeSubject(api.Subject(r.URL.Query().Get("subject")))
 	if !ok {
-		problem(w, 400, "invalid_subject", "Scegli Italiano o Inglese.")
+		problem(w, 400, "invalid_subject", "Scegli una delle materie disponibili.")
 	}
 	return subject, ok
 }
@@ -82,7 +86,7 @@ func (s *Store) saveSubjectSettings(subject api.Subject, settings api.Settings) 
 	if subject == api.Italian {
 		return s.SaveSettings(settings)
 	}
-	// Read the Italian prompt inside the transaction so saving English cannot
+	// Read the Italian prompt inside the transaction so saving another subject cannot
 	// overwrite a concurrent Italian prompt update with a stale copy.
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -115,4 +119,8 @@ func (s *Store) saveSubjectSettings(subject api.Subject, settings api.Settings) 
 		return err
 	}
 	return tx.Commit()
+}
+
+func studySubject(subject api.Subject) bool {
+	return subject == api.History || subject == api.Geography || subject == api.Science || subject == api.Geometry
 }

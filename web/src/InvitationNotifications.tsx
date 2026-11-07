@@ -64,7 +64,7 @@ export function useInvitationNotifications(enabled: boolean) {
   const dialog = <Dialog.Root open={open && enabled} onOpenChange={value => { if (!lock.current) setOpen(value); }}>
     <Dialog.Portal><Dialog.Backdrop className="dialog-backdrop"/><Dialog.Popup className="dialog-panel invitation-dialog" finalFocus={trigger}>
       <Dialog.Title>Notifiche</Dialog.Title>
-      <Dialog.Description>{admin ? 'Gestisci le richieste di accesso e gli inviti agli spazi.' : 'Scegli se entrare negli spazi che ti hanno invitato.'}</Dialog.Description>
+      <Dialog.Description className="notification-description">{admin ? 'Gestisci le richieste di accesso e gli inviti agli spazi.' : 'Scegli se entrare negli spazi che ti hanno invitato.'}</Dialog.Description>
       <Dialog.Close className="icon-button close-dialog" aria-label="Chiudi notifiche" disabled={busy}><X size={20}/></Dialog.Close>
       {error && <p className="notice error-notice" role="alert">{error}</p>}
       {notice && <p className="notice success-notice" role="status">{notice}</p>}
@@ -72,7 +72,7 @@ export function useInvitationNotifications(enabled: boolean) {
         <h3 id="access-requests-title">Richieste di accesso</h3>
         {requests.isPending && <LoadingSkeleton label="Caricamento delle richieste" rows={2}/>}
         {requests.isError && <div><p role="alert">{errorMessage(requests.error)}</p><button className="text-button" onClick={() => void requests.refetch()}>Riprova le richieste</button></div>}
-        {requests.data?.length === 0 && <p>Non ci sono richieste di accesso in attesa.</p>}
+        {requests.data?.length === 0 && <p className="notification-empty">Non ci sono richieste di accesso in attesa.</p>}
         {requests.data?.map(request => <article className="received-invitation" key={request.id} aria-label={request.email}>
           <h4>{request.email}</h4><p>Chiede di entrare in Lumi.</p>
           <small>Richiesta del {new Date(request.requestedAt).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</small>
@@ -83,7 +83,7 @@ export function useInvitationNotifications(enabled: boolean) {
         <h3 id="space-invitations-title">Inviti agli spazi</h3>
         {invitations.isPending && <LoadingSkeleton label="Caricamento degli inviti" rows={2}/>}
         {invitations.isError && <div><p role="alert">{errorMessage(invitations.error)}</p><button className="text-button" onClick={() => void invitations.refetch()}>Riprova</button></div>}
-        {invitations.data?.length === 0 && <p>Non hai inviti in attesa.</p>}
+        {invitations.data?.length === 0 && <p className="notification-empty">Non hai inviti in attesa.</p>}
         {invitations.data?.map(invitation => <article className="received-invitation" key={invitation.id} aria-label={invitation.familyName}>
           <h4>{invitation.familyName}</h4><p>Ti invita a entrare nello spazio.</p>
           <small>Scade il {new Date(invitation.expiresAt).toLocaleDateString('it')}</small>

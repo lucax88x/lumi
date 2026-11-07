@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Message, WordImage, SentenceMap, DictionaryEntry, Conversation, WordClarification, WordExplanation } from '../src/api/types.gen';
+import type { Message, WordImage, SentenceMap, DictionaryEntry, Conversation, WordClarification, WordExplanation, LearningVisual, StudyClarification } from '../src/api/types.gen';
 import spaceMap from './fixtures/space-map.json' with { type: 'json' };
 
 const spaceQuestion = 'mi fai la mappa mentale con tutti i pianeti e i nomi stellari? tipo meteorite, asteroide, etc';
@@ -59,6 +59,42 @@ const clarificationCases: { subject: 'italian' | 'english'; question: string; cl
   },
 ];
 
+const egyptFocus: StudyClarification = { topic: 'Gli Egiziani', question: 'Che cosa vuoi scoprire degli Egiziani?', choices: [
+  { label: 'Il Nilo', reply: 'Il Nilo' }, { label: 'Le piramidi', reply: 'Le piramidi' }, { label: 'La vita quotidiana', reply: 'La vita quotidiana' },
+] };
+const angleVisual: LearningVisual = { kind: 'geometry', title: 'L’angolo retto', summary: 'Si apre come un angolo del quaderno.', figures: [
+  { shape: 'angle', label: 'Angolo retto', degrees: 90, explanation: 'Prova a guardare un angolo del tuo quaderno.' },
+] };
+const waterVisual: LearningVisual = { kind: 'diagram', title: 'Il ciclo dell’acqua', summary: 'L’acqua fa un giro e ricomincia.', layout: 'cycle', nodes: [
+  { id: 'sun', label: 'Il Sole scalda', explanation: 'L’acqua sale come vapore.', symbol: 'sun' },
+  { id: 'cloud', label: 'Le nuvole', explanation: 'Si formano piccole gocce.', symbol: 'cloud' },
+  { id: 'rain', label: 'La pioggia', explanation: 'Le gocce cadono sulla terra.', symbol: 'rain' },
+], edges: [{ from: 'sun', to: 'cloud' }, { from: 'cloud', to: 'rain' }, { from: 'rain', to: 'sun' }] };
+const nileVisual: LearningVisual = { kind: 'map', title: 'Il Nilo', summary: 'Un fiume importante per gli Egiziani.', datasetVersion: 'ne-v1', features: [
+  { id: 'rivers-4', label: 'Il Nilo', explanation: 'L’acqua del fiume aiutava a coltivare i campi.' },
+] };
+const creteVisual: LearningVisual = { kind: 'map', title: 'Creta', summary: 'L’isola dove vivevano i Cretesi.', datasetVersion: 'ne-v1', features: [
+  { id: 'islands-1159102805', label: 'Creta', explanation: 'Un’isola nel Mar Mediterraneo.' },
+] };
+const cretanMap = { title: 'La vita dei Cretesi', branches: [
+  { label: 'Dove vivevano', explanation: 'Vivevano sull’isola di Creta.', items: [{ label: 'Creta', explanation: 'Un’isola nel Mar Mediterraneo.' }] },
+  { label: 'Che cosa facevano', explanation: 'Coltivavano e viaggiavano sul mare.', items: [{ label: 'Le navi', explanation: 'Portavano merci in altri luoghi.' }] },
+] };
+function studyMockAnswer(text: string, history: Message[]): Partial<Message> | undefined {
+  if (text === 'Gli Egiziani') return { text: '', studyClarification: egyptFocus };
+  if (text === 'I Cretesi') return { text: '', studyClarification: { topic: 'I Cretesi', question: 'Che cosa vuoi scoprire dei Cretesi?', choices: [{ label: 'Dove vivevano', reply: 'Dove vivevano i Cretesi' }, { label: 'La loro vita', reply: 'La vita dei Cretesi' }] } };
+  if (text === 'I tipi di angoli') return { text: '', studyClarification: { topic: 'Gli angoli', question: 'Hai già i nomi degli angoli che stai studiando?', choices: [{ label: 'Ti dico i nomi', reply: 'Ti dico i nomi degli angoli' }, { label: 'Una prima scoperta', reply: 'Una prima scoperta degli angoli' }] } };
+  if (text.includes('Non lo so. Aiutami')) return { text: 'Gli Egiziani vivevano vicino al Nilo. Partiamo da questa piccola scoperta.' };
+  if (text === 'Spiegami l’angolo retto' || text.includes('Una prima scoperta degli angoli')) return { text: '', learningVisual: angleVisual };
+  if (text.includes('Il Nilo') && !text.includes('punto selezionato')) return { text: '', learningVisual: nileVisual };
+  if (text.includes('Dove vivevano i Cretesi')) return { text: '', learningVisual: creteVisual };
+  if (text.includes('La vita dei Cretesi')) return { text: 'Tocca un ramo per iniziare.', topicMap: cretanMap };
+  if (text === 'Come funziona il ciclo dell’acqua?') return { text: '', learningVisual: waterVisual };
+  if (text.includes('Il punto selezionato è')) return { text: 'Restiamo sul punto che hai scelto e guardiamo un esempio semplice.' };
+  if (history.some(message => message.learningVisual) && !text) return { text: 'Facciamo un piccolo passo avanti.' };
+  return undefined;
+}
+
 async function mockAPI(page: Page, autoRead = false) {
   const chats: Conversation[] = [];
   const messages = new Map<string, Message[]>();
@@ -66,6 +102,7 @@ async function mockAPI(page: Page, autoRead = false) {
   let authenticated = true;
   const settings = { model: 'test-model', prompt: 'Spiega una parola alla volta.', defaultPrompt: 'Spiega una parola alla volta.', autoRead, speechRate: 0.9 };
   const englishSettings = { ...settings, prompt: 'Aiuta con inglese in italiano.', defaultPrompt: 'Aiuta con inglese in italiano.' };
+  const studySettings = Object.fromEntries(['history', 'geography', 'science', 'geometry'].map(subject => [subject, { ...settings, prompt: `Studiamo ${subject}.`, defaultPrompt: `Studiamo ${subject}.` }]));
   await page.route('**/api/v1/**', async route => {
     const request = route.request(); const path = new URL(request.url()).pathname.replace(/^\/api\/v1(?:\/families\/test)?/, ''); const method = request.method();
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -101,11 +138,12 @@ async function mockAPI(page: Page, autoRead = false) {
         message.text = ''; message.images = []; message.wordExplanation = vigorousWord;
       }
       if (request.postDataJSON().subject === 'english') { message.text = ''; message.images = []; message.wordExplanation = dogWord; }
+      const studyAnswer = studyMockAnswer(request.postDataJSON().text, []); if (studyAnswer) { message.text = ''; message.images = []; Object.assign(message, studyAnswer); }
       const contextCase = clarificationCases.find(item => item.question === request.postDataJSON().text);
       if (contextCase) { message.text = ''; message.images = []; message.wordExplanation = undefined; message.wordClarification = { ...contextCase.clarification, examples: [] }; }
       return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'images', message: { ...message, text: '', status: 'streaming' } })}\n\ndata: ${JSON.stringify({ type: 'completed', message })}\n\n` });
     }
-    if (path === '/admin/settings') { const selected = new URL(request.url()).searchParams.get('subject') === 'english' ? englishSettings : settings; if (method === 'PUT') Object.assign(selected, request.postDataJSON()); return json(selected); }
+    if (path === '/admin/settings') { const subject = new URL(request.url()).searchParams.get('subject') ?? 'italian'; const selected = subject === 'english' ? englishSettings : studySettings[subject] ?? settings; if (method === 'PUT') Object.assign(selected, request.postDataJSON()); return json(selected); }
     if (path === '/admin/models') return json([{ slug: 'test-model', displayName: 'Modello di prova' }]);
     if (path === '/admin/connection') return json({ connected: true, email: 'parent@example.test', message: '', transcriptionConfigured: true });
     if (path === '/admin/connection/start') return json({ authorizationUrl: 'https://auth.openai.com/authorize?state=test', expiresAt: new Date(Date.now() + 600_000).toISOString() });
@@ -155,12 +193,28 @@ async function mockAPI(page: Page, autoRead = false) {
           dictionary.unshift({ subject: item.subject, id: `context-${pendingContext.word}`, ...answer.wordExplanation, firstAskedAt: date, lastAskedAt: date });
         }
       }
+      const subject = chats.find(c => c.id === id)?.subject;
+      if (subject && ['history', 'geography', 'science', 'geometry'].includes(subject)) Object.assign(answer, studyMockAnswer(body.text, history));
       history.push(user, answer);
-      return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'started', message: { ...answer, wordClarification: undefined, wordExplanation: undefined, topicMap: undefined, sentenceMap: undefined, images: [], text: '', status: 'streaming' } })}\n\n${answer.wordClarification ? `data: ${JSON.stringify({ type: 'word_clarification', message: { ...answer, status: 'streaming' } })}\n\n` : ''}${answer.wordExplanation ? `data: ${JSON.stringify({ type: 'word_explanation', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.topicMap ? `data: ${JSON.stringify({ type: 'topic_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.sentenceMap ? `data: ${JSON.stringify({ type: 'sentence_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.images ? `data: ${JSON.stringify({ type: 'images', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}data: ${JSON.stringify({ type: 'delta', delta: answer.text })}\n\ndata: ${JSON.stringify({ type: 'completed', message: answer })}\n\n` });
+      return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'started', message: { ...answer, studyClarification: undefined, learningVisual: undefined, wordClarification: undefined, wordExplanation: undefined, topicMap: undefined, sentenceMap: undefined, images: [], text: '', status: 'streaming' } })}\n\n${answer.studyClarification ? `data: ${JSON.stringify({ type: 'study_clarification', message: { ...answer, status: 'streaming' } })}\n\n` : ''}${answer.learningVisual ? `data: ${JSON.stringify({ type: 'learning_visual', message: { ...answer, status: 'streaming' } })}\n\n` : ''}${answer.wordClarification ? `data: ${JSON.stringify({ type: 'word_clarification', message: { ...answer, status: 'streaming' } })}\n\n` : ''}${answer.wordExplanation ? `data: ${JSON.stringify({ type: 'word_explanation', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.topicMap ? `data: ${JSON.stringify({ type: 'topic_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.sentenceMap ? `data: ${JSON.stringify({ type: 'sentence_map', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}${answer.images ? `data: ${JSON.stringify({ type: 'images', message: { ...answer, text: '', status: 'streaming' } })}\n\n` : ''}data: ${JSON.stringify({ type: 'delta', delta: answer.text })}\n\ndata: ${JSON.stringify({ type: 'completed', message: answer })}\n\n` });
     }
     return json({ message: 'Not found' }, 404);
   });
-  return { chats, messages, dictionary, settings, englishSettings };
+  return { chats, messages, dictionary, settings, englishSettings, studySettings };
+}
+
+// Capture the card on its own so fixed chat controls do not cover the review image.
+async function captureStudyVisual(page: Page, path: string) {
+  const markup = await page.locator('.learning-visual').last().evaluate(element => element.outerHTML);
+  const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(elements => elements.map(element => (element as HTMLLinkElement).href));
+  const preview = await page.context().newPage();
+  try {
+    const viewport = page.viewportSize();
+    if (viewport) await preview.setViewportSize(viewport);
+    await preview.setContent(`<html lang="it"><head><meta name="viewport" content="width=device-width, initial-scale=1">${styles.map(href => `<link rel="stylesheet" href="${href}">`).join('')}<style>body{margin:0;padding:16px}.message{margin:0;width:100%;box-sizing:border-box}.learning-visual{margin:0}</style></head><body><article class="message assistant">${markup}</article></body></html>`);
+    await preview.evaluate(() => document.fonts.ready);
+    await preview.locator('.message').screenshot({ path });
+  } finally { await preview.close(); }
 }
 
 async function openNavigation(page: Page) {
@@ -240,11 +294,11 @@ test('word context is visible in coach previews and clears on the next preview',
   await mockAPI(page);
   await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
-  await page.getByLabel('Parola o frase di prova').fill('Cosa significa formato?');
+  await page.getByLabel('Domanda di prova').fill('Cosa significa formato?');
   await page.getByRole('button', { name: 'Prova le istruzioni', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Il contesto di formato' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Non ho una frase', exact: true })).toHaveCount(0);
-  await page.getByLabel('Parola o frase di prova').fill('vigoroso');
+  await page.getByLabel('Domanda di prova').fill('vigoroso');
   await page.getByRole('button', { name: 'Prova le istruzioni', exact: true }).click();
   await expect(page.locator('.word-heading')).toHaveText('vigoroso');
   await expect(page.getByRole('region', { name: 'Il contesto di formato' })).toHaveCount(0);
@@ -318,7 +372,7 @@ test('parents can remove dictionary words independently from chats and previews'
   await expect(page.locator('.message.assistant .word-explanation')).toBeVisible();
   await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
-  await page.getByLabel('Parola o frase di prova').fill('vigoroso');
+  await page.getByLabel('Domanda di prova').fill('vigoroso');
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
   await expect(page.locator('.preview-result').getByText('forte', { exact: true })).toBeVisible();
   expect(api.dictionary).toHaveLength(1);
@@ -862,7 +916,7 @@ test('parent preview displays image tool results', async ({ page }) => {
   await page.route('https://upload.wikimedia.org/test.jpg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>' }));
   await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
-  await page.getByLabel('Parola o frase di prova').fill('Mostrami una roccia');
+  await page.getByLabel('Domanda di prova').fill('Mostrami una roccia');
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
   await expect(page.locator('.preview-result').getByRole('img', { name: 'Roccia' })).toBeVisible();
   await expect(page.locator('.preview-result')).toContainText('Ecco una roccia!');
@@ -904,7 +958,7 @@ test('sentence maps open one piece at a time, guide follow-ups and survive reloa
 test('parent preview shows the sentence map', async ({ page }) => {
   await mockAPI(page); await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
-  await page.getByLabel('Parola o frase di prova').fill(catMap.sentence);
+  await page.getByLabel('Domanda di prova').fill(catMap.sentence);
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
   const map = page.getByRole('region', { name: 'Mappa della frase' });
   await expect(map).toBeVisible();
@@ -950,13 +1004,13 @@ test('explicit topic maps show all planets, expand gradually and preserve select
 test('parent preview shows a topic map and clears it for the next example', async ({ page }) => {
   await mockAPI(page); await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
-  await page.getByLabel('Parola o frase di prova').fill(spaceQuestion);
+  await page.getByLabel('Domanda di prova').fill(spaceQuestion);
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
   const map = page.getByRole('region', { name: 'Mappa dell’argomento' });
   await expect(map).toBeVisible();
   await map.getByRole('button', { name: 'Le stelle', exact: true }).click();
   await expect(map.getByRole('button', { name: 'Sole', exact: true })).toBeVisible();
-  await page.getByLabel('Parola o frase di prova').fill(catMap.sentence);
+  await page.getByLabel('Domanda di prova').fill(catMap.sentence);
   await page.getByRole('button', { name: 'Prova le istruzioni' }).click();
   await expect(page.getByRole('region', { name: 'Mappa della frase' })).toBeVisible();
   await expect(map).toHaveCount(0);
@@ -1027,7 +1081,7 @@ test('parents edit and preview English instructions independently from Italian',
   await expect(page.getByRole('status')).toHaveText('Istruzioni salvate.');
   expect(api.settings.prompt).toBe('Spiega una parola alla volta.');
   expect(api.englishSettings.prompt).toBe('Usa esempi inglesi molto brevi.');
-  await page.getByLabel('Parola o frase di prova').fill('Come si dice cane?');
+  await page.getByLabel('Domanda di prova').fill('Come si dice cane?');
   await page.getByRole('button', { name: 'Prova le istruzioni', exact: true }).click();
   await expect(page.locator('.preview-result .word-heading')).toHaveText('dog');
   expect(api.dictionary).toHaveLength(0);
@@ -1300,3 +1354,179 @@ test('chat adapts to keyboard viewport changes and small landscape screens', asy
   expect(await page.getByRole('region', { name: 'Leggi la conversazione' }).evaluate(area => area.clientHeight)).toBeGreaterThan(40);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test('study narrows Egiziani to the Nilo and reopens a real cartographic attachment', async ({ page }, testInfo) => {
+  const api = await mockAPI(page);
+  await page.goto('/spazi/test');
+  for (const name of ['Italiano', 'Inglese', 'Storia', 'Geografia', 'Scienze', 'Geometria']) await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Storia', exact: true }).click();
+  await page.getByLabel('Scrivi una parola o una frase').fill('Gli Egiziani');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.getByRole('button', { name: 'Il Nilo', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Più facile', exact: true })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Il Nilo', exact: true })).toBeVisible();
+  await page.screenshot({ path: `test-results/study-focus-${testInfo.project.name}.png` });
+  await page.getByRole('button', { name: 'Il Nilo', exact: true }).click();
+  const map = page.getByRole('img', { name: 'Cartina: Il Nilo', exact: true });
+  await expect(map).toBeVisible();
+  await expect(page.getByText('La risposta non è arrivata. Puoi riprovare.')).toHaveCount(0);
+  expect(api.chats[0].subject).toBe('history');
+  expect(api.dictionary).toHaveLength(0);
+  await map.locator('.map-pin').click();
+  await expect(page.getByText('L’acqua del fiume aiutava a coltivare i campi.')).toBeVisible();
+  await captureStudyVisual(page, `test-results/study-nile-${testInfo.project.name}.png`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Più facile', exact: true }).click();
+  expect(api.messages.get(api.chats[0].id)!.at(-2)!.text).toContain('Il punto selezionato è «Il Nilo»');
+  await expect(map).toHaveCount(1);
+  await page.reload();
+  await expect(map).toBeVisible();
+});
+
+test('study asks which angles and allows a first discovery without another clarification', async ({ page }, testInfo) => {
+  const api = await mockAPI(page);
+  await page.goto('/spazi/test');
+  await page.getByRole('button', { name: 'Geometria', exact: true }).click();
+  await page.getByLabel('Scrivi una parola o una frase').fill('I tipi di angoli');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.getByText('Hai già i nomi degli angoli che stai studiando?')).toBeVisible();
+  await expect(page.locator('.geometry-drawing')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Una prima scoperta', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'Angolo retto: 90 gradi, angolo retto' })).toBeVisible();
+  await page.getByRole('img', { name: 'Angolo retto: 90 gradi, angolo retto' }).click();
+  await expect(page.getByText('Prova a guardare un angolo del tuo quaderno.')).toBeVisible();
+  await captureStudyVisual(page, `test-results/study-angle-${testInfo.project.name}.png`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Fammi un esempio', exact: true }).click();
+  expect(api.messages.get(api.chats[0].id)!.at(-2)!.text).toContain('Il punto selezionato è «Angolo retto»');
+  await expect(page.locator('.geometry-drawing')).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByRole('img', { name: 'Angolo retto: 90 gradi, angolo retto' })).toBeVisible();
+});
+
+test('study accepts not knowing and keeps the input available for a free example', async ({ page }) => {
+  const api = await mockAPI(page);
+  await page.goto('/spazi/test');
+  await page.getByRole('button', { name: 'Storia', exact: true }).click();
+  await page.getByLabel('Scrivi una parola o una frase').fill('Gli Egiziani');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.getByLabel('Scrivi una parola o una frase')).toHaveAttribute('placeholder', 'Scrivi o racconta un esempio…');
+  await page.getByRole('button', { name: 'Non lo so', exact: true }).click();
+  await expect(page.getByText('Gli Egiziani vivevano vicino al Nilo. Partiamo da questa piccola scoperta.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Non lo so', exact: true })).toHaveCount(0);
+  expect(api.messages.get(api.chats[0].id)!.at(-2)!.text).toContain('Non lo so. Aiutami');
+});
+
+test('study displays an explorable science cycle with readable labels', async ({ page }, testInfo) => {
+  await mockAPI(page);
+  await page.goto('/spazi/test');
+  await page.getByRole('button', { name: 'Scienze', exact: true }).click();
+  await page.getByLabel('Scrivi una parola o una frase').fill('Come funziona il ciclo dell’acqua?');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.getByRole('group', { name: 'Schema: Il ciclo dell’acqua' })).toBeVisible();
+  await page.locator('.diagram-drawing').getByText('Le nuvole', { exact: true }).click();
+  await expect(page.getByText('Si formano piccole gocce.')).toBeVisible();
+  await page.getByRole('button', { name: 'La pioggia', exact: true }).click();
+  await expect(page.getByText('Le gocce cadono sulla terra.')).toBeVisible();
+  await captureStudyVisual(page, `test-results/study-water-cycle-${testInfo.project.name}.png`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('study supports Cretesi maps and the island of Crete', async ({ page }, testInfo) => {
+  await mockAPI(page);
+  await page.goto('/spazi/test');
+  await page.getByRole('button', { name: 'Storia', exact: true }).click();
+  await page.getByLabel('Scrivi una parola o una frase').fill('I Cretesi');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await page.getByRole('button', { name: 'La loro vita', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Mappa dell’argomento' })).toBeVisible();
+  await page.getByRole('button', { name: 'Dove vivevano', exact: true }).click();
+  await expect(page.getByText('Vivevano sull’isola di Creta.')).toBeVisible();
+  await page.getByLabel('Scrivi una parola o una frase').fill('Dove vivevano i Cretesi');
+  await page.getByRole('button', { name: 'Scopriamo!' }).click();
+  await expect(page.getByRole('img', { name: 'Cartina: Creta' })).toBeVisible();
+  await captureStudyVisual(page, `test-results/study-crete-${testInfo.project.name}.png`);
+});
+
+test('study previews and saves separate coach instructions for each new subject', async ({ page }) => {
+  const api = await mockAPI(page);
+  await page.goto('/spazi/test/coach');
+  await page.getByRole('tab', { name: 'Come insegna' }).click();
+  for (const [subject, label] of [['history', 'Storia'], ['geography', 'Geografia'], ['science', 'Scienze'], ['geometry', 'Geometria']]) {
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.studySettings[subject].prompt);
+  }
+  await page.getByLabel('Istruzioni per Lumi').fill('Usa figure grandi e poche parole.');
+  await page.getByRole('button', { name: 'Salva istruzioni', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Istruzioni salvate.');
+  expect(api.studySettings.geometry.prompt).toBe('Usa figure grandi e poche parole.');
+  expect(api.settings.prompt).toBe('Spiega una parola alla volta.');
+  await page.getByLabel('Domanda di prova').fill('Spiegami l’angolo retto');
+  await page.getByRole('button', { name: 'Prova le istruzioni', exact: true }).click();
+  await expect(page.locator('.preview-result .geometry-drawing')).toBeVisible();
+  expect(api.chats).toHaveLength(0);
+  expect(api.dictionary).toHaveLength(0);
+});
+
+for (const [width, height] of [[320, 640], [390, 760], [430, 880]]) {
+  test(`study mobile makes drawings and their selected explanation usable at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    const api = await mockAPI(page);
+    const date = new Date().toISOString();
+    const figures: LearningVisual = { kind: 'geometry', title: 'Confrontiamo gli angoli', summary: 'Guarda quanto si aprono.', figures: [
+      { shape: 'angle', degrees: 45, label: 'Angolo acuto', explanation: 'Si apre meno di un angolo retto.' },
+      { shape: 'angle', degrees: 90, label: 'Angolo retto', explanation: 'Come un angolo del quaderno.' },
+      { shape: 'angle', degrees: 130, label: 'Angolo ottuso', explanation: 'Si apre più di un angolo retto.' },
+    ] };
+    api.chats.push({ id: 'mobile-angles', subject: 'geometry', title: 'Confrontiamo gli angoli', createdAt: date, updatedAt: date });
+    api.messages.set('mobile-angles', [{ id: 'mobile-angles-answer', conversationId: 'mobile-angles', role: 'assistant', status: 'completed', text: '', createdAt: date, learningVisual: figures }]);
+    await page.goto('/spazi/test/domande/mobile-angles');
+    await expect(page.locator('.visual-heading h3')).toBeInViewport({ ratio: 1 });
+    await expect(page.locator('.geometry-drawing')).toHaveCount(1);
+    await expect(page.locator('.geometry-drawing')).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: `test-results/study-mobile-angles-initial-${width}-${testInfo.project.name}.png` });
+    await expect(page.getByRole('button', { name: 'Angolo acuto', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Fammi un esempio', exact: true }).click();
+    await expect(page.getByText('Restiamo sul punto che hai scelto e guardiamo un esempio semplice.')).toBeVisible();
+    expect(api.messages.get('mobile-angles')!.at(-2)!.text).toContain('Il punto selezionato è «Angolo acuto»');
+    await page.getByRole('button', { name: 'Angolo ottuso', exact: true }).click();
+    await expect(page.locator('.visual-explanation')).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole('img', { name: 'Angolo ottuso: 130 gradi, angolo ottuso' })).toBeVisible();
+    await page.getByRole('button', { name: 'Angolo retto', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Angolo retto', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.visual-explanation')).toContainText('Come un angolo del quaderno.');
+    expect(await page.locator('.visual-read').evaluate(button => button.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/study-mobile-angles-${width}-${testInfo.project.name}.png` });
+
+    const cycle: LearningVisual = { kind: 'diagram', title: 'Il viaggio dell’acqua', summary: 'Segui le frecce: il viaggio ricomincia.', layout: 'cycle', nodes: [
+      { id: 'a', label: 'Il Sole scalda l’acqua', explanation: 'Il Sole riscalda l’acqua del mare.', symbol: 'sun' },
+      { id: 'b', label: 'L’acqua sale come vapore', explanation: 'Piccole parti d’acqua salgono nell’aria.', symbol: 'sea' },
+      { id: 'c', label: 'Si formano le nuvole', explanation: 'Il vapore si trasforma in goccioline.', symbol: 'cloud' },
+      { id: 'd', label: 'La pioggia scende', explanation: 'Le gocce tornano sulla terra.', symbol: 'rain' },
+      { id: 'e', label: 'L’acqua entra nei fiumi', explanation: 'L’acqua si raccoglie e scorre nei fiumi.', symbol: 'river' },
+      { id: 'f', label: 'L’acqua torna al mare', explanation: 'Dal mare il viaggio dell’acqua può ricominciare.', symbol: 'sea' },
+    ], edges: [['a', 'b'], ['b', 'c'], ['c', 'd'], ['d', 'e'], ['e', 'f'], ['f', 'a']].map(([from, to]) => ({ from, to })) };
+    api.chats.push({ id: 'mobile-cycle', subject: 'science', title: 'Il viaggio dell’acqua', createdAt: date, updatedAt: date });
+    api.messages.set('mobile-cycle', [{ id: 'mobile-cycle-answer', conversationId: 'mobile-cycle', role: 'assistant', status: 'completed', text: '', createdAt: date, learningVisual: cycle }]);
+    await page.goto('/spazi/test/domande/mobile-cycle');
+    await expect(page.locator('.visual-heading h3')).toBeInViewport({ ratio: 1 });
+    const board = page.getByRole('group', { name: 'Schema: Il viaggio dell’acqua' });
+    await expect(board.getByRole('button')).toHaveCount(6);
+    await expect(board.locator('.diagram-connections > path')).toHaveCount(6);
+    const buttons = await board.getByRole('button').evaluateAll(elements => elements.map(element => { const box = element.getBoundingClientRect(); return { width: box.width, height: box.height, fits: element.scrollWidth <= element.clientWidth + 1 }; }));
+    for (const button of buttons) { expect(button.width).toBeGreaterThanOrEqual(44); expect(button.height).toBeGreaterThanOrEqual(44); expect(button.fits).toBe(true); }
+    expect(await board.locator('.diagram-connections > path').evaluateAll(paths => paths.every(path => !/NaN|Infinity/.test(path.getAttribute('d') ?? '')))).toBe(true);
+    await board.getByRole('button', { name: 'L’acqua torna al mare', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.visual-explanation')).toBeInViewport({ ratio: 1 });
+    await expect(page.locator('.visual-explanation')).toContainText('Dal mare il viaggio dell’acqua può ricominciare.');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await captureStudyVisual(page, `test-results/study-mobile-cycle-${width}-${testInfo.project.name}.png`);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await board.getByRole('button', { name: 'Si formano le nuvole', exact: true }).click();
+    await expect(board.getByRole('button', { name: 'Si formano le nuvole', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+}

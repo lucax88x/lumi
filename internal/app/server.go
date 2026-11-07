@@ -232,7 +232,7 @@ func (s *Server) CreateConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	subject, ok := normalizeSubject(subject)
 	if !ok {
-		problem(w, 400, "invalid_subject", "Scegli Italiano o Inglese.")
+		problem(w, 400, "invalid_subject", "Scegli una delle materie disponibili.")
 		return
 	}
 	v, err := s.store.CreateSubject(b.Id, b.Title, subject)

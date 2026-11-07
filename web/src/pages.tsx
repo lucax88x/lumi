@@ -1,3 +1,6 @@
+import { ArrowRight } from 'lucide-react';
+import { StudyClarification } from './StudyClarification';
+import { LearningVisual } from './LearningVisual';
 import { SubjectPicker, subjectLabel, subjects } from './subjects';
 import { familyID, familyPath, useAccount, useSession } from './portal-state';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -171,6 +174,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
   const detail = useQuery({ ...getConversationOptions({ path: { familyId: familyId, conversationId: id ?? '' } }), enabled: Boolean(id), refetchInterval: query => query.state.data?.messages.some(m => m.status === 'streaming') ? 2000 : false });
   const [selectedSubject, setSelectedSubject] = useState<Subject>('italian');
   const subject = detail.data?.conversation.subject ?? selectedSubject;
+  const isStudy = ['history', 'geography', 'science', 'geometry'].includes(subject);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -179,18 +183,19 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
   const [live, setLive] = useState<Message | null>(null);
   const [pendingUser, setPendingUser] = useState<Message | null>(null);
   const [queued, setQueued] = useState<string | null>(null);
-  const [mapFocus, setMapFocus] = useState<{ kind: 'sentence' | 'topic'; context: string } | null>(null);
+  const [mapFocus, setMapFocus] = useState<{ kind: 'sentence' | 'topic' | 'visual'; context: string } | null>(null);
   const controller = useRef<AbortController | null>(null);
   const locked = useRef(false);
   const readingArea = useRef<HTMLDivElement>(null);
   const followAnswer = useRef(true);
+  const revealedStudy = useRef<string | null>(null);
   const [showLatest, setShowLatest] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const speech = useSpeech(status.speechRate);
   const speechRef = useRef(speech); speechRef.current = speech;
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort(); speechRef.current.stop(); }; }, []);
-  useEffect(() => { speechRef.current.stop(); }, [id]);
+  useEffect(() => { speechRef.current.stop(); revealedStudy.current = null; }, [id]);
   // Only the plain question is handed across the route transition; it stays in memory.
   useEffect(() => {
     if (!id) return;
@@ -200,11 +205,37 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
   useEffect(() => { if (queued && id && detail.data) { const text = queued; setQueued(null); void submit('message', text); } }, [queued, id, detail.data]);
   useEffect(() => {
     const area = readingArea.current;
-    if (area && followAnswer.current) area.scrollTop = area.scrollHeight;
-  }, [detail.dataUpdatedAt, pendingUser?.id, live?.text, live?.status, live?.images, live?.sentenceMap, live?.topicMap, live?.wordExplanation, live?.wordClarification, busy]);
+    if (!area) return;
+    const latest = live ?? detail.data?.messages.at(-1);
+    if (isStudy && latest?.role === 'assistant' && (latest.learningVisual || latest.topicMap || latest.studyClarification) && revealedStudy.current !== latest.id) {
+      const article = [...area.querySelectorAll<HTMLElement>('[data-message-id]')].find(element => element.dataset.messageId === latest.id);
+      if (article) {
+        revealedStudy.current = latest.id;
+        followAnswer.current = false;
+        area.scrollTop += article.getBoundingClientRect().top - area.getBoundingClientRect().top - 8;
+        setShowLatest(false);
+        return;
+      }
+    }
+    if (followAnswer.current) area.scrollTop = area.scrollHeight;
+  }, [detail.dataUpdatedAt, pendingUser?.id, live?.text, live?.status, live?.images, live?.sentenceMap, live?.topicMap, live?.wordExplanation, live?.wordClarification, live?.studyClarification, live?.learningVisual, busy]);
+
+  function updateReadingPosition(area: HTMLDivElement) {
+    const nearBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 100;
+    followAnswer.current = nearBottom;
+    const viewport = area.getBoundingClientRect();
+    const readingStudy = isStudy && [...area.querySelectorAll<HTMLElement>('.learning-visual, .topic-map, .study-clarification')].some(lesson => {
+      const bounds = lesson.getBoundingClientRect();
+      return bounds.bottom > viewport.top && bounds.top < viewport.bottom;
+    });
+    setShowLatest(!nearBottom && !readingStudy);
+  }
 
   async function submit(action: SendMessage['action'] = 'message', override?: string) {
-    const focusedText = action !== 'message' && mapFocus ? `${mapFocus.kind === 'topic' ? (action === 'simplify' ? 'Puoi spiegarmi questo punto della mappa con parole più facili?' : action === 'example' ? 'Mi fai un esempio di questo punto della mappa?' : actionText[action]) : actionText[action]} ${mapFocus.context}` : null;
+    const currentVisual = (live ?? detail.data?.messages.at(-1))?.learningVisual;
+    const firstPoint = currentVisual?.kind === 'geometry' ? currentVisual.figures[0] : currentVisual?.kind === 'diagram' ? currentVisual.nodes[0] : currentVisual?.features[0];
+    const focus = mapFocus ?? (currentVisual && firstPoint ? { kind: 'visual', context: `Il punto selezionato è «${firstPoint.label}», nella visuale «${currentVisual.title}».` } : null);
+    const focusedText = action !== 'message' && focus ? `${focus.kind !== 'sentence' ? (action === 'simplify' ? 'Puoi spiegarmi questo punto con parole più facili?' : action === 'example' ? 'Mi fai un esempio di questo punto?' : actionText[action]) : actionText[action]} ${focus.context}` : null;
     const requestAction = focusedText ? 'message' : action;
     const text = focusedText ?? override ?? draft.trim();
     if (locked.current || recording || (id && !detail.data) || (!text && action === 'message')) return;
@@ -251,24 +282,27 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
   const latestMessage = messages.at(-1);
   const clarificationMessage = latestMessage?.role === 'assistant' && latestMessage.status === 'completed' && latestMessage.wordClarification ? latestMessage : undefined;
   const clarification = clarificationMessage?.wordClarification;
+  const studyClarificationMessage = latestMessage?.role === 'assistant' && latestMessage.status === 'completed' && latestMessage.studyClarification ? latestMessage : undefined;
+  const studyClarification = studyClarificationMessage?.studyClarification;
   const externallyBusy = detail.data?.messages.some(m => m.status === 'streaming') ?? false;
   const mood: Mood = recording ? 'listening' : busy ? 'thinking' : speech.speaking ? 'speaking' : 'idle';
   const canSend = !busy && !recording && !externallyBusy && (!id || Boolean(detail.data)) && navigator.onLine;
-  return <div className={`child-page ${id ? 'conversation-page' : 'home-page'}`}>
+  return <div className={`child-page ${id ? 'conversation-page' : 'home-page'} ${id && isStudy ? 'study-conversation' : ''}`}>
     {!id ? <>
-      <section className="welcome"><div className="welcome-art"><Avatar mood={mood}/></div><div className="welcome-copy"><p>Ciao, sono Lumi!</p><h1>Una parola difficile?<br/>Scopriamola insieme.</h1><p>Puoi scrivere o parlare. Ti aiuto un pezzetto alla volta.</p></div></section>
+      <section className="welcome"><div className="welcome-art"><Avatar mood={mood}/></div><div className="welcome-copy"><p>Ciao, sono Lumi!</p><h1>Che cosa vuoi capire?<br/>Scopriamolo insieme.</h1><p>Puoi scrivere o parlare. Ti aiuto un pezzetto alla volta.</p></div></section>
     </> : <>
       <header className="chat-title"><Avatar mood={mood}/><div><h1 title={detail.data?.conversation.title}>{detail.data?.conversation.title ?? 'La tua domanda'}</h1><p className="chat-subject">{subjectLabel(subject)} con Lumi</p></div><Link to="/spazi/$familyId" params={{ familyId }} className="new-question" aria-label="Fai una nuova domanda"><Plus size={20}/><span>Nuova domanda</span></Link></header>
       <div className="chat-reading-area">
-      <div ref={readingArea} className="chat-scroll" tabIndex={0} role="region" aria-label="Leggi la conversazione" onScroll={e => { const area = e.currentTarget; const nearBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 100; followAnswer.current = nearBottom; setShowLatest(!nearBottom); }}>
+      <div ref={readingArea} className="chat-scroll" tabIndex={0} role="region" aria-label="Leggi la conversazione" onScroll={event => updateReadingPosition(event.currentTarget)}>
       {detail.isPending && <LoadingSkeleton label="Caricamento della conversazione" variant="messages" rows={2}/>}
       {detail.isError && <p role="alert" className="notice error-notice">{errorMessage(detail.error)} <button className="text-button" onClick={() => void detail.refetch()}>Riprova</button></p>}
       <div className="messages" role="log" aria-label="Conversazione con Lumi" aria-live="off">
-        {messages.map(m => <article key={m.id} className={`message ${m.role}`}><div className="message-label">{m.role === 'user' ? <><span className="you-dot"/>La tua domanda</> : <><Sparkles size={15}/>Lumi</>}</div><p>{m.text || ((m.wordExplanation || m.wordClarification) ? '' : m.status === 'streaming' ? 'Accendo una piccola idea…' : (m.images?.length || m.sentenceMap || m.topicMap) ? '' : 'La risposta non è arrivata. Puoi riprovare.')}</p><SentenceMap map={m.sentenceMap} onSelect={index => { speech.stop(); setMapFocus(index !== null && m.sentenceMap ? { kind: 'sentence', context: `Il pezzetto è «${m.sentenceMap.parts[index].text}», nella frase «${m.sentenceMap.sentence}».` } : null); }} readingPart={speech.activeMessageId?.startsWith(`${m.id}:part:`) ? Number(speech.activeMessageId.split(':').at(-1)) : undefined} onRead={m.status === 'completed' ? (text, index) => speech.activeMessageId === `${m.id}:part:${index}` ? speech.stop() : speech.speak(text, `${m.id}:part:${index}`) : undefined}/><TopicMap map={m.topicMap} onSelect={point => { speech.stop(); setMapFocus(point && m.topicMap ? { kind: 'topic', context: `Il punto è «${point.label}», nel ramo «${point.branch}» della mappa «${m.topicMap.title}».` } : null); }} readingNode={speech.activeMessageId?.startsWith(`${m.id}:topic:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, node) => speech.activeMessageId === `${m.id}:topic:${node}` ? speech.stop() : speech.speak(text, `${m.id}:topic:${node}`) : undefined}/><WordExplanation explanation={m.wordExplanation} readingPart={speech.activeMessageId?.startsWith(`${m.id}:word:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, part) => speech.activeMessageId === `${m.id}:word:${part}` ? speech.stop() : speech.speak(text, `${m.id}:word:${part}`) : undefined}/><WordClarification clarification={m.wordClarification} disabled={!canSend} onChoose={m.id === clarificationMessage?.id && clarification ? sentence => void submit('message', `Per «${clarification.word}», intendo questo esempio: «${sentence}»`) : undefined}/><WordImages images={m.images}/>{m.role === 'assistant' && <div className="message-tools">{m.status === 'completed' && <button className="listen-button" onClick={() => speech.activeMessageId === m.id ? speech.stop() : speech.speak(messageSpeechParts(m), m.id)}>{speech.activeMessageId === m.id ? <><Square size={16}/>Ferma la voce</> : <><Volume2 size={16}/>Riascolta</>}</button>}{m.status === 'interrupted' && <span className="partial-label">La risposta si è interrotta</span>}{m.status === 'streaming' && <span className="thinking-dots" aria-label="Lumi sta pensando"><i/><i/><i/></span>}</div>}</article>)}
+        {messages.map(m => <article key={m.id} data-message-id={m.id} className={`message ${m.role}`}><div className="message-label">{m.role === 'user' ? <><span className="you-dot"/>La tua domanda</> : <><Sparkles size={15}/>Lumi</>}</div><p>{m.text || ((m.wordExplanation || m.wordClarification || m.studyClarification || m.learningVisual) ? '' : m.status === 'streaming' ? 'Accendo una piccola idea…' : (m.images?.length || m.sentenceMap || m.topicMap) ? '' : 'La risposta non è arrivata. Puoi riprovare.')}</p><SentenceMap map={m.sentenceMap} onSelect={index => { speech.stop(); setMapFocus(index !== null && m.sentenceMap ? { kind: 'sentence', context: `Il pezzetto è «${m.sentenceMap.parts[index].text}», nella frase «${m.sentenceMap.sentence}».` } : null); }} readingPart={speech.activeMessageId?.startsWith(`${m.id}:part:`) ? Number(speech.activeMessageId.split(':').at(-1)) : undefined} onRead={m.status === 'completed' ? (text, index) => speech.activeMessageId === `${m.id}:part:${index}` ? speech.stop() : speech.speak(text, `${m.id}:part:${index}`) : undefined}/><TopicMap map={m.topicMap} onSelect={point => { speech.stop(); setMapFocus(point && m.topicMap ? { kind: 'topic', context: `Il punto è «${point.label}», nel ramo «${point.branch}» della mappa «${m.topicMap.title}».` } : null); }} readingNode={speech.activeMessageId?.startsWith(`${m.id}:topic:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, node) => speech.activeMessageId === `${m.id}:topic:${node}` ? speech.stop() : speech.speak(text, `${m.id}:topic:${node}`) : undefined}/><WordExplanation explanation={m.wordExplanation} readingPart={speech.activeMessageId?.startsWith(`${m.id}:word:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, part) => speech.activeMessageId === `${m.id}:word:${part}` ? speech.stop() : speech.speak(text, `${m.id}:word:${part}`) : undefined}/><WordClarification clarification={m.wordClarification} disabled={!canSend} onChoose={m.id === clarificationMessage?.id && clarification ? sentence => void submit('message', `Per «${clarification.word}», intendo questo esempio: «${sentence}»`) : undefined}/><StudyClarification clarification={m.studyClarification} disabled={!canSend} onChoose={m.id === studyClarificationMessage?.id && studyClarification ? reply => void submit('message', `Per «${studyClarification.topic}»: ${reply}`) : undefined}/><LearningVisual visual={m.learningVisual} onSelect={label => { speech.stop(); setMapFocus(label && m.learningVisual ? { kind: 'visual', context: `Il punto selezionato è «${label}», nella visuale «${m.learningVisual.title}».` } : null); }} readingNode={speech.activeMessageId?.startsWith(`${m.id}:visual:`) ? speech.activeMessageId.split(':').at(-1) : undefined} onRead={m.status === 'completed' ? (text, node) => speech.activeMessageId === `${m.id}:visual:${node}` ? speech.stop() : speech.speak(text, `${m.id}:visual:${node}`) : undefined}/><WordImages images={m.images}/>{m.role === 'assistant' && <div className="message-tools">{m.status === 'completed' && <button className="listen-button" onClick={() => speech.activeMessageId === m.id ? speech.stop() : speech.speak(messageSpeechParts(m), m.id)}>{speech.activeMessageId === m.id ? <><Square size={16}/>Ferma la voce</> : <><Volume2 size={16}/>Riascolta</>}</button>}{m.status === 'interrupted' && <span className="partial-label">La risposta si è interrotta</span>}{m.status === 'streaming' && <span className="thinking-dots" aria-label="Lumi sta pensando"><i/><i/><i/></span>}</div>}</article>)}
       </div>
-      {lastAnswer && !clarification && !busy && <div className="followups">
+      {lastAnswer && !clarification && !studyClarification && !busy && <div className="followups">
         <button className="soft-button" disabled={!canSend} onClick={() => void submit('simplify')}><Flower2 size={17}/>Più facile</button>
         <button className="soft-button" disabled={!canSend} onClick={() => void submit('example')}><Sparkles size={17}/>Fammi un esempio</button>
+        {(mapFocus || ['history', 'geography', 'science', 'geometry'].includes(subject)) && <button className="soft-button" disabled={!canSend} onClick={() => void submit('next')}>Continua<ArrowRight size={17}/></button>}
       </div>}
       </div>
       {showLatest && <button className="latest-answer" onClick={() => { const area = readingArea.current; followAnswer.current = true; setShowLatest(false); area?.scrollTo({ top: area.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}><ArrowDown size={18}/>Ultima risposta</button>}
@@ -276,11 +310,11 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
     </>}
     {speech.blocked && <p className="notice">La voce ha bisogno di un tocco, oppure di una voce {speech.missingLanguage === 'en' ? 'inglese' : 'italiana'} installata sul dispositivo. {lastAnswer && <button className="text-button" onClick={() => speech.speak(messageSpeechParts(lastAnswer), lastAnswer.id)}>Tocca per ascoltare</button>}</p>}
     <section className="question-card" aria-label="Fai una domanda">
-      <div className="question-heading"><h2>{clarification ? `La frase con «${clarification.word}»` : id ? 'Continuiamo?' : 'Che cosa scopriamo oggi?'}</h2>{id && <span className="composer-hint">Scrivi o parla con Lumi</span>}</div>
+      <div className="question-heading"><h2>{studyClarification ? 'Che cosa vuoi scoprire?' : clarification ? `La frase con «${clarification.word}»` : id ? 'Continuiamo?' : 'Che cosa scopriamo oggi?'}</h2>{id && <span className="composer-hint">Scrivi o parla con Lumi</span>}</div>
       {!id && <><SubjectPicker value={selectedSubject} disabled={busy || recording} onChange={value => { speech.stop(); setSelectedSubject(value); }}/><p className="subject-intro">{subjects.find(item => item.id === subject)?.hint}</p></>}
       <form onSubmit={e => { e.preventDefault(); void submit(); }}>
         <label htmlFor="question" className="sr-only">Scrivi una parola o una frase</label>
-        <textarea id="question" ref={textarea} value={draft} onChange={e => { setDraft(e.target.value); setTranscribed(false); }} placeholder={clarification ? clarification.examples.length ? 'Scrivi quello che intendi…' : `Scrivi la frase con «${clarification.word}»…` : id ? 'Scrivi un’altra domanda…' : subject === 'english' ? 'Per esempio: come si dice «cane»?' : 'Per esempio: cosa vuol dire «meraviglia»?'} rows={id ? 1 : 2} maxLength={4000} disabled={busy || recording} aria-describedby={transcribed ? 'transcript-review' : undefined}/>
+        <textarea id="question" ref={textarea} value={draft} onChange={e => { setDraft(e.target.value); setTranscribed(false); }} placeholder={studyClarification ? 'Scrivi o racconta un esempio…' : clarification ? clarification.examples.length ? 'Scrivi quello che intendi…' : `Scrivi la frase con «${clarification.word}»…` : id ? 'Scrivi un’altra domanda…' : subjects.find(item => item.id === subject)?.example} rows={id ? 1 : 2} maxLength={4000} disabled={busy || recording} aria-describedby={transcribed ? 'transcript-review' : undefined}/>
         {transcribed && <p id="transcript-review" className="transcript-note" role="status">Ho scritto quello che hai detto. Puoi correggerlo, poi tocca «Scopriamo!».</p>}
         <div className="composer-bottom"><Recorder key={subject} subject={subject} disabled={busy || externallyBusy || (Boolean(id) && !detail.data)} onStart={speech.stop} onState={setRecording} onText={text => { setDraft(text); setTranscribed(true); textarea.current?.focus(); }}/><button type="submit" className="primary-button send-button" disabled={!canSend || !draft.trim()}>{busy || externallyBusy ? 'Lumi pensa…' : 'Scopriamo!'}<Send size={19}/></button></div>
       </form>

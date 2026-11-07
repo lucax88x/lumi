@@ -39,7 +39,7 @@ export async function readStream(path: string, body: unknown, onEvent: (event: S
         const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
         if (!data) continue;
         const event = JSON.parse(data) as StreamEvent;
-        if (!['started', 'delta', 'images', 'sentence_map', 'topic_map', 'word_explanation', 'word_clarification', 'completed', 'failed'].includes(event.type)) throw new Error('Evento del server non valido.');
+        if (!['started', 'delta', 'images', 'sentence_map', 'topic_map', 'word_explanation', 'word_clarification', 'study_clarification', 'learning_visual', 'completed', 'failed'].includes(event.type)) throw new Error('Evento del server non valido.');
         onEvent(event);
         if (event.type === 'completed' || event.type === 'failed') terminal = true;
       }
@@ -55,6 +55,9 @@ export function shortDate(value: string) {
 }
 
 export function messageSpeechText(message: Message): string {
+  if (message.studyClarification) return [message.text, message.studyClarification.question, ...message.studyClarification.choices.map(choice => choice.label), 'Puoi anche dire: non lo so.'].filter(Boolean).join('\n');
+  if (message.learningVisual) return [message.text, message.learningVisual.title, message.learningVisual.summary, 'Tocca un punto per scoprirlo.'].filter(Boolean).join('\n');
+  if (message.topicMap && !message.text) return `${message.topicMap.title}. Tocca un ramo per scoprire una piccola idea.`;
   const clarification = message.wordClarification;
   if (clarification) return [message.text, clarification.question, ...clarification.examples.flatMap(example => [example.sentence, example.meaning])].filter(Boolean).join('\n');
   const word = message.wordExplanation;

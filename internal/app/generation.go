@@ -19,12 +19,14 @@ import (
 
 // GenerationEvent carries application-owned attachments separately from spoken text.
 type GenerationEvent struct {
-	Text              string
-	Images            []api.WordImage
-	SentenceMap       *api.SentenceMap
-	TopicMap          *api.TopicMap
-	WordExplanation   *api.WordExplanation
-	WordClarification *api.WordClarification
+	Text               string
+	Images             []api.WordImage
+	SentenceMap        *api.SentenceMap
+	TopicMap           *api.TopicMap
+	WordExplanation    *api.WordExplanation
+	WordClarification  *api.WordClarification
+	StudyClarification *api.StudyClarification
+	LearningVisual     *api.LearningVisual
 }
 
 type Generator interface {
@@ -51,6 +53,16 @@ func subjectTools(used map[string]bool, subject api.Subject) responses.ToolUnion
 	if used["show_images"] {
 		tool.OfNamespace.Tools = nil
 	}
+	if studySubject(subject) {
+		if !contentToolUsed(used) {
+			tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, topicMapTool())
+			tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, studyTools()...)
+			if !used["find_map_features:2"] {
+				tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, mapSearchTool())
+			}
+		}
+		return tool
+	}
 	if !contentToolUsed(used) {
 		tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, profileTool(sentenceMapTool(), subject), profileTool(topicMapTool(), subject), profileTool(wordExplanationTool(), subject), wordClarificationTool())
 	}
@@ -58,7 +70,7 @@ func subjectTools(used map[string]bool, subject api.Subject) responses.ToolUnion
 }
 
 func contentToolUsed(used map[string]bool) bool {
-	return used["show_sentence_map"] || used["show_topic_map"] || used["show_word_explanation"] || used["ask_word_context"]
+	return used["ask_study_focus"] || used["show_learning_visual"] || used["show_sentence_map"] || used["show_topic_map"] || used["show_word_explanation"] || used["ask_word_context"]
 }
 
 func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, history []api.Message, emit func(GenerationEvent) error) error {
@@ -68,7 +80,7 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 	}
 	input := responses.ResponseInputParam{}
 	for _, m := range history {
-		if m.Status != "completed" || (m.Text == "" && m.SentenceMap == nil && m.TopicMap == nil && m.WordExplanation == nil && m.WordClarification == nil && m.Images == nil) {
+		if m.Status != "completed" || (m.Text == "" && m.SentenceMap == nil && m.TopicMap == nil && m.WordExplanation == nil && m.WordClarification == nil && m.StudyClarification == nil && m.LearningVisual == nil && m.Images == nil) {
 			continue
 		}
 		text := m.Text
@@ -107,6 +119,22 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 			}
 			text += "\n[Chiarimento della parola richiesto, dati: " + string(encoded) + "]"
 		}
+		for _, attachment := range []struct {
+			label   string
+			data    any
+			present bool
+		}{
+			{"Argomento da chiarire", m.StudyClarification, m.StudyClarification != nil},
+			{"Visuale didattica già mostrata", m.LearningVisual, m.LearningVisual != nil},
+		} {
+			if attachment.present {
+				encoded, err := json.Marshal(attachment.data)
+				if err != nil {
+					return err
+				}
+				text += "\n[" + attachment.label + ", dati: " + string(encoded) + "]"
+			}
+		}
 		item := responses.ResponseInputItemParamOfMessage(text, responses.EasyInputMessageRole(m.Role))
 		if m.Role == "assistant" {
 			item.OfMessage.Phase = responses.EasyInputMessagePhaseFinalAnswer
@@ -119,7 +147,11 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 	if subject == api.English {
 		instructions = settings.Prompt + "\n\n" + imageInstructions + "\n\n" + assistantProfiles[subject].instructions
 	}
-	instructions += "\n\n" + wordClarificationInstructions
+	if studySubject(subject) {
+		instructions = settings.Prompt + "\n\n" + imageInstructions + "\n\n" + assistantProfiles[subject].instructions
+	} else {
+		instructions += "\n\n" + wordClarificationInstructions
+	}
 	params := responses.ResponseNewParams{
 		Model: settings.Model, Instructions: openai.String(instructions),
 		Input: responses.ResponseNewParamsInputUnion{OfInputItemList: input}, Store: openai.Bool(false),
@@ -127,9 +159,15 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 		Include: []responses.ResponseIncludable{responses.ResponseIncludableReasoningEncryptedContent},
 	}
 	chars := 0
-	hasWordContent := false
-	// At most one image search and one content card, followed by a final response.
-	for round := 0; round < 3; round++ {
+	hasContent := false
+	foundPlaces := map[string]bool{}
+	searches := 0
+	maxRounds := 3
+	if studySubject(subject) {
+		maxRounds = 4
+	}
+	// Geographic lookup is preparatory; at most one main content attachment.
+	for round := 0; round < maxRounds; round++ {
 		if round > 0 && chars > 0 {
 			if err := emit(GenerationEvent{Text: "\n\n"}); err != nil {
 				return err
@@ -163,49 +201,73 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 			input = append(input, next)
 		}
 		if len(calls) == 0 {
-			if chars == before && !hasWordContent {
+			if chars == before && !hasContent {
 				return errors.New("Non ho ricevuto una risposta completa. Riprova tra poco.")
 			}
 			return nil
 		}
-		if round == 2 {
+		if round == maxRounds-1 {
 			return errors.New("La risposta si è interrotta. Puoi riprovare.")
 		}
 		for _, call := range calls {
 			output := imageToolResult{Images: []api.WordImage{}}
 			switch {
-			case call.Namespace != "lumi" || (call.Name != "show_images" && call.Name != "show_sentence_map" && call.Name != "show_topic_map" && call.Name != "show_word_explanation" && call.Name != "ask_word_context"):
-				output.Error = "Strumento non disponibile."
+			case call.Namespace != "lumi" || !subjectToolAllowed(subject, call.Name):
+				output.Error = "Strumento non disponibile per questa materia."
+			case call.Name == "find_map_features":
+				if searches >= 2 || contentToolUsed(used) {
+					output.Error = "Le ricerche geografiche disponibili sono terminate. Continua con i luoghi già trovati o una spiegazione semplice."
+				} else {
+					searches++
+					output.MapFeatures, output.Error = findMapFeatures(call.Arguments)
+					for _, feature := range output.MapFeatures {
+						foundPlaces[feature.Id] = true
+					}
+					if searches == 2 {
+						used["find_map_features:2"] = true
+					}
+				}
 			case used[call.Name] || (call.Name != "show_images" && contentToolUsed(used)):
-				output.Error = "Sono disponibili una scheda, una mappa o un chiarimento e una ricerca di immagini per turno."
+				output.Error = "Sono disponibili un contenuto didattico o un chiarimento e una ricerca di immagini per turno."
 			default:
 				used[call.Name] = true
-				if call.Name == "show_images" {
+				switch call.Name {
+				case "show_images":
 					output = g.executeImageTool(ctx, call.Arguments)
-				} else if call.Name == "ask_word_context" {
+				case "ask_study_focus":
+					output.StudyClarification, output.Error = executeStudyFocus(call.Arguments)
+				case "show_learning_visual":
+					output.LearningVisual, output.Error = executeLearningVisual(call.Arguments, foundPlaces)
+				case "ask_word_context":
 					output.WordClarification, output.Error = executeWordClarificationTool(call.Arguments, history)
-				} else if call.Name == "show_word_explanation" {
+				case "show_word_explanation":
 					output.WordExplanation, output.Error = executeProfileWord(call.Arguments, history, subject)
-				} else if call.Name == "show_topic_map" {
+				case "show_topic_map":
 					output.TopicMap, output.Error = executeProfileTopicMap(call.Arguments, subject)
-				} else {
+				case "show_sentence_map":
 					output.SentenceMap, output.Error = executeProfileSentenceMap(call.Arguments, history, subject)
 				}
+			}
+			if output.Error != "" && (call.Name == "show_learning_visual" || call.Name == "ask_study_focus") {
+				delete(used, call.Name)
 			}
 			if err := ctx.Err(); err != nil {
 				return err
 			}
 			if len(output.Images) > 0 {
+				hasContent = true
 				if err := emit(GenerationEvent{Images: output.Images}); err != nil {
 					return err
 				}
 			}
 			if output.SentenceMap != nil {
+				hasContent = true
 				if err := emit(GenerationEvent{SentenceMap: output.SentenceMap}); err != nil {
 					return err
 				}
 			}
 			if output.TopicMap != nil {
+				hasContent = true
 				if err := emit(GenerationEvent{TopicMap: output.TopicMap}); err != nil {
 					return err
 				}
@@ -214,13 +276,25 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 				if err := emit(GenerationEvent{WordExplanation: output.WordExplanation}); err != nil {
 					return err
 				}
-				hasWordContent = true
+				hasContent = true
 			}
 			if output.WordClarification != nil {
 				if err := emit(GenerationEvent{WordClarification: output.WordClarification}); err != nil {
 					return err
 				}
-				hasWordContent = true
+				hasContent = true
+			}
+			if output.StudyClarification != nil {
+				if err := emit(GenerationEvent{StudyClarification: output.StudyClarification}); err != nil {
+					return err
+				}
+				hasContent = true
+			}
+			if output.LearningVisual != nil {
+				if err := emit(GenerationEvent{LearningVisual: output.LearningVisual}); err != nil {
+					return err
+				}
+				hasContent = true
 			}
 			encoded, err := json.Marshal(output)
 			if err != nil {
@@ -231,7 +305,7 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 			input = append(input, next)
 		}
 		params.Input.OfInputItemList = input
-		if round == 1 || (used["show_images"] && contentToolUsed(used)) {
+		if round == maxRounds-2 || (used["show_images"] && contentToolUsed(used)) || (studySubject(subject) && contentToolUsed(used)) {
 			params.ToolChoice.OfToolChoiceMode = openai.Opt(responses.ToolChoiceOptionsNone)
 		} else {
 			params.Tools = []responses.ToolUnionParam{subjectTools(used, subject)}
@@ -241,12 +315,15 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 }
 
 type imageToolResult struct {
-	Images            []api.WordImage        `json:"images"`
-	Error             string                 `json:"error,omitempty"`
-	SentenceMap       *api.SentenceMap       `json:"sentenceMap,omitempty"`
-	TopicMap          *api.TopicMap          `json:"topicMap,omitempty"`
-	WordExplanation   *api.WordExplanation   `json:"wordExplanation,omitempty"`
-	WordClarification *api.WordClarification `json:"wordClarification,omitempty"`
+	Images             []api.WordImage         `json:"images"`
+	Error              string                  `json:"error,omitempty"`
+	SentenceMap        *api.SentenceMap        `json:"sentenceMap,omitempty"`
+	TopicMap           *api.TopicMap           `json:"topicMap,omitempty"`
+	WordExplanation    *api.WordExplanation    `json:"wordExplanation,omitempty"`
+	WordClarification  *api.WordClarification  `json:"wordClarification,omitempty"`
+	StudyClarification *api.StudyClarification `json:"studyClarification,omitempty"`
+	LearningVisual     *api.LearningVisual     `json:"learningVisual,omitempty"`
+	MapFeatures        []mapSearchResult       `json:"mapFeatures,omitempty"`
 }
 
 func (g *OpenAIGenerator) executeImageTool(ctx context.Context, arguments string) imageToolResult {
@@ -436,7 +513,13 @@ loop:
 			if event.WordClarification != nil {
 				m.WordClarification = event.WordClarification
 			}
-			if persist && (event.WordClarification != nil || event.WordExplanation != nil || event.Images != nil || event.SentenceMap != nil || event.TopicMap != nil || time.Since(checkpoint) > time.Second) {
+			if event.StudyClarification != nil {
+				m.StudyClarification = event.StudyClarification
+			}
+			if event.LearningVisual != nil {
+				m.LearningVisual = event.LearningVisual
+			}
+			if persist && (event.StudyClarification != nil || event.LearningVisual != nil || event.WordClarification != nil || event.WordExplanation != nil || event.Images != nil || event.SentenceMap != nil || event.TopicMap != nil || time.Since(checkpoint) > time.Second) {
 				if err := s.store.Finish(m); err != nil {
 					failure = errors.New("Non riesco a salvare la risposta.")
 					break loop
@@ -458,6 +541,12 @@ loop:
 			}
 			if event.WordClarification != nil {
 				out = api.StreamEvent{Type: api.StreamEventTypeWordClarification, Message: &m}
+			}
+			if event.StudyClarification != nil {
+				out = api.StreamEvent{Type: api.StreamEventTypeStudyClarification, Message: &m}
+			}
+			if event.LearningVisual != nil {
+				out = api.StreamEvent{Type: api.StreamEventTypeLearningVisual, Message: &m}
 			}
 			if err := streamWrite(w, out); err != nil {
 				failure = err
@@ -481,7 +570,7 @@ loop:
 	cancel()
 	if failure == nil {
 		m.Status = "completed"
-	} else if m.Text != "" || m.WordClarification != nil || m.WordExplanation != nil || m.SentenceMap != nil || m.TopicMap != nil || (m.Images != nil && len(*m.Images) > 0) {
+	} else if m.Text != "" || m.StudyClarification != nil || m.LearningVisual != nil || m.WordClarification != nil || m.WordExplanation != nil || m.SentenceMap != nil || m.TopicMap != nil || (m.Images != nil && len(*m.Images) > 0) {
 		m.Status = "interrupted"
 	} else {
 		m.Status = "failed"
@@ -580,7 +669,7 @@ func (s *Server) PreviewPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 	subject, valid := normalizeSubject(subject)
 	if !valid {
-		problem(w, 400, "invalid_subject", "Scegli Italiano o Inglese.")
+		problem(w, 400, "invalid_subject", "Scegli una delle materie disponibili.")
 		return
 	}
 	if strings.TrimSpace(b.Text) == "" || len(b.Text) > 16000 || strings.TrimSpace(b.Prompt) == "" || len(b.Prompt) > 20000 || b.Model == "" {
@@ -607,4 +696,14 @@ func (s *Server) PreviewPrompt(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, subjectKey{}, subject)
 	m := api.Message{Id: randomID(), Role: "assistant", Status: "streaming", CreatedAt: time.Now().UTC()}
 	s.runStream(w, r, ctx, api.Settings{Model: b.Model, Prompt: b.Prompt}, []api.Message{{Role: "user", Text: b.Text, Status: "completed"}}, m, false)
+}
+
+func subjectToolAllowed(subject api.Subject, name string) bool {
+	if name == "show_images" || name == "show_topic_map" {
+		return true
+	}
+	if studySubject(subject) {
+		return name == "ask_study_focus" || name == "show_learning_visual" || name == "find_map_features"
+	}
+	return name == "ask_word_context" || name == "show_word_explanation" || name == "show_sentence_map"
 }

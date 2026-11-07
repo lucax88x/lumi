@@ -3575,6 +3575,12 @@
           },
           "wordClarification": {
             "$ref": "#/components/schemas/WordClarification"
+          },
+          "studyClarification": {
+            "$ref": "#/components/schemas/StudyClarification"
+          },
+          "learningVisual": {
+            "$ref": "#/components/schemas/LearningVisual"
           }
         },
         "required": [
@@ -3869,7 +3875,9 @@
               "word_explanation",
               "word_clarification",
               "completed",
-              "failed"
+              "failed",
+              "study_clarification",
+              "learning_visual"
             ]
           },
           "message": {
@@ -4334,7 +4342,19 @@
         "type": "string",
         "enum": [
           "italian",
-          "english"
+          "english",
+          "history",
+          "geography",
+          "science",
+          "geometry"
+        ],
+        "x-enum-varnames": [
+          "Italian",
+          "English",
+          "History",
+          "Geography",
+          "Science",
+          "Geometry"
         ]
       },
       "ReceivedInvitation": {
@@ -4494,6 +4514,358 @@
           "sentence",
           "meaning"
         ]
+      },
+      "StudyChoice": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "reply": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 180
+          }
+        },
+        "required": [
+          "label",
+          "reply"
+        ]
+      },
+      "StudyClarification": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudyChoice"
+            },
+            "minItems": 2,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "topic",
+          "question",
+          "choices"
+        ]
+      },
+      "GeometryFigure": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "shape": {
+            "type": "string",
+            "enum": [
+              "angle",
+              "line",
+              "ray",
+              "segment",
+              "triangle",
+              "square",
+              "rectangle",
+              "circle"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "degrees": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 360
+          },
+          "width": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "maximum": 360,
+            "minimum": 0
+          },
+          "height": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "maximum": 360,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "shape",
+          "label",
+          "explanation"
+        ]
+      },
+      "GeometryVisual": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "geometry"
+            ],
+            "x-enum-varnames": [
+              "GeometryVisualKindGeometry"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "figures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GeometryFigure"
+            },
+            "minItems": 1,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "summary",
+          "figures"
+        ]
+      },
+      "DiagramNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "symbol": {
+            "type": "string",
+            "enum": [
+              "sun",
+              "cloud",
+              "rain",
+              "mountain",
+              "river",
+              "sea",
+              "tree",
+              "plant",
+              "person",
+              "house",
+              "arrow",
+              "dot"
+            ]
+          },
+          "timeLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "explanation"
+        ]
+      },
+      "DiagramEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
+      "DiagramVisual": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "diagram"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "layout": {
+            "type": "string",
+            "enum": [
+              "sequence",
+              "cycle",
+              "timeline",
+              "scene"
+            ]
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagramNode"
+            },
+            "minItems": 2,
+            "maxItems": 6
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagramEdge"
+            },
+            "minItems": 0,
+            "maxItems": 8
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "summary",
+          "layout",
+          "nodes",
+          "edges"
+        ]
+      },
+      "MapFeature": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "explanation"
+        ]
+      },
+      "GeographyVisual": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "map"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "datasetVersion": {
+            "type": "string",
+            "enum": [
+              "ne-v1"
+            ]
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapFeature"
+            },
+            "minItems": 1,
+            "maxItems": 4
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "summary",
+          "datasetVersion",
+          "features"
+        ]
+      },
+      "LearningVisual": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/GeometryVisual"
+          },
+          {
+            "$ref": "#/components/schemas/DiagramVisual"
+          },
+          {
+            "$ref": "#/components/schemas/GeographyVisual"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "geometry": "#/components/schemas/GeometryVisual",
+            "diagram": "#/components/schemas/DiagramVisual",
+            "map": "#/components/schemas/GeographyVisual"
+          }
+        }
       }
     },
     "securitySchemes": {

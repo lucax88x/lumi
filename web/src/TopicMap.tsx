@@ -23,9 +23,8 @@ function TopicMapContent({ map, onSelect, onRead, readingNode }: Props & { map: 
     {readingNode === node ? <><Square size={16}/>Ferma la voce</> : <><Volume2 size={16}/>Ascolta</>}
   </button>;
   return <section className="sentence-map topic-map" aria-label="Mappa dell’argomento">
-    <h3>La mappa delle idee</h3>
-    <p className="sentence-map-hint">Tocca un ramo, poi scegli cosa scoprire.</p>
-    <p className="sentence-map-root">{map.title}</p>
+    <h3 className="topic-map-title">{map.title}</h3>
+    <p className="sentence-map-hint">Scegli un ramo da esplorare.</p>
     <ul className="sentence-map-parts topic-map-branches">
       {map.branches.map((branch, branchIndex) => {
         const open = selectedBranch === branchIndex;

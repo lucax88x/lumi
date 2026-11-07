@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -53,19 +54,8 @@ func OpenStore(dir string) (*Store, error) {
 			continue
 		}
 		b, _ := resources.ReadFile("migrations/" + entry.Name())
-		tx, e := db.Begin()
-		if e != nil {
-			return fail(e)
-		}
-		if _, e = tx.Exec(string(b)); e == nil {
-			_, e = tx.Exec(`INSERT INTO migrations(version) VALUES(?)`, entry.Name())
-		}
-		if e != nil {
-			tx.Rollback()
-			return fail(e)
-		}
-		if e = tx.Commit(); e != nil {
-			return fail(e)
+		if err = applyMigration(db, entry.Name(), string(b)); err != nil {
+			return fail(err)
 		}
 	}
 	// A process restart cannot resume an upstream stream safely.
@@ -146,15 +136,15 @@ func (s *Store) Conversation(id string) (api.ConversationDetail, error) {
 	}
 	d.Conversation.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	d.Conversation.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
-	rows, err := s.db.Query(`SELECT id,role,text,status,created_at,images,sentence_map,topic_map,word_explanation,word_clarification FROM messages WHERE conversation_id=? ORDER BY seq`, id)
+	rows, err := s.db.Query(`SELECT id,role,text,status,created_at,images,sentence_map,topic_map,word_explanation,word_clarification,study_clarification,learning_visual FROM messages WHERE conversation_id=? ORDER BY seq`, id)
 	if err != nil {
 		return d, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		m := api.Message{ConversationId: id}
-		var stamp, images, sentenceMap, topicMap, wordExplanation, wordClarification string
-		if err = rows.Scan(&m.Id, &m.Role, &m.Text, &m.Status, &stamp, &images, &sentenceMap, &topicMap, &wordExplanation, &wordClarification); err != nil {
+		var stamp, images, sentenceMap, topicMap, wordExplanation, wordClarification, studyClarification, learningVisual string
+		if err = rows.Scan(&m.Id, &m.Role, &m.Text, &m.Status, &stamp, &images, &sentenceMap, &topicMap, &wordExplanation, &wordClarification, &studyClarification, &learningVisual); err != nil {
 			return d, err
 		}
 		if err = json.Unmarshal([]byte(images), &m.Images); err != nil {
@@ -172,6 +162,12 @@ func (s *Store) Conversation(id string) (api.ConversationDetail, error) {
 		if err = json.Unmarshal([]byte(wordClarification), &m.WordClarification); err != nil {
 			return d, err
 		}
+		if err = json.Unmarshal([]byte(studyClarification), &m.StudyClarification); err != nil {
+			return d, err
+		}
+		if err = json.Unmarshal([]byte(learningVisual), &m.LearningVisual); err != nil {
+			return d, err
+		}
 		m.CreatedAt, _ = time.Parse(time.RFC3339Nano, stamp)
 		d.Messages = append(d.Messages, m)
 	}
@@ -179,8 +175,8 @@ func (s *Store) Conversation(id string) (api.ConversationDetail, error) {
 }
 func (s *Store) StartTurn(cid, rid, text string) (api.Message, bool, error) {
 	var existing api.Message
-	var stamp, storedText, images, sentenceMap, topicMap, wordExplanation, wordClarification string
-	err := s.db.QueryRow(`SELECT m.id,m.role,m.text,m.status,m.created_at,u.text,m.images,m.sentence_map,m.topic_map,m.word_explanation,m.word_clarification FROM messages m JOIN messages u ON u.request_id=m.request_id AND u.conversation_id=m.conversation_id AND u.role='user' WHERE m.conversation_id=? AND m.request_id=? AND m.role='assistant'`, cid, rid).Scan(&existing.Id, &existing.Role, &existing.Text, &existing.Status, &stamp, &storedText, &images, &sentenceMap, &topicMap, &wordExplanation, &wordClarification)
+	var stamp, storedText, images, sentenceMap, topicMap, wordExplanation, wordClarification, studyClarification, learningVisual string
+	err := s.db.QueryRow(`SELECT m.id,m.role,m.text,m.status,m.created_at,u.text,m.images,m.sentence_map,m.topic_map,m.word_explanation,m.word_clarification,m.study_clarification,m.learning_visual FROM messages m JOIN messages u ON u.request_id=m.request_id AND u.conversation_id=m.conversation_id AND u.role='user' WHERE m.conversation_id=? AND m.request_id=? AND m.role='assistant'`, cid, rid).Scan(&existing.Id, &existing.Role, &existing.Text, &existing.Status, &stamp, &storedText, &images, &sentenceMap, &topicMap, &wordExplanation, &wordClarification, &studyClarification, &learningVisual)
 	if err == nil {
 		if storedText != text {
 			return existing, false, fmt.Errorf("request id reused")
@@ -198,6 +194,12 @@ func (s *Store) StartTurn(cid, rid, text string) (api.Message, bool, error) {
 			return existing, false, err
 		}
 		if err = json.Unmarshal([]byte(wordClarification), &existing.WordClarification); err != nil {
+			return existing, false, err
+		}
+		if err = json.Unmarshal([]byte(studyClarification), &existing.StudyClarification); err != nil {
+			return existing, false, err
+		}
+		if err = json.Unmarshal([]byte(learningVisual), &existing.LearningVisual); err != nil {
 			return existing, false, err
 		}
 		existing.ConversationId = cid
@@ -251,12 +253,20 @@ func (s *Store) Finish(m api.Message) error {
 	if err != nil {
 		return err
 	}
+	encodedStudy, err := json.Marshal(m.StudyClarification)
+	if err != nil {
+		return err
+	}
+	encodedVisual, err := json.Marshal(m.LearningVisual)
+	if err != nil {
+		return err
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	updated, err := tx.Exec(`UPDATE messages SET text=?,status=?,images=?,sentence_map=?,topic_map=?,word_explanation=?,word_clarification=? WHERE id=? AND status!='completed'`, m.Text, m.Status, string(encoded), string(encodedMap), string(encodedTopicMap), string(encodedWord), string(encodedClarification), m.Id)
+	updated, err := tx.Exec(`UPDATE messages SET text=?,status=?,images=?,sentence_map=?,topic_map=?,word_explanation=?,word_clarification=?,study_clarification=?,learning_visual=? WHERE id=? AND status!='completed'`, m.Text, m.Status, string(encoded), string(encodedMap), string(encodedTopicMap), string(encodedWord), string(encodedClarification), string(encodedStudy), string(encodedVisual), m.Id)
 	if err != nil {
 		return err
 	}
@@ -296,4 +306,44 @@ func (s *Store) Delete(id string) error {
 	}
 	_, err := s.db.Exec(`DELETE FROM conversations WHERE id=?`, id)
 	return err
+}
+
+// SQLite parent-table rebuilds require foreign keys disabled outside the transaction.
+// A dedicated connection and a check before commit preserve existing relationships.
+func applyMigration(db *sql.DB, name, sqlText string) error {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
+		return err
+	}
+	defer conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(sqlText); err != nil {
+		return fmt.Errorf("migration %s: %w", name, err)
+	}
+	if _, err = tx.Exec(`INSERT INTO migrations(version) VALUES(?)`, name); err != nil {
+		return err
+	}
+	rows, err := tx.Query("PRAGMA foreign_key_check")
+	if err != nil {
+		return err
+	}
+	invalid := rows.Next()
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	if invalid {
+		return fmt.Errorf("migration %s violates foreign keys", name)
+	}
+	return tx.Commit()
 }

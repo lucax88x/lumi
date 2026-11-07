@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -64,6 +65,93 @@ func (e AccessRequestStateStatus) Valid() bool {
 	}
 }
 
+// Defines values for DiagramNodeSymbol.
+const (
+	Arrow    DiagramNodeSymbol = "arrow"
+	Cloud    DiagramNodeSymbol = "cloud"
+	Dot      DiagramNodeSymbol = "dot"
+	House    DiagramNodeSymbol = "house"
+	Mountain DiagramNodeSymbol = "mountain"
+	Person   DiagramNodeSymbol = "person"
+	Plant    DiagramNodeSymbol = "plant"
+	Rain     DiagramNodeSymbol = "rain"
+	River    DiagramNodeSymbol = "river"
+	Sea      DiagramNodeSymbol = "sea"
+	Sun      DiagramNodeSymbol = "sun"
+	Tree     DiagramNodeSymbol = "tree"
+)
+
+// Valid indicates whether the value is a known member of the DiagramNodeSymbol enum.
+func (e DiagramNodeSymbol) Valid() bool {
+	switch e {
+	case Arrow:
+		return true
+	case Cloud:
+		return true
+	case Dot:
+		return true
+	case House:
+		return true
+	case Mountain:
+		return true
+	case Person:
+		return true
+	case Plant:
+		return true
+	case Rain:
+		return true
+	case River:
+		return true
+	case Sea:
+		return true
+	case Sun:
+		return true
+	case Tree:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagramVisualKind.
+const (
+	Diagram DiagramVisualKind = "diagram"
+)
+
+// Valid indicates whether the value is a known member of the DiagramVisualKind enum.
+func (e DiagramVisualKind) Valid() bool {
+	switch e {
+	case Diagram:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagramVisualLayout.
+const (
+	Cycle    DiagramVisualLayout = "cycle"
+	Scene    DiagramVisualLayout = "scene"
+	Sequence DiagramVisualLayout = "sequence"
+	Timeline DiagramVisualLayout = "timeline"
+)
+
+// Valid indicates whether the value is a known member of the DiagramVisualLayout enum.
+func (e DiagramVisualLayout) Valid() bool {
+	switch e {
+	case Cycle:
+		return true
+	case Scene:
+		return true
+	case Sequence:
+		return true
+	case Timeline:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FamilyRole.
 const (
 	FamilyRoleMember FamilyRole = "member"
@@ -94,6 +182,87 @@ func (e FamilyMemberRole) Valid() bool {
 	case FamilyMemberRoleMember:
 		return true
 	case FamilyMemberRoleParent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GeographyVisualDatasetVersion.
+const (
+	NeV1 GeographyVisualDatasetVersion = "ne-v1"
+)
+
+// Valid indicates whether the value is a known member of the GeographyVisualDatasetVersion enum.
+func (e GeographyVisualDatasetVersion) Valid() bool {
+	switch e {
+	case NeV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GeographyVisualKind.
+const (
+	Map GeographyVisualKind = "map"
+)
+
+// Valid indicates whether the value is a known member of the GeographyVisualKind enum.
+func (e GeographyVisualKind) Valid() bool {
+	switch e {
+	case Map:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GeometryFigureShape.
+const (
+	Angle     GeometryFigureShape = "angle"
+	Circle    GeometryFigureShape = "circle"
+	Line      GeometryFigureShape = "line"
+	Ray       GeometryFigureShape = "ray"
+	Rectangle GeometryFigureShape = "rectangle"
+	Segment   GeometryFigureShape = "segment"
+	Square    GeometryFigureShape = "square"
+	Triangle  GeometryFigureShape = "triangle"
+)
+
+// Valid indicates whether the value is a known member of the GeometryFigureShape enum.
+func (e GeometryFigureShape) Valid() bool {
+	switch e {
+	case Angle:
+		return true
+	case Circle:
+		return true
+	case Line:
+		return true
+	case Ray:
+		return true
+	case Rectangle:
+		return true
+	case Segment:
+		return true
+	case Square:
+		return true
+	case Triangle:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GeometryVisualKind.
+const (
+	GeometryVisualKindGeometry GeometryVisualKind = "geometry"
+)
+
+// Valid indicates whether the value is a known member of the GeometryVisualKind enum.
+func (e GeometryVisualKind) Valid() bool {
+	switch e {
+	case GeometryVisualKindGeometry:
 		return true
 	default:
 		return false
@@ -162,15 +331,17 @@ func (e SentenceMapLanguage) Valid() bool {
 
 // Defines values for StreamEventType.
 const (
-	StreamEventTypeCompleted         StreamEventType = "completed"
-	StreamEventTypeDelta             StreamEventType = "delta"
-	StreamEventTypeFailed            StreamEventType = "failed"
-	StreamEventTypeImages            StreamEventType = "images"
-	StreamEventTypeSentenceMap       StreamEventType = "sentence_map"
-	StreamEventTypeStarted           StreamEventType = "started"
-	StreamEventTypeTopicMap          StreamEventType = "topic_map"
-	StreamEventTypeWordClarification StreamEventType = "word_clarification"
-	StreamEventTypeWordExplanation   StreamEventType = "word_explanation"
+	StreamEventTypeCompleted          StreamEventType = "completed"
+	StreamEventTypeDelta              StreamEventType = "delta"
+	StreamEventTypeFailed             StreamEventType = "failed"
+	StreamEventTypeImages             StreamEventType = "images"
+	StreamEventTypeLearningVisual     StreamEventType = "learning_visual"
+	StreamEventTypeSentenceMap        StreamEventType = "sentence_map"
+	StreamEventTypeStarted            StreamEventType = "started"
+	StreamEventTypeStudyClarification StreamEventType = "study_clarification"
+	StreamEventTypeTopicMap           StreamEventType = "topic_map"
+	StreamEventTypeWordClarification  StreamEventType = "word_clarification"
+	StreamEventTypeWordExplanation    StreamEventType = "word_explanation"
 )
 
 // Valid indicates whether the value is a known member of the StreamEventType enum.
@@ -184,9 +355,13 @@ func (e StreamEventType) Valid() bool {
 		return true
 	case StreamEventTypeImages:
 		return true
+	case StreamEventTypeLearningVisual:
+		return true
 	case StreamEventTypeSentenceMap:
 		return true
 	case StreamEventTypeStarted:
+		return true
+	case StreamEventTypeStudyClarification:
 		return true
 	case StreamEventTypeTopicMap:
 		return true
@@ -201,8 +376,12 @@ func (e StreamEventType) Valid() bool {
 
 // Defines values for Subject.
 const (
-	English Subject = "english"
-	Italian Subject = "italian"
+	English   Subject = "english"
+	Geography Subject = "geography"
+	Geometry  Subject = "geometry"
+	History   Subject = "history"
+	Italian   Subject = "italian"
+	Science   Subject = "science"
 )
 
 // Valid indicates whether the value is a known member of the Subject enum.
@@ -210,7 +389,15 @@ func (e Subject) Valid() bool {
 	switch e {
 	case English:
 		return true
+	case Geography:
+		return true
+	case Geometry:
+		return true
+	case History:
+		return true
 	case Italian:
+		return true
+	case Science:
 		return true
 	default:
 		return false
@@ -322,6 +509,40 @@ type ConversationDetail struct {
 	Messages     []Message    `json:"messages"`
 }
 
+// DiagramEdge defines model for DiagramEdge.
+type DiagramEdge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// DiagramNode defines model for DiagramNode.
+type DiagramNode struct {
+	Explanation string             `json:"explanation"`
+	Id          string             `json:"id"`
+	Label       string             `json:"label"`
+	Symbol      *DiagramNodeSymbol `json:"symbol,omitempty"`
+	TimeLabel   *string            `json:"timeLabel,omitempty"`
+}
+
+// DiagramNodeSymbol defines model for DiagramNode.Symbol.
+type DiagramNodeSymbol string
+
+// DiagramVisual defines model for DiagramVisual.
+type DiagramVisual struct {
+	Edges   []DiagramEdge       `json:"edges"`
+	Kind    DiagramVisualKind   `json:"kind"`
+	Layout  DiagramVisualLayout `json:"layout"`
+	Nodes   []DiagramNode       `json:"nodes"`
+	Summary string              `json:"summary"`
+	Title   string              `json:"title"`
+}
+
+// DiagramVisualKind defines model for DiagramVisual.Kind.
+type DiagramVisualKind string
+
+// DiagramVisualLayout defines model for DiagramVisual.Layout.
+type DiagramVisualLayout string
+
 // DictionaryEntry defines model for DictionaryEntry.
 type DictionaryEntry struct {
 	Example            string    `json:"example"`
@@ -372,6 +593,45 @@ type FamilyName struct {
 	Name string `json:"name"`
 }
 
+// GeographyVisual defines model for GeographyVisual.
+type GeographyVisual struct {
+	DatasetVersion GeographyVisualDatasetVersion `json:"datasetVersion"`
+	Features       []MapFeature                  `json:"features"`
+	Kind           GeographyVisualKind           `json:"kind"`
+	Summary        string                        `json:"summary"`
+	Title          string                        `json:"title"`
+}
+
+// GeographyVisualDatasetVersion defines model for GeographyVisual.DatasetVersion.
+type GeographyVisualDatasetVersion string
+
+// GeographyVisualKind defines model for GeographyVisual.Kind.
+type GeographyVisualKind string
+
+// GeometryFigure defines model for GeometryFigure.
+type GeometryFigure struct {
+	Degrees     *float32            `json:"degrees,omitempty"`
+	Explanation string              `json:"explanation"`
+	Height      *float32            `json:"height,omitempty"`
+	Label       string              `json:"label"`
+	Shape       GeometryFigureShape `json:"shape"`
+	Width       *float32            `json:"width,omitempty"`
+}
+
+// GeometryFigureShape defines model for GeometryFigure.Shape.
+type GeometryFigureShape string
+
+// GeometryVisual defines model for GeometryVisual.
+type GeometryVisual struct {
+	Figures []GeometryFigure   `json:"figures"`
+	Kind    GeometryVisualKind `json:"kind"`
+	Summary string             `json:"summary"`
+	Title   string             `json:"title"`
+}
+
+// GeometryVisualKind defines model for GeometryVisual.Kind.
+type GeometryVisualKind string
+
 // Invitation defines model for Invitation.
 type Invitation struct {
 	Email     string    `json:"email"`
@@ -395,6 +655,18 @@ type InviteEmail struct {
 	Email openapi_types.Email `json:"email"`
 }
 
+// LearningVisual defines model for LearningVisual.
+type LearningVisual struct {
+	union json.RawMessage
+}
+
+// MapFeature defines model for MapFeature.
+type MapFeature struct {
+	Explanation string `json:"explanation"`
+	Id          string `json:"id"`
+	Label       string `json:"label"`
+}
+
 // MemberRole defines model for MemberRole.
 type MemberRole struct {
 	Role MemberRoleRole `json:"role"`
@@ -405,17 +677,19 @@ type MemberRoleRole string
 
 // Message defines model for Message.
 type Message struct {
-	ConversationId    string             `json:"conversationId"`
-	CreatedAt         time.Time          `json:"createdAt"`
-	Id                string             `json:"id"`
-	Images            *[]WordImage       `json:"images,omitempty"`
-	Role              string             `json:"role"`
-	SentenceMap       *SentenceMap       `json:"sentenceMap,omitempty"`
-	Status            string             `json:"status"`
-	Text              string             `json:"text"`
-	TopicMap          *TopicMap          `json:"topicMap,omitempty"`
-	WordClarification *WordClarification `json:"wordClarification,omitempty"`
-	WordExplanation   *WordExplanation   `json:"wordExplanation,omitempty"`
+	ConversationId     string              `json:"conversationId"`
+	CreatedAt          time.Time           `json:"createdAt"`
+	Id                 string              `json:"id"`
+	Images             *[]WordImage        `json:"images,omitempty"`
+	LearningVisual     *LearningVisual     `json:"learningVisual,omitempty"`
+	Role               string              `json:"role"`
+	SentenceMap        *SentenceMap        `json:"sentenceMap,omitempty"`
+	Status             string              `json:"status"`
+	StudyClarification *StudyClarification `json:"studyClarification,omitempty"`
+	Text               string              `json:"text"`
+	TopicMap           *TopicMap           `json:"topicMap,omitempty"`
+	WordClarification  *WordClarification  `json:"wordClarification,omitempty"`
+	WordExplanation    *WordExplanation    `json:"wordExplanation,omitempty"`
 }
 
 // ModelChoice defines model for ModelChoice.
@@ -531,6 +805,19 @@ type StreamEvent struct {
 
 // StreamEventType defines model for StreamEvent.Type.
 type StreamEventType string
+
+// StudyChoice defines model for StudyChoice.
+type StudyChoice struct {
+	Label string `json:"label"`
+	Reply string `json:"reply"`
+}
+
+// StudyClarification defines model for StudyClarification.
+type StudyClarification struct {
+	Choices  []StudyChoice `json:"choices"`
+	Question string        `json:"question"`
+	Topic    string        `json:"topic"`
+}
 
 // Subject defines model for Subject.
 type Subject string
@@ -667,6 +954,143 @@ type TranscribeMultipartRequestBody TranscribeMultipartBody
 
 // AcceptInvitationJSONRequestBody defines body for AcceptInvitation for application/json ContentType.
 type AcceptInvitationJSONRequestBody = InvitationToken
+
+// AsGeometryVisual returns the union data inside the LearningVisual as a GeometryVisual
+func (t LearningVisual) AsGeometryVisual() (GeometryVisual, error) {
+	var body GeometryVisual
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGeometryVisual overwrites any union data inside the LearningVisual as the provided GeometryVisual
+func (t *LearningVisual) FromGeometryVisual(v GeometryVisual) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"geometry"}`))
+	t.union = b
+	return err
+}
+
+// MergeGeometryVisual performs a merge with any union data inside the LearningVisual, using the provided GeometryVisual
+func (t *LearningVisual) MergeGeometryVisual(v GeometryVisual) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"geometry"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsDiagramVisual returns the union data inside the LearningVisual as a DiagramVisual
+func (t LearningVisual) AsDiagramVisual() (DiagramVisual, error) {
+	var body DiagramVisual
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromDiagramVisual overwrites any union data inside the LearningVisual as the provided DiagramVisual
+func (t *LearningVisual) FromDiagramVisual(v DiagramVisual) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"diagram"}`))
+	t.union = b
+	return err
+}
+
+// MergeDiagramVisual performs a merge with any union data inside the LearningVisual, using the provided DiagramVisual
+func (t *LearningVisual) MergeDiagramVisual(v DiagramVisual) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"diagram"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGeographyVisual returns the union data inside the LearningVisual as a GeographyVisual
+func (t LearningVisual) AsGeographyVisual() (GeographyVisual, error) {
+	var body GeographyVisual
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGeographyVisual overwrites any union data inside the LearningVisual as the provided GeographyVisual
+func (t *LearningVisual) FromGeographyVisual(v GeographyVisual) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"map"}`))
+	t.union = b
+	return err
+}
+
+// MergeGeographyVisual performs a merge with any union data inside the LearningVisual, using the provided GeographyVisual
+func (t *LearningVisual) MergeGeographyVisual(v GeographyVisual) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"map"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t LearningVisual) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"kind"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t LearningVisual) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "diagram":
+		return t.AsDiagramVisual()
+	case "geometry":
+		return t.AsGeometryVisual()
+	case "map":
+		return t.AsGeographyVisual()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t LearningVisual) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *LearningVisual) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -2023,73 +2447,84 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"MPn85fHL478DAAD//w==",
+	"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",
+	"vfisuM4YuyUQnXz6/PD54f8DAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

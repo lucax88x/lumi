@@ -29,6 +29,8 @@ export type Message = {
     topicMap?: TopicMap;
     wordExplanation?: WordExplanation;
     wordClarification?: WordClarification;
+    studyClarification?: StudyClarification;
+    learningVisual?: LearningVisual;
 };
 
 export type ConversationDetail = {
@@ -104,7 +106,7 @@ export type PromptPreview = {
 };
 
 export type StreamEvent = {
-    type: 'started' | 'delta' | 'images' | 'sentence_map' | 'topic_map' | 'word_explanation' | 'word_clarification' | 'completed' | 'failed';
+    type: 'started' | 'delta' | 'images' | 'sentence_map' | 'topic_map' | 'word_explanation' | 'word_clarification' | 'completed' | 'failed' | 'study_clarification' | 'learning_visual';
     message?: Message;
     delta?: string;
     error?: Error;
@@ -222,7 +224,7 @@ export type AdminFamily = {
     memberCount: number;
 };
 
-export type Subject = 'italian' | 'english';
+export type Subject = 'italian' | 'english' | 'history' | 'geography' | 'science' | 'geometry';
 
 export type ReceivedInvitation = {
     id: string;
@@ -261,6 +263,77 @@ export type WordClarificationExample = {
     sentence: string;
     meaning: string;
 };
+
+export type StudyChoice = {
+    label: string;
+    reply: string;
+};
+
+export type StudyClarification = {
+    topic: string;
+    question: string;
+    choices: Array<StudyChoice>;
+};
+
+export type GeometryFigure = {
+    shape: 'angle' | 'line' | 'ray' | 'segment' | 'triangle' | 'square' | 'rectangle' | 'circle';
+    label: string;
+    explanation: string;
+    degrees?: number;
+    width?: number;
+    height?: number;
+};
+
+export type GeometryVisual = {
+    kind: 'geometry';
+    title: string;
+    summary: string;
+    figures: Array<GeometryFigure>;
+};
+
+export type DiagramNode = {
+    id: string;
+    label: string;
+    explanation: string;
+    symbol?: 'sun' | 'cloud' | 'rain' | 'mountain' | 'river' | 'sea' | 'tree' | 'plant' | 'person' | 'house' | 'arrow' | 'dot';
+    timeLabel?: string;
+};
+
+export type DiagramEdge = {
+    from: string;
+    to: string;
+};
+
+export type DiagramVisual = {
+    kind: 'diagram';
+    title: string;
+    summary: string;
+    layout: 'sequence' | 'cycle' | 'timeline' | 'scene';
+    nodes: Array<DiagramNode>;
+    edges: Array<DiagramEdge>;
+};
+
+export type MapFeature = {
+    id: string;
+    label: string;
+    explanation: string;
+};
+
+export type GeographyVisual = {
+    kind: 'map';
+    title: string;
+    summary: string;
+    datasetVersion: 'ne-v1';
+    features: Array<MapFeature>;
+};
+
+export type LearningVisual = ({
+    kind: 'geometry';
+} & GeometryVisual) | ({
+    kind: 'diagram';
+} & DiagramVisual) | ({
+    kind: 'map';
+} & GeographyVisual);
 
 export type GetStatusData = {
     body?: never;

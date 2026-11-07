@@ -26,7 +26,7 @@ export function DictionaryPage() {
 
 export function Dictionary({ words, speechRate }: { words: DictionaryEntry[]; speechRate?: number }) {
   const [subject, setSubject] = useState<Subject>('italian');
-  return <><SubjectPicker value={subject} onChange={setSubject}/><DictionaryWords key={subject} words={words.filter(word => (word.subject ?? 'italian') === subject)} speechRate={speechRate}/></>;
+  return <><SubjectPicker only={['italian', 'english']} value={subject} onChange={setSubject}/><DictionaryWords key={subject} words={words.filter(word => (word.subject ?? 'italian') === subject)} speechRate={speechRate}/></>;
 }
 
 function DictionaryWords({ words, speechRate }: { words: DictionaryEntry[]; speechRate?: number }) {
