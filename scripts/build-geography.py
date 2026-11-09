@@ -17,7 +17,7 @@ from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = 'ne-v1'
+VERSION = 'ne-v2'
 TAG = 'v5.1.2'
 OUT = ROOT / 'web/public/geography' / VERSION
 CATALOG = ROOT / 'internal/app/geographydata'
@@ -52,10 +52,45 @@ def compact(value):
     if isinstance(value, float): return round(value, 4)
     return value
 
+
+def build_continents(layers, catalog):
+    # Physical regions define continental membership across political borders.
+    # Island-group polygons include sea: clip them to real country coastlines.
+    land = unary_union([shape(f['geometry']) for f in layers['countries']])
+    masks = defaultdict(list)
+    for feature in layers['islands']:
+        props = {k.lower(): v for k, v in feature['properties'].items()}
+        if props.get('featurecla') in ('Continent', 'Island', 'Island group'):
+            masks[props.get('region')].append(shape(feature['geometry']))
+    regions = {
+        'africa': ('Africa', 'Africa', []),
+        'antarctica': ('Antarctica', 'Antartide', ['Antarctica', 'Antartico']),
+        'asia': ('Asia', 'Asia', []),
+        'europe': ('Europe', 'Europa', ['Europe']),
+        'north-america': ('North America', 'America del Nord', ['Nord America', 'America settentrionale', 'North America']),
+        'south-america': ('South America', 'America del Sud', ['Sud America', 'America meridionale', 'South America']),
+        'oceania': ('Oceania', 'Oceania', []),
+    }
+    geometries = {}
+    for key, (region, label, aliases) in regions.items():
+        geometries[key] = land.intersection(unary_union(masks[region]))
+    geometries['america'] = unary_union([geometries['north-america'], geometries['south-america']])
+    regions['america'] = ('America', 'America', ['Americhe', 'Americas'])
+    features = []
+    for key, (_, label, aliases) in regions.items():
+        ident = 'continents-' + key
+        geometry = mapping(clockwise(geometries[key].simplify(0.015, preserve_topology=True)))
+        geometry['coordinates'] = compact(geometry['coordinates'])
+        features.append({'type': 'Feature', 'id': ident, 'properties': {'label': label}, 'geometry': geometry})
+        catalog.append({'id': ident, 'label': label, 'kind': 'continents', 'context': 'Continente', 'aliases': sorted(set(aliases + [label]))})
+    dump(OUT / 'continents.json', {'type': 'FeatureCollection', 'features': features})
+    print('continents', len(features))
+
 def main():
-    catalog, sources = [], []
+    catalog, sources, layers = [], [], {}
     manifest = OUT / 'sources.json'
-    expected = {item['url']: item['sha256'] for item in json.loads(manifest.read_text())['sources']} if manifest.exists() else {}
+    previous = ROOT / 'web/public/geography/ne-v1/sources.json'
+    expected = {item['url']: item['sha256'] for item in json.loads((manifest if manifest.exists() else previous).read_text())['sources']}
     for layer, name in LAYERS.items():
         url = f'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/{TAG}/geojson/{name}.geojson'
         cache = Path(tempfile.gettempdir()) / 'lumi-natural-earth' / TAG / (name + '.geojson')
@@ -65,8 +100,9 @@ def main():
         if url in expected and hashlib.sha256(raw).hexdigest() != expected[url]:
             raise ValueError(f'Source checksum changed: {url}')
         sources.append({'url': url, 'sha256': hashlib.sha256(raw).hexdigest()})
+        layers[layer] = json.loads(raw)['features']
         grouped = defaultdict(list)
-        for feature in json.loads(raw)['features']:
+        for feature in layers[layer]:
             p = {k.lower(): v for k, v in feature['properties'].items()}
             name_en = p.get('name_en') or p.get('name') or p.get('admin')
             if layer == 'countries':
@@ -108,6 +144,7 @@ def main():
         dump(OUT / (layer + '.json'), {'type': 'FeatureCollection', 'features': features})
         print(layer, len(features))
     assert sum(x['kind'] == 'regions' for x in catalog) == 20
+    build_continents(layers, catalog)
     dump(CATALOG / 'catalog.json', catalog)
     dump(OUT / 'sources.json', {'version': VERSION, 'source': 'Natural Earth', 'tag': TAG, 'license': 'Public domain', 'sources': sources})
 

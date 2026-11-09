@@ -54,21 +54,28 @@ export function shortDate(value: string) {
   return new Intl.DateTimeFormat('it', { day: 'numeric', month: 'short' }).format(new Date(value));
 }
 
+export function narrativeText(text: string): string {
+  // Strip bold delimiters, including incomplete pairs while text is streaming.
+  return text.replace(/\*{2,}|_{2,}/g, '');
+}
+
 export function messageSpeechText(message: Message): string {
-  if (message.studyClarification) return [message.text, message.studyClarification.question, ...message.studyClarification.choices.map(choice => choice.label), 'Puoi anche dire: non lo so.'].filter(Boolean).join('\n');
-  if (message.learningVisual) return [message.text, message.learningVisual.title, message.learningVisual.summary, 'Tocca un punto per scoprirlo.'].filter(Boolean).join('\n');
-  if (message.topicMap && !message.text) return `${message.topicMap.title}. Tocca un ramo per scoprire una piccola idea.`;
+  const text = message.role === 'assistant' ? narrativeText(message.text) : message.text;
+  if (message.studyClarification) return [text, message.studyClarification.question, ...message.studyClarification.choices.map(choice => choice.label), 'Puoi anche dire: non lo so.'].filter(Boolean).join('\n');
+  if (message.learningVisual) return [text, message.learningVisual.title, message.learningVisual.summary, 'Tocca un punto per scoprirlo.'].filter(Boolean).join('\n');
+  if (message.topicMap && !text) return `${message.topicMap.title}. Tocca un ramo per scoprire una piccola idea.`;
   const clarification = message.wordClarification;
-  if (clarification) return [message.text, clarification.question, ...clarification.examples.flatMap(example => [example.sentence, example.meaning])].filter(Boolean).join('\n');
+  if (clarification) return [text, clarification.question, ...clarification.examples.flatMap(example => [example.sentence, example.meaning])].filter(Boolean).join('\n');
   const word = message.wordExplanation;
-  return word ? [message.text, `${word.word}. ${word.meaning}`, word.example].filter(Boolean).join('\n') : message.text;
+  return word ? [text, `${word.word}. ${word.meaning}`, word.example].filter(Boolean).join('\n') : text;
 }
 
 // Keep language boundaries for automatic reading and replay.
 export function messageSpeechParts(message: Message): import('./speech').SpeechInput {
+  const text = message.role === 'assistant' ? narrativeText(message.text) : message.text;
   const clarification = message.wordClarification;
   if (clarification) return [
-    ...[message.text, clarification.question].filter(Boolean).map(text => ({ text, language: 'it' as const })),
+    ...[text, clarification.question].filter(Boolean).map(text => ({ text, language: 'it' as const })),
     ...clarification.examples.flatMap(example => [
       { text: example.sentence, language: clarification.language },
       { text: example.meaning, language: 'it' as const },
@@ -79,14 +86,14 @@ export function messageSpeechParts(message: Message): import('./speech').SpeechI
     const map = message.sentenceMap;
     const part = map?.parts[0];
     if (map?.language && part) return [
-      { text: message.text, language: 'it' },
+      { text, language: 'it' },
       { text: part.text, language: map.language },
       ...(part.translation ? [{ text: part.translation, language: map.language === 'en' ? 'it' as const : 'en' as const }] : []),
     ];
     return messageSpeechText(message);
   }
   return [
-    { text: message.text, language: 'it' },
+    { text, language: 'it' },
     { text: word.word, language: 'en' },
     { text: word.meaning, language: 'it' },
     { text: word.example, language: 'en' },

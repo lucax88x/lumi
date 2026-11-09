@@ -733,3 +733,8 @@ button.clarification-example:hover:not(:disabled) { background: var(--color-lila
   .home-page .subject-picker .subject-icon { width: 18px; height: 18px; }
   .home-page .subject-picker button { gap: 6px; font-size: 14px; }
 }
+
+.map-continent-label { font-family: var(--font-sans); font-size: 16px; font-weight: 700; fill: #294c5a; paint-order: stroke; stroke: #fbfaf1; stroke-width: 2.5px; stroke-linejoin: round; }
+.map-ocean-label { font-family: var(--font-sans); font-size: 10px; fill: #537783; pointer-events: none; }
+.world-drawing .map-feature:focus-visible { outline: none; }
+.world-drawing .map-feature:focus-visible > path { stroke: #5d388d; stroke-width: 2.5px; }

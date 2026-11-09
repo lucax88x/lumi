@@ -25,7 +25,7 @@ func topicMapTool() responses.NamespaceToolToolUnionParam {
 		"properties": map[string]any{"label": text(80), "explanation": text(240), "items": map[string]any{"type": "array", "minItems": 1, "maxItems": 8, "items": item}}}
 	return responses.NamespaceToolToolUnionParam{OfFunction: &responses.NamespaceToolToolFunctionParam{
 		Name: "show_topic_map", Strict: openai.Bool(true),
-		Description: openai.String("Crea e mostra una vera mappa mentale interattiva su un argomento richiesto: titolo centrale, categorie e concetti con spiegazioni. Usalo per richieste come una mappa dei pianeti e dei corpi celesti, degli animali o del ciclo dell'acqua."),
+		Description: openai.String("Crea e mostra una mappa mentale interattiva su un argomento richiesto: titolo centrale, categorie e concetti con spiegazioni. Organizza concetti, non rappresenta la posizione geografica dei luoghi. Usalo per richieste come una mappa dei pianeti e dei corpi celesti, degli animali o del ciclo dell'acqua."),
 		Parameters: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"title", "branches"},
 			"properties": map[string]any{"title": text(100), "branches": map[string]any{"type": "array", "minItems": 2, "maxItems": 6, "items": branch}}},
 	}}

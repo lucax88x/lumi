@@ -76,11 +76,20 @@ const nileVisual: LearningVisual = { kind: 'map', title: 'Il Nilo', summary: 'Un
 const creteVisual: LearningVisual = { kind: 'map', title: 'Creta', summary: 'L’isola dove vivevano i Cretesi.', datasetVersion: 'ne-v1', features: [
   { id: 'islands-1159102805', label: 'Creta', explanation: 'Un’isola nel Mar Mediterraneo.' },
 ] };
+const continentsVisual: LearningVisual = { kind: 'map', title: 'I continenti', summary: 'Le grandi terre del mondo.', datasetVersion: 'ne-v2', view: 'world', features: [
+  { id: 'continents-africa', label: 'Africa', explanation: 'Si trova a sud dell’Europa, fra due grandi oceani.' },
+  { id: 'continents-america', label: 'America', explanation: 'Si allunga da nord a sud, fra Atlantico e Pacifico.' },
+  { id: 'continents-antarctica', label: 'Antartide', explanation: 'Si trova intorno al Polo Sud, in fondo alla cartina.' },
+  { id: 'continents-asia', label: 'Asia', explanation: 'Si trova a est dell’Europa.' },
+  { id: 'continents-europe', label: 'Europa', explanation: 'Si trova a nord dell’Africa. Qui c’è anche l’Italia.' },
+  { id: 'continents-oceania', label: 'Oceania', explanation: 'Comprende l’Australia, la Nuova Zelanda e tante isole nel Pacifico.' },
+] };
 const cretanMap = { title: 'La vita dei Cretesi', branches: [
   { label: 'Dove vivevano', explanation: 'Vivevano sull’isola di Creta.', items: [{ label: 'Creta', explanation: 'Un’isola nel Mar Mediterraneo.' }] },
   { label: 'Che cosa facevano', explanation: 'Coltivavano e viaggiavano sul mare.', items: [{ label: 'Le navi', explanation: 'Portavano merci in altri luoghi.' }] },
 ] };
 function studyMockAnswer(text: string, history: Message[]): Partial<Message> | undefined {
+  if (text === 'Mostrami i continenti e dove si trovano' || text === 'Intendevo una cartina') return { text: 'Ecco **il mondo** e i suoi __continenti__.', learningVisual: continentsVisual };
   if (text === 'Gli Egiziani') return { text: '', studyClarification: egyptFocus };
   if (text === 'I Cretesi') return { text: '', studyClarification: { topic: 'I Cretesi', question: 'Che cosa vuoi scoprire dei Cretesi?', choices: [{ label: 'Dove vivevano', reply: 'Dove vivevano i Cretesi' }, { label: 'La loro vita', reply: 'La vita dei Cretesi' }] } };
   if (text === 'I tipi di angoli') return { text: '', studyClarification: { topic: 'Gli angoli', question: 'Hai già i nomi degli angoli che stai studiando?', choices: [{ label: 'Ti dico i nomi', reply: 'Ti dico i nomi degli angoli' }, { label: 'Una prima scoperta', reply: 'Una prima scoperta degli angoli' }] } };
@@ -1530,3 +1539,84 @@ for (const [width, height] of [[320, 640], [390, 760], [430, 880]]) {
     await expect(board.getByRole('button', { name: 'Si formano le nuvole', exact: true })).toHaveAttribute('aria-pressed', 'true');
   });
 }
+
+for (const [width, height] of [[320, 640], [390, 760], [430, 880]]) {
+  test(`world continents stay readable and selected at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: class { constructor(public text: string) {} } });
+      const state = window as unknown as { activeUtterance?: SpeechSynthesisUtterance };
+      Object.defineProperty(window, 'speechSynthesis', { value: {
+        getVoices: () => [{ voiceURI: 'it', lang: 'it-IT', localService: true }], addEventListener() {}, removeEventListener() {},
+        cancel() { state.activeUtterance = undefined; },
+        speak(utterance: SpeechSynthesisUtterance) { state.activeUtterance = utterance; queueMicrotask(() => utterance.onstart?.(new Event('start') as SpeechSynthesisEvent)); },
+      } });
+    });
+    const api = await mockAPI(page);
+    await page.goto('/spazi/test');
+    await page.getByRole('button', { name: 'Geografia', exact: true }).click();
+    await page.getByLabel('Scrivi una parola o una frase').fill('Mostrami i continenti e dove si trovano');
+    await page.getByRole('button', { name: 'Scopriamo!' }).click();
+    const map = page.getByRole('group', { name: 'Cartina: I continenti' });
+    await expect(map).toBeVisible();
+    await expect(map.locator('.map-feature')).toHaveCount(6);
+    const originalPaths = await map.locator('.map-feature > path').evaluateAll(paths => paths.map(path => path.getAttribute('d')));
+    await expect(page.locator('.message.assistant > p').first()).toHaveText('Ecco il mondo e i suoi continenti.');
+    expect(api.messages.get(api.chats[0].id)!.at(-1)!.text).toContain('**il mondo**');
+    await page.getByRole('button', { name: 'Riascolta', exact: true }).click();
+    expect(await page.evaluate(() => (window as unknown as { activeUtterance: SpeechSynthesisUtterance }).activeUtterance.text)).not.toMatch(/\*\*|__/);
+    await page.getByRole('button', { name: 'Ferma la voce', exact: true }).click();
+    for (let turn = 0; turn < 2; turn++) {
+      await page.getByRole('button', { name: 'Più facile', exact: true }).click();
+      expect(api.messages.get(api.chats[0].id)!.at(-2)!.text).toContain('Il punto selezionato è «Africa»');
+    }
+    const oceania = map.locator('.map-continent-label').filter({ hasText: 'Oceania' });
+    if (testInfo.project.name === 'android') await oceania.tap(); else await oceania.click();
+    await expect(page.locator('.visual-explanation')).toContainText('Comprende l’Australia, la Nuova Zelanda');
+    await expect(page.locator('.visual-explanation')).toBeInViewport({ ratio: 1 });
+    await page.locator('.visual-read').click();
+    expect(await page.evaluate(() => (window as unknown as { activeUtterance: SpeechSynthesisUtterance }).activeUtterance.text)).toBe('Oceania.');
+    await page.evaluate(() => (window as unknown as { activeUtterance: SpeechSynthesisUtterance }).activeUtterance.onend?.(new Event('end') as SpeechSynthesisEvent));
+    await expect.poll(() => page.evaluate(() => (window as unknown as { activeUtterance?: SpeechSynthesisUtterance }).activeUtterance?.text)).toContain('Comprende l’Australia');
+    await page.getByRole('button', { name: 'Più facile', exact: true }).click();
+    expect(api.messages.get(api.chats[0].id)!.at(-2)!.text).toContain('Il punto selezionato è «Oceania»');
+    await expect(page.getByRole('button', { name: 'Oceania', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Seleziona Europa', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.visual-explanation')).toContainText('Qui c’è anche l’Italia.');
+    await expect(page.locator('.visual-explanation')).toBeInViewport({ ratio: 1 });
+    await page.getByRole('button', { name: 'Antartide', exact: true }).focus();
+    await page.keyboard.press('Space');
+    await expect(page.locator('.visual-explanation')).toContainText('Polo Sud');
+    const labelsFit = await map.locator('.map-continent-label, .map-ocean-label').evaluateAll(labels => labels.every(label => {
+      const box = (label as SVGGraphicsElement).getBBox();
+      return box.x >= 0 && box.y >= 0 && box.x + box.width <= 360 && box.y + box.height <= 250;
+    }));
+    expect(labelsFit).toBe(true);
+    expect(await map.locator('.map-feature > path').evaluateAll(paths => paths.map(path => path.getAttribute('d')))).toEqual(originalPaths);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await captureStudyVisual(page, `test-results/continents-${width}-${testInfo.project.name}.png`);
+    await page.reload();
+    await expect(map.locator('.map-feature')).toHaveCount(6);
+    expect(api.messages.get(api.chats[0].id)![1].learningVisual?.kind).toBe('map');
+  });
+}
+
+test('world continents can split America into seven selectable places', async ({ page }, testInfo) => {
+  const api = await mockAPI(page);
+  const date = new Date().toISOString();
+  const visual = structuredClone(continentsVisual);
+  visual.features = visual.features.filter(f => f.id !== 'continents-america');
+  visual.features.push(
+    { id: 'continents-north-america', label: 'America del Nord', explanation: 'A nord.' },
+    { id: 'continents-south-america', label: 'America del Sud', explanation: 'A sud.' },
+  );
+  api.chats.push({ id: 'seven', subject: 'geography', title: 'Sette continenti', createdAt: date, updatedAt: date });
+  api.messages.set('seven', [{ id: 'seven-answer', conversationId: 'seven', role: 'assistant', status: 'completed', text: '', createdAt: date, learningVisual: visual }]);
+  await page.goto('/spazi/test/domande/seven');
+  const map = page.getByRole('group', { name: 'Cartina: I continenti' });
+  await expect(map.locator('.map-feature')).toHaveCount(7);
+  await page.getByRole('button', { name: 'America del Sud', exact: true }).click();
+  await expect(page.locator('.visual-explanation')).toContainText('A sud.');
+  await captureStudyVisual(page, `test-results/continents-seven-${testInfo.project.name}.png`);
+});

@@ -18,10 +18,10 @@ import (
 const studyInstructions = `STUDIO DI ARGOMENTI: accompagna una bambina di prima–seconda primaria. Italiano semplice, pochi concetti, esempi concreti. Non analizzare le parole della richiesta come una frase scolastica. Non chiedere MAI quale formato vuole: scegli tu mappa mentale, disegno, schema o cartina.
 CHIARISCI IL CONTENUTO: per argomenti ampi o classificazioni non specificate usa ask_study_focus con una sola domanda e 2–3 scelte pertinenti. Per «Egiziani» proponi per esempio «Il Nilo», «Le piramidi», «La vita quotidiana». Per «Cretesi» chiedi quale parte vuole scoprire, con esempi concreti. Per «tipi di angoli» chiedi quali sta studiando o un esempio, senza decidere tu una classificazione. Puoi proporre «Ti dico i nomi», «Un esempio del quaderno», «Una prima scoperta». L'app aggiunge «Non lo so» e permette di scrivere o parlare. Le scelte sono suggerimenti, non fatti o preferenze già espressi. Non chiedere foto o dati personali. La domanda è già mostrata e letta: non ripeterla nel testo.
 Se il contesto basta, NON chiedere ancora. Se risponde «Il Nilo» alla domanda sugli Egiziani, parla del Nilo: non analizzare la frase e non chiedere di nuovo. Se dice «Non lo so», «Una prima scoperta» o chiede una panoramica, dai una piccola introduzione senza ripetere il chiarimento. Se la risposta è «Ti dico i nomi», aspetta i nomi con una breve domanda. «Spiegami l'angolo retto» è già preciso: mostra direttamente figura, spiegazione ed esempio. Segui una nuova domanda se cambia argomento.
-VISUALI: usa show_topic_map per organizzare concetti: normalmente 2–4 rami e 1–3 voci per ramo. Usa show_learning_visual per figure geometriche, sequenze, cicli, linee del tempo, paesaggi schematici o vere cartine. Scegli il formato utile automaticamente per una richiesta di studio chiara, anche se non chiede esplicitamente un disegno. Una definizione molto breve può essere solo testo. Una visuale principale per turno; un chiarimento esclude mappe e disegni nello stesso turno. Dopo una visuale basta una breve introduzione. Non scrivere JSON, Markdown o elenchi lunghi nel testo e non promettere visuali se il tool fallisce.
+VISUALI: per posizione o distribuzione geografica, «dove si trovano», cartine, planisferi e «una mappa dei continenti» usa show_learning_visual kind=map, NON show_topic_map. Se chiede esplicitamente una mappa mentale o concettuale, usa invece show_topic_map. «Intendevo una cartina» corregge il formato: riprendi l’argomento e i luoghi dalla cronologia e mostra la cartina senza chiederli di nuovo. Usa show_topic_map per organizzare concetti: normalmente 2–4 rami e 1–3 voci per ramo. Usa show_learning_visual per figure geometriche, sequenze, cicli, linee del tempo, paesaggi schematici o vere cartine. Scegli il formato utile automaticamente per una richiesta di studio chiara, anche se non chiede esplicitamente un disegno. Una definizione molto breve può essere solo testo. Una visuale principale per turno; un chiarimento esclude mappe e disegni nello stesso turno. Dopo una visuale basta una breve introduzione. Non scrivere JSON, Markdown o elenchi lunghi nel testo e non promettere visuali se il tool fallisce.
 GEOMETRIA: figures contiene da 1 a 3 esempi. Per un angolo specifica degrees fra 0 e 360, senza width o height. App e disegno ricavano la classificazione dalla misura: nullo=0, acuto fra 0 e 90, retto=90, ottuso fra 90 e 180, piatto=180, concavo fra 180 e 360, giro=360. Non chiamare retto un angolo da 60°. Per line, ray, segment, triangle, square, rectangle, circle non usare degrees. width e height sono dimensioni del disegno; non inventare misure fisiche o unità. Il triangolo rappresentato è isoscele, con base width e altezza height; se chiedi equilateralità usa height=width*sqrt(3)/2. Il cerchio usa width come diametro. Le dimensioni non richieste possono essere null. Inserisci un esempio quotidiano nella spiegazione.
 SCHEMI: da 2 a 6 nodi con id distinti, etichette brevi, spiegazioni di una o due frasi. sequence per passaggi ordinati; cycle per un ciclo, con un collegamento da ogni nodo al successivo e ritorno al primo; timeline per eventi in ordine cronologico con eventuale timeLabel; scene per parti di un paesaggio. edges collega solo id presenti. I simboli sono predefiniti; non inventare codice SVG, URL o coordinate. Mantieni pochi elementi, aggiungine altri nei turni successivi.
-CARTINE REALI: usa prima find_map_features (massimo due ricerche per turno) con il nome del luogo, anche italiano; il catalogo restituisce id e contesto. Usa in show_learning_visual kind=map soltanto gli id realmente trovati, datasetVersion=ne-v1. Non inventare confini o coordinate. Se ci sono omonimi chiedi quale intende. Se manca un luogo, dillo brevemente e spiega il concetto con una mappa delle idee o uno schema. Sono cartine didattiche della geografia attuale, non confini di civiltà antiche. Per il Nilo evidenzia il fiume; per Creta evidenzia l'isola, non tutta la Grecia.
+CARTINE REALI: usa prima find_map_features (massimo due ricerche per turno) con il nome del luogo, anche italiano; il catalogo restituisce id e contesto. Usa in show_learning_visual kind=map soltanto gli id realmente trovati, datasetVersion=ne-v2. Le cartine normali usano view=focus (o null). Per i continenti usa view=world: mostra sei continenti (Africa, America unita, Antartide, Asia, Europa, Oceania) con un’unica ricerca «continenti», «mondo» o «planisfero» e includi tutti i sei risultati. Se chiede esplicitamente sette continenti, cerca «sette continenti» e includi tutti i sette risultati con America del Nord e America del Sud separate. Spiega in poche parole dove si trova ogni continente. Questa panoramica è già precisa: non chiedere un chiarimento. Non inventare confini o coordinate. Se ci sono omonimi chiedi quale intende. Se manca un luogo o la cartina fallisce, dichiaralo brevemente e spiega a parole. Non presentare una mappa delle idee o uno schema a rami come una cartina riuscita. Sono cartine didattiche della geografia attuale, non confini di civiltà antiche. Per il Nilo evidenzia il fiume; per Creta evidenzia l'isola, non tutta la Grecia.
 PROSEGUIRE: conserva il contenuto mostrato e il punto selezionato. «Più facile» e «Fammi un esempio» si riferiscono a quel punto, senza rigenerare la visuale. «Continua» passa al prossimo concetto: se il contesto indica un punto selezionato, riparti da quello. Ricrea una visuale solo quando serve aggiornarla o per un nuovo argomento. Non chiedere mai di scegliere un formato. Le foto restano solo su richiesta esplicita, separate dai disegni didattici.`
 
 var studySpec = sync.OnceValues(api.GetSwagger)
@@ -61,6 +61,10 @@ func studySchema(name string) map[string]any {
 			delete(m, "oneOf")
 		}
 		if props, ok := m["properties"].(map[string]any); ok {
+			// Saved messages accept older versions; tools only create the current atlas.
+			if version, ok := props["datasetVersion"].(map[string]any); ok {
+				version["enum"] = []string{"ne-v2"}
+			}
 			required := map[string]bool{}
 			for _, key := range m["required"].([]any) {
 				required[key.(string)] = true
@@ -102,7 +106,7 @@ func studyTool(name, description string, schema map[string]any) responses.Namesp
 func studyTools() []responses.NamespaceToolToolUnionParam {
 	return []responses.NamespaceToolToolUnionParam{
 		studyTool("ask_study_focus", "Chiede quale parte dell'argomento vuole capire, con poche scelte pertinenti. Mai chiedere il formato della spiegazione.", studySchema("StudyClarification")),
-		studyTool("show_learning_visual", "Mostra un disegno geometrico preciso, uno schema semplice o una vera cartina del catalogo.", map[string]any{"type": "object", "additionalProperties": false, "required": []string{"visual"}, "properties": map[string]any{"visual": studySchema("LearningVisual")}}),
+		studyTool("show_learning_visual", "Mostra un disegno geometrico preciso, uno schema semplice o una vera cartina del catalogo. Per posizione, distribuzione geografica, continenti, cartine e planisferi usa kind=map; per i continenti usa view=world e tutti i sei (o sette se richiesti) luoghi trovati.", map[string]any{"type": "object", "additionalProperties": false, "required": []string{"visual"}, "properties": map[string]any{"visual": studySchema("LearningVisual")}}),
 	}
 }
 
@@ -294,6 +298,11 @@ func executeLearningVisual(arguments string, found map[string]bool) (*api.Learni
 				return nil, "Scegli solo luoghi distinti trovati con find_map_features. Non inventare coordinate o confini."
 			}
 			seen[feature.Id] = true
+		}
+		// Upgrade legacy tool arguments too, without rewriting saved messages.
+		v.DatasetVersion = api.NeV2
+		if err := result.FromGeographyVisual(v); err != nil {
+			return nil, invalid
 		}
 	default:
 		return nil, invalid

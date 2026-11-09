@@ -135,8 +135,8 @@ func TestGeographyCatalogAndAssets(t *testing.T) {
 		t.Fatal("accepted unknown key")
 	}
 	assets := map[string]bool{}
-	for _, group := range []string{"countries", "regions", "cities", "rivers", "lakes", "islands"} {
-		data, err := os.ReadFile(filepath.Join("../../web/public/geography/ne-v1", group+".json"))
+	for _, group := range []string{"continents", "countries", "regions", "cities", "rivers", "lakes", "islands"} {
+		data, err := os.ReadFile(filepath.Join("../../web/public/geography/ne-v2", group+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -70,3 +70,27 @@ describe('streaming without retries', () => {
     expect(events[1].message?.text).toBe('Tocca un ramo.');
   });
 });
+
+it('removes bold markers from assistant narration in every speech path without changing stored text or attachments', async () => {
+  const { narrativeText, messageSpeechParts, messageSpeechText } = await import('./lib');
+  const text = 'Guarda **Europa** e __Asia__. **';
+  expect(narrativeText(text)).toBe('Guarda Europa e Asia. ');
+  const base: import('./api/types.gen').Message = { id: 'm', conversationId: 'c', role: 'assistant', status: 'completed', text, createdAt: '' };
+  const variants: Partial<import('./api/types.gen').Message>[] = [
+    {}, { learningVisual: { kind: 'map', title: 'Mondo', summary: 'Terre.', datasetVersion: 'ne-v2', features: [] } },
+    { studyClarification: { topic: 'Mondo', question: 'Quale parte?', choices: [] } },
+    { wordClarification: { word: 'bank', language: 'en', question: 'Quale frase?', examples: [{ sentence: '**Bank**.', meaning: 'Banca.' }] } },
+    { wordExplanation: { word: 'dog', meaning: 'cane', example: '**Dog**.', exampleTranslation: 'Cane.' } },
+    { sentenceMap: { sentence: 'The cat.', language: 'en', parts: [{ text: '**The cat**.', question: 'Chi?', explanation: 'Il gatto.' }] } },
+  ];
+  for (const variant of variants) {
+    const message = { ...base, ...variant };
+    const snapshot = structuredClone(message);
+    expect(messageSpeechText(message).startsWith('Guarda Europa e Asia. ')).toBe(true);
+    const parts = messageSpeechParts(message);
+    expect((typeof parts === 'string' ? parts : parts[0].text).startsWith('Guarda Europa e Asia. ')).toBe(true);
+    expect(message).toEqual(snapshot);
+    if (message.wordExplanation) expect(parts).toContainEqual({ text: '**Dog**.', language: 'en' });
+  }
+  expect(messageSpeechText({ ...base, role: 'user' })).toBe(text);
+});

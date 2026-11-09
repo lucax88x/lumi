@@ -161,10 +161,20 @@ function DiagramDrawing({ visual, selected, onChoose, detailId }: { visual: Diag
   </div>;
 }
 
-const groups = ['countries', 'regions', 'cities', 'rivers', 'lakes', 'islands'];
+const continentLabels: Record<string, [number, number]> = {
+  'continents-africa': [20, 3], 'continents-america': [-105, 24],
+  'continents-north-america': [-105, 40], 'continents-south-america': [-61, -14],
+  'continents-antarctica': [0, -79], 'continents-asia': [100, 45],
+  'continents-europe': [12, 57], 'continents-oceania': [140, -31],
+};
+const oceanLabels: { label: string; at: [number, number] }[] = [
+  { label: 'Pacifico', at: [-130, -24] }, { label: 'Atlantico', at: [-34, 25] },
+  { label: 'Indiano', at: [77, -32] },
+];
+const groups = ['continents', 'countries', 'regions', 'cities', 'rivers', 'lakes', 'islands'];
 const atlasCache = new Map<string, Promise<FeatureCollection>>();
 async function atlasGroup(version: string, group: string) {
-  if (version !== 'ne-v1' || !groups.includes(group)) throw new Error('Cartina non disponibile.');
+  if (!['ne-v1', 'ne-v2'].includes(version) || !groups.includes(group) || (version === 'ne-v1' && group === 'continents')) throw new Error('Cartina non disponibile.');
   const key = `${version}/${group}`;
   if (!atlasCache.has(key)) atlasCache.set(key, fetch(`/geography/${key}.json`).then(async response => {
     if (!response.ok) throw new Error('Cartina non disponibile.');
@@ -180,7 +190,7 @@ function GeographyDrawing({ visual, selected, onChoose }: { visual: GeographyVis
   const featureIds = visual.features.map(feature => feature.id).join(',');
   useEffect(() => {
     let alive = true; setFailed(false); setData(undefined);
-    const needed = [...new Set(['countries', ...visual.features.map(f => f.id.split('-')[0])])];
+    const needed = [...new Set([visual.view === 'world' ? 'continents' : 'countries', ...visual.features.map(f => f.id.split('-')[0])])];
     void Promise.all(needed.map(group => atlasGroup(visual.datasetVersion, group))).then(collections => {
       const features = collections.flatMap(collection => collection.features);
       const highlights = visual.features.map(point => features.find(f => f.id === point.id));
@@ -188,7 +198,7 @@ function GeographyDrawing({ visual, selected, onChoose }: { visual: GeographyVis
       if (alive) setData({ background: collections[0], highlights: highlights as Feature[] });
     }).catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, [visual.datasetVersion, featureIds, attempt]);
+  }, [visual.datasetVersion, visual.view, featureIds, attempt]);
   if (failed) return <p className="notice" role="status">Non riesco a caricare la cartina. Le spiegazioni sono qui sotto. <button type="button" className="text-button" onClick={() => setAttempt(n => n + 1)}>Riprova</button></p>;
   if (!data) return <p role="status">Preparo la cartina…</p>;
   const focus: FeatureCollection = { type: 'FeatureCollection', features: data.highlights.map(feature => {
@@ -197,31 +207,44 @@ function GeographyDrawing({ visual, selected, onChoose }: { visual: GeographyVis
   }) };
   const bounds = geoBounds(focus);
   const centerLon = bounds[1][0] < bounds[0][0] ? (bounds[0][0] + bounds[1][0] + 360) / 2 : (bounds[0][0] + bounds[1][0]) / 2;
-  const projection = (bounds[1][1] - bounds[0][1] > 120 ? geoNaturalEarth1() : geoMercator()).rotate([-centerLon, 0]).fitExtent([[22, 24], [298, 216]], focus);
+  const world = visual.view === 'world';
+  const projection = world
+    ? geoNaturalEarth1().rotate([0, 0]).fitExtent([[10, 30], [350, 230]], { type: 'Sphere' })
+    : (bounds[1][1] - bounds[0][1] > 120 ? geoNaturalEarth1() : geoMercator()).rotate([-centerLon, 0]).fitExtent([[22, 24], [298, 216]], focus);
   const path = geoPath(projection).pointRadius(6);
   return <>
-    <svg className="geography-drawing" viewBox="0 0 320 240" role="img" aria-label={`Cartina: ${visual.title}`}>
+    <svg className={`geography-drawing ${world ? 'world-drawing' : ''}`} viewBox={world ? '0 0 360 250' : '0 0 320 240'} role={world ? 'group' : 'img'} aria-label={`Cartina: ${visual.title}`}>
       <title>{visual.title}</title><desc>{visual.summary}. Tocca un luogo evidenziato per scoprirlo.</desc>
-      <rect width="320" height="240" fill="#EDF5F8"/>
-      <g fill="#fbfaf1" stroke="#b5bbad" strokeWidth="0.7">{data.background.features.map((feature, index) => <path key={index} d={path(feature) ?? ''}/>)}</g>
-      {data.background.features.map(feature => ({ feature, center: path.centroid(feature), area: path.area(feature) }))
+      <rect width={world ? 360 : 320} height={world ? 250 : 240} fill="#EDF5F8"/>
+      <g className="map-background" fill="#fbfaf1" stroke="#b5bbad" strokeWidth={world ? 0.4 : 0.7}>{data.background.features.filter(feature => !world || !['continents-north-america', 'continents-south-america'].includes(String(feature.id))).map((feature, index) => <path key={index} d={path(feature) ?? ''}/>)}</g>
+      {!world && data.background.features.map(feature => ({ feature, center: path.centroid(feature), area: path.area(feature) }))
         .filter(({ feature, center, area }) => !data.highlights.some(highlight => highlight.id === feature.id) && area > 1000 && center.every(Number.isFinite) && center[0] > 38 && center[0] < 295 && center[1] > 35 && center[1] < 215)
         .sort((a, b) => b.area - a.area).slice(0, 3)
         .map(({ feature, center }) => <text key={String(feature.id)} x={center[0]} y={center[1]} textAnchor="middle" className="map-country-label">{feature.properties?.label}</text>)}
       {data.highlights.map((feature, index) => {
         const line = feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString';
-        const centroid = path.centroid(feature as Feature<Geometry>);
+        const anchor = world ? continentLabels[String(feature.id)] : undefined;
+        const centroid = anchor ? projection(anchor) ?? [NaN, NaN] : path.centroid(feature as Feature<Geometry>);
         const visible = centroid.every(Number.isFinite) && centroid[0] >= 15 && centroid[0] <= 305 && centroid[1] >= 15 && centroid[1] <= 225;
-        return <g key={index} className="map-feature visual-tap-target" onClick={() => onChoose(index)}>
+        return <g key={index} className="map-feature visual-tap-target" role={world ? 'button' : undefined} tabIndex={world ? 0 : undefined} aria-label={world ? `Seleziona ${visual.features[index].label}` : undefined} aria-pressed={world ? selected === index : undefined} onClick={() => onChoose(index)} onKeyDown={event => {
+          if (world && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onChoose(index); }
+        }}>
           {line && <path d={path(feature) ?? ''} fill="none" stroke="transparent" strokeWidth="18"/>}
-          <path d={path(feature) ?? ''} fill={line ? 'none' : selected === index ? '#C8E2EB' : '#E4EDF0'} stroke="#287CAA" strokeWidth={selected === index ? (line ? 3 : 1.8) : 1.2}/>
-          {visible && <g className="map-pin" transform={`translate(${centroid[0]},${centroid[1]})`}>
+          <path d={path(feature) ?? ''} fill={line ? 'none' : selected === index ? '#A8D2DE' : '#E4EDF0'} stroke="#287CAA" strokeWidth={selected === index ? (line ? 3 : 1.8) : 1.2}/>
+          {world && anchor && <text x={centroid[0]} y={centroid[1]} textAnchor="middle" className="map-continent-label">
+            {String(feature.properties?.label ?? visual.features[index].label).split(' del ').map((part, lineIndex) => <tspan key={lineIndex} x={centroid[0]} dy={lineIndex ? 16 : 0}>{lineIndex ? `del ${part}` : part}</tspan>)}
+          </text>}
+          {!world && visible && <g className="map-pin" transform={`translate(${centroid[0]},${centroid[1]})`}>
             <circle r={selected === index ? 11 : 8} fill={selected === index ? '#287CAA' : '#FFFFFF'} stroke={selected === index ? '#FFFFFF' : '#287CAA'} strokeWidth="2.5"/>
             <circle r="3" fill={selected === index ? '#FFFFFF' : '#287CAA'} pointerEvents="none"/>
           </g>}
         </g>;
       })}
-      <text x="302" y="18" textAnchor="middle" fontSize="13" fill="#3f5661">N ↑</text>
+      {world && oceanLabels.map(({ label, at }) => {
+        const [x, y] = projection(at)!;
+        return <text key={label} x={x} y={y} textAnchor="middle" className="map-ocean-label"><tspan x={x}>Oceano</tspan><tspan x={x} dy="12">{label}</tspan></text>;
+      })}
+      <text x={world ? 342 : 302} y="18" textAnchor="middle" fontSize="13" fill="#3f5661">N ↑</text>
     </svg>
   </>;
 }

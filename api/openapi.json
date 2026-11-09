@@ -4826,7 +4826,8 @@
           "datasetVersion": {
             "type": "string",
             "enum": [
-              "ne-v1"
+              "ne-v1",
+              "ne-v2"
             ]
           },
           "features": {
@@ -4835,7 +4836,15 @@
               "$ref": "#/components/schemas/MapFeature"
             },
             "minItems": 1,
-            "maxItems": 4
+            "maxItems": 7
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "world",
+              "focus"
+            ],
+            "description": "world mostra il planisfero completo; se omesso si usa focus, centrato sui luoghi evidenziati."
           }
         },
         "required": [

@@ -323,8 +323,12 @@ export type GeographyVisual = {
     kind: 'map';
     title: string;
     summary: string;
-    datasetVersion: 'ne-v1';
+    datasetVersion: 'ne-v1' | 'ne-v2';
     features: Array<MapFeature>;
+    /**
+     * world mostra il planisfero completo; se omesso si usa focus, centrato sui luoghi evidenziati.
+     */
+    view?: 'world' | 'focus';
 };
 
 export type LearningVisual = ({

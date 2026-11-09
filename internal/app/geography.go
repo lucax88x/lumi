@@ -61,7 +61,7 @@ func mapFeatureExists(id string) bool {
 	return false
 }
 func mapSearchTool() responses.NamespaceToolToolUnionParam {
-	return studyTool("find_map_features", "Cerca luoghi reali nel catalogo: restituisce id, nome e contesto. Usa il nome del luogo, per esempio Nilo, Creta, Italia o Toscana. Non inventare id.", map[string]any{
+	return studyTool("find_map_features", "Cerca luoghi reali nel catalogo: restituisce id, nome e contesto. Usa il nome del luogo, per esempio Nilo, Creta, Italia o Toscana. Con continenti, mondo o planisfero restituisce tutti i sei continenti in una chiamata; con sette continenti restituisce i sette. Sono cercabili anche America del Nord e America del Sud. Non inventare id.", map[string]any{
 		"type": "object", "additionalProperties": false, "required": []string{"query"}, "properties": map[string]any{"query": map[string]any{"type": "string", "minLength": 1, "maxLength": 100}},
 	})
 }
@@ -94,6 +94,19 @@ func findMapFeatures(arguments string) ([]mapSearchResult, string) {
 	}
 	if query == "" {
 		return nil, "Scrivi il nome del luogo da cercare."
+	}
+	// A world overview must fit in one lookup (only two are allowed per turn).
+	world := query == "continenti" || query == "mondo" || query == "planisfero" || query == "sei continenti" || query == "6 continenti"
+	seven := query == "sette continenti" || query == "7 continenti"
+	if world || seven {
+		results := []mapSearchResult{}
+		for _, f := range geographyCatalog() {
+			if f.Kind != "continents" || (seven && f.Id == "continents-america") || (!seven && (f.Id == "continents-north-america" || f.Id == "continents-south-america")) {
+				continue
+			}
+			results = append(results, f)
+		}
+		return results, ""
 	}
 	type match struct {
 		feature mapSearchResult

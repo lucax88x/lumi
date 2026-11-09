@@ -112,3 +112,47 @@ it('accepts streamed study attachments and preserves them on an interrupted cont
     expect(events[0].message?.learningVisual ?? events[0].message?.studyClarification).toEqual(type === 'learning_visual' ? visual : focus);
   }
 });
+
+it('renders a stable complete world and preserves continent selection across reading and rerenders', async () => {
+  const { readFileSync } = await import('node:fs');
+  const atlas = JSON.parse(readFileSync('public/geography/ne-v2/continents.json', 'utf8')) as import('geojson').FeatureCollection;
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(atlas))));
+  const world: import('./api/types.gen').GeographyVisual = { kind: 'map', title: 'I continenti', summary: 'Le grandi terre del mondo.', datasetVersion: 'ne-v2', view: 'world', features: atlas.features.filter(f => !['continents-north-america', 'continents-south-america'].includes(String(f.id))).map(f => ({ id: String(f.id), label: String(f.properties?.label), explanation: `Scopriamo ${f.properties?.label}.` })) };
+  const onSelect = vi.fn(); const onRead = vi.fn();
+  const { container, rerender } = render(<LearningVisual visual={world} onSelect={onSelect} onRead={onRead}/>);
+  await screen.findByRole('group', { name: 'Cartina: I continenti' });
+  const paths = () => [...container.querySelectorAll('.map-feature > path')].map(p => p.getAttribute('d'));
+  const before = paths();
+  expect(before).toHaveLength(6);
+  expect(before.every(path => path && !/NaN|Infinity/.test(path))).toBe(true);
+  expect(container.querySelectorAll('.map-background path')).toHaveLength(6);
+  expect(container.querySelectorAll('.map-continent-label')).toHaveLength(6);
+  expect(container.querySelectorAll('.map-country-label')).toHaveLength(0);
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Seleziona Oceania' }), { key: 'Enter' });
+  expect(onSelect).toHaveBeenLastCalledWith('Oceania');
+  expect(screen.getByText('Scopriamo Oceania.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Ascolta' }));
+  expect(onRead).toHaveBeenLastCalledWith('Oceania. Scopriamo Oceania.', expect.any(String));
+  rerender(<LearningVisual visual={structuredClone(world)} onSelect={onSelect} onRead={onRead} readingNode="6"/>);
+  expect(screen.getByText('Scopriamo Oceania.')).toBeVisible();
+  expect(paths()).toEqual(before);
+  fireEvent.click(screen.getByRole('button', { name: 'Antartide' }));
+  expect(screen.getByText('Scopriamo Antartide.')).toBeVisible();
+  expect(paths()).toEqual(before);
+});
+
+it('ships real continental shapes with ocean-free islands and both American subdivisions', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { geoContains } = await import('d3-geo');
+  const atlas = JSON.parse(readFileSync('public/geography/ne-v2/continents.json', 'utf8')) as import('geojson').FeatureCollection;
+  const contains = (id: string, point: [number, number]) => geoContains(atlas.features.find(f => f.id === `continents-${id}`)!, point);
+  for (const [id, point] of [
+    ['africa', [20, 10]], ['europe', [12, 43]], ['asia', [100, 40]],
+    ['antarctica', [20, -80]], ['america', [-100, 40]], ['america', [-60, -10]],
+    ['north-america', [-100, 40]], ['south-america', [-60, -10]],
+    ['oceania', [135, -25]], ['oceania', [170, -44]], ['oceania', [176, -39]],
+    ['oceania', [147, -42]], ['oceania', [145, -6]], ['oceania', [178, -17.8]],
+  ] as [string, [number, number]][]) expect(contains(id, point), `${id} at ${point}`).toBe(true);
+  expect(contains('oceania', [170, -30])).toBe(false);
+  expect(contains('north-america', [-60, -10])).toBe(false);
+});
