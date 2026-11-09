@@ -103,10 +103,26 @@ func studyTool(name, description string, schema map[string]any) responses.Namesp
 		Name: name, Description: openai.String(description), Strict: openai.Bool(true), Parameters: schema,
 	}}
 }
-func studyTools() []responses.NamespaceToolToolUnionParam {
+
+// New tools expose cartography only in Geography and History after planning.
+func studyTools(allowMaps bool) []responses.NamespaceToolToolUnionParam {
+	visual := studySchema("LearningVisual")
+	description := "Mostra un disegno geometrico preciso o uno schema semplice."
+	if allowMaps {
+		description += " Per posizione, continenti, cartine e planisferi usa kind=map; per i continenti usa view=world e tutti i sei (o sette se richiesti) luoghi trovati."
+	} else {
+		kept := []any{}
+		for _, variant := range visual["anyOf"].([]any) {
+			kind := variant.(map[string]any)["properties"].(map[string]any)["kind"].(map[string]any)["enum"].([]any)[0]
+			if kind != "map" {
+				kept = append(kept, variant)
+			}
+		}
+		visual["anyOf"] = kept
+	}
 	return []responses.NamespaceToolToolUnionParam{
 		studyTool("ask_study_focus", "Chiede quale parte dell'argomento vuole capire, con poche scelte pertinenti. Mai chiedere il formato della spiegazione.", studySchema("StudyClarification")),
-		studyTool("show_learning_visual", "Mostra un disegno geometrico preciso, uno schema semplice o una vera cartina del catalogo. Per posizione, distribuzione geografica, continenti, cartine e planisferi usa kind=map; per i continenti usa view=world e tutti i sei (o sette se richiesti) luoghi trovati.", map[string]any{"type": "object", "additionalProperties": false, "required": []string{"visual"}, "properties": map[string]any{"visual": studySchema("LearningVisual")}}),
+		studyTool("show_learning_visual", description, map[string]any{"type": "object", "additionalProperties": false, "required": []string{"visual"}, "properties": map[string]any{"visual": visual}}),
 	}
 }
 

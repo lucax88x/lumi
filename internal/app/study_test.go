@@ -37,10 +37,13 @@ func TestStudyToolsAndValidation(t *testing.T) {
 		for _, tool := range tools {
 			names[tool.OfFunction.Name] = true
 		}
-		for _, name := range []string{"show_topic_map", "ask_study_focus", "show_learning_visual", "find_map_features"} {
+		for _, name := range []string{"show_topic_map", "ask_study_focus", "show_learning_visual"} {
 			if !names[name] {
 				t.Fatal("missing tool", name)
 			}
+		}
+		if names["find_map_features"] != geographicSubject(subject) || subjectToolAllowed(subject, "find_map_features") != geographicSubject(subject) {
+			t.Fatal("geographic lookup leaked or missing", subject)
 		}
 		if names["show_sentence_map"] || subjectToolAllowed(subject, "show_word_explanation") {
 			t.Fatal("linguistic tools leaked")
@@ -176,16 +179,18 @@ func TestStudyLookupStreamAndAttachmentOnlyCompletion(t *testing.T) {
 	g := toolGenerator(t, func(r *http.Request) (*http.Response, error) {
 		calls++
 		body := requestBody(t, r)
-		if !strings.Contains(body["instructions"].(string), "Non chiedere MAI quale formato") {
+		if calls > 1 && !strings.Contains(body["instructions"].(string), "Non chiedere MAI quale formato") {
 			t.Fatal("wrong instructions")
 		}
 		var name, args string
 		switch calls {
 		case 1:
-			name, args = "find_map_features", `{"query":"Nilo"}`
+			return plannedStream("map", "Il Nilo", false, 0), nil
 		case 2:
-			name, args = "find_map_features", `{"query":"Egitto"}`
+			name, args = "find_map_features", `{"query":"Nilo"}`
 		case 3:
+			name, args = "find_map_features", `{"query":"Egitto"}`
+		case 4:
 			name, args = "show_learning_visual", visual
 		default:
 			if body["tool_choice"] != "none" {
@@ -201,7 +206,7 @@ func TestStudyLookupStreamAndAttachmentOnlyCompletion(t *testing.T) {
 	ctx := context.WithValue(context.Background(), subjectKey{}, api.History)
 	history := []api.Message{{Role: "assistant", Status: "completed", StudyClarification: mustStudyFocus(t)}, {Role: "user", Status: "completed", Text: "Il Nilo"}}
 	err := g.Stream(ctx, api.Settings{Model: "test", Prompt: "Studiamo."}, history, func(e GenerationEvent) error { events = append(events, e); return nil })
-	if err != nil || calls != 4 || len(events) != 1 || events[0].LearningVisual == nil {
+	if err != nil || calls != 4 || len(events) != 2 || events[0].LearningVisual == nil || events[1].Text != "Tocca un luogo per scoprirlo" {
 		t.Fatalf("calls=%d events=%v err=%v", calls, events, err)
 	}
 }

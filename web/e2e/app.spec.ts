@@ -89,7 +89,7 @@ const cretanMap = { title: 'La vita dei Cretesi', branches: [
   { label: 'Che cosa facevano', explanation: 'Coltivavano e viaggiavano sul mare.', items: [{ label: 'Le navi', explanation: 'Portavano merci in altri luoghi.' }] },
 ] };
 function studyMockAnswer(text: string, history: Message[]): Partial<Message> | undefined {
-  if (text === 'Mostrami i continenti e dove si trovano' || text === 'Intendevo una cartina') return { text: 'Ecco **il mondo** e i suoi __continenti__.', learningVisual: continentsVisual };
+  if (text === 'I continenti' || text === 'Mostrami i continenti e dove si trovano' || text === 'Intendevo una cartina') return { text: 'Tocca un continente per scoprire dove si trova', learningVisual: continentsVisual };
   if (text === 'Gli Egiziani') return { text: '', studyClarification: egyptFocus };
   if (text === 'I Cretesi') return { text: '', studyClarification: { topic: 'I Cretesi', question: 'Che cosa vuoi scoprire dei Cretesi?', choices: [{ label: 'Dove vivevano', reply: 'Dove vivevano i Cretesi' }, { label: 'La loro vita', reply: 'La vita dei Cretesi' }] } };
   if (text === 'I tipi di angoli') return { text: '', studyClarification: { topic: 'Gli angoli', question: 'Hai già i nomi degli angoli che stai studiando?', choices: [{ label: 'Ti dico i nomi', reply: 'Ti dico i nomi degli angoli' }, { label: 'Una prima scoperta', reply: 'Una prima scoperta degli angoli' }] } };
@@ -1340,6 +1340,54 @@ test('desktop retains its conversation header and composer guidance', async ({ p
   await expect(page.locator('.page-footer')).toBeVisible();
 });
 
+test('waiting scenes entertain until text or a learning card arrives', async ({ page }, testInfo) => {
+  await page.clock.install();
+  const api = await mockAPI(page);
+  const date = new Date().toISOString();
+  api.chats.push({ id: 'waiting', title: 'Una piccola scoperta', subject: 'italian', createdAt: date, updatedAt: date });
+  const answer: Message = { id: 'waiting-answer', conversationId: 'waiting', role: 'assistant', status: 'streaming', text: '', createdAt: date };
+  api.messages.set('waiting', [answer]);
+  await page.goto('/spazi/test/domande/waiting');
+  const play = page.locator('.thinking-play');
+  await expect(play).toBeVisible();
+  await expect(play.getByRole('status')).toHaveText('Lumi sta pensando. La risposta sta arrivando.');
+  await expect(play).toContainText('Ehi, stellina! Aspettami!');
+  await expect(page.locator('.thinking-dots')).toHaveCount(0);
+  await page.screenshot({ path: `test-results/waiting-star-${testInfo.project.name}.png` });
+  const next = play.getByRole('button', { name: 'Un’altra magia' });
+  await next.focus();
+  await page.keyboard.press('Enter');
+  await expect(play).toContainText('Un’idea a testa in giù!');
+  await page.clock.fastForward(8000);
+  await expect(play).toContainText('Una bolla… due bolle… pop!');
+  await page.screenshot({ path: `test-results/waiting-bubbles-${testInfo.project.name}.png` });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect.poll(() => page.locator('.thinking-bubble-one').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  await page.clock.fastForward(16000);
+  await expect(play).toContainText('Una bolla… due bolle… pop!');
+  await next.click();
+  await expect(play).toContainText('Ehi, stellina! Aspettami!');
+
+  answer.text = 'Ecco la prima piccola idea.';
+  await page.clock.fastForward(2100);
+  await expect(play).toHaveCount(0);
+  await expect(page.locator('.message.assistant')).toContainText(answer.text);
+  await expect(page.locator('.thinking-dots')).toBeVisible();
+
+  answer.text = '';
+  answer.wordExplanation = vigorousWord;
+  await page.clock.fastForward(2100);
+  await expect(play).toHaveCount(0);
+  await expect(page.locator('.word-explanation')).toBeVisible();
+  answer.wordExplanation = undefined;
+  answer.status = 'interrupted';
+  await page.clock.fastForward(2100);
+  await expect(play).toHaveCount(0);
+  await expect(page.getByText('La risposta si è interrotta', { exact: true })).toBeVisible();
+});
+
 test('long streaming answers respect reading position and keep the composer in view', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 700 });
   await page.clock.install();
@@ -1594,14 +1642,14 @@ for (const [width, height] of [[320, 640], [390, 760], [430, 880]]) {
     const api = await mockAPI(page);
     await page.goto('/spazi/test');
     await page.getByRole('radio', { name: 'Geografia', exact: true }).click();
-    await page.getByLabel('Scrivi una parola o una frase').fill('Mostrami i continenti e dove si trovano');
+    await page.getByLabel('Scrivi una parola o una frase').fill('I continenti');
     await page.getByRole('button', { name: 'Scopriamo!' }).click();
     const map = page.getByRole('group', { name: 'Cartina: I continenti' });
     await expect(map).toBeVisible();
     await expect(map.locator('.map-feature')).toHaveCount(6);
     const originalPaths = await map.locator('.map-feature > path').evaluateAll(paths => paths.map(path => path.getAttribute('d')));
-    await expect(page.locator('.message.assistant > p').first()).toHaveText('Ecco il mondo e i suoi continenti.');
-    expect(api.messages.get(api.chats[0].id)!.at(-1)!.text).toContain('**il mondo**');
+    await expect(page.locator('.message.assistant > p').first()).toHaveText('Tocca un continente per scoprire dove si trova');
+    expect(api.messages.get(api.chats[0].id)!.at(-1)!.text).toBe('Tocca un continente per scoprire dove si trova');
     await page.getByRole('button', { name: 'Riascolta', exact: true }).click();
     expect(await page.evaluate(() => (window as unknown as { activeUtterance: SpeechSynthesisUtterance }).activeUtterance.text)).not.toMatch(/\*\*|__/);
     await page.getByRole('button', { name: 'Ferma la voce', exact: true }).click();

@@ -44,8 +44,28 @@ L'America è l'unione geometrica di Nord e Sud. Le geometrie sono generalizzate,
 non rappresentano una classificazione universale dei continenti.
 
 `continenti`, `mondo` e `planisfero` restituiscono i sei continenti in una ricerca;
-`sette continenti` ne restituisce sette. Per la verifica del formato scelto dal
-modello esiste una prova opt-in, che consuma il piano configurato:
+`sette continenti` ne restituisce sette.
+
+Le cartine sono disponibili soltanto in Geografia e Storia. Prima della risposta,
+una chiamata interna obbligatoria a `plan_study` decide fra cartina, mappa
+concettuale, prosecuzione e altro, usando domanda, cronologia e allegati reali.
+Questa pianificazione non viene mostrata né salvata. «I continenti» apre il
+planisfero a sei continenti; sette richiede una domanda esplicita. Una richiesta
+esplicita di mappa mentale conserva invece il formato concettuale.
+
+Per una cartina il server espone soltanto ricerca geografica, visuali `kind=map`
+e un eventuale chiarimento sul luogo. Controlla gli id e, per il planisfero,
+`view=world` e l'insieme completo dei continenti richiesti. Schemi incompatibili
+vengono rifiutati prima dell'emissione e del salvataggio. Sono ammessi quattro
+passaggi dopo la pianificazione e una sola correzione; gli errori di rete o di
+pianificazione interrompono il turno senza ripetizioni automatiche. Il testo del
+modello resta trattenuto: dopo la validazione l'app mostra la cartina e una breve
+frase fissa, senza un'altra chiamata per l'introduzione. In Scienze e Geometria
+restano disponibili gli altri disegni e schemi.
+
+La prova opt-in verifica Geografia e Storia, includendo esattamente «I continenti»,
+la correzione del formato, sette continenti e la mappa mentale esplicita. Consuma
+il piano configurato e resta distinta dai test con risposte simulate:
 
 ```sh
 LUMI_LIVE_TEST_DATA_DIR=/percorso/dati mise exec -- go test ./internal/app -run TestLiveContinentFormat -v

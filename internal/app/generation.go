@@ -56,8 +56,8 @@ func subjectTools(used map[string]bool, subject api.Subject) responses.ToolUnion
 	if studySubject(subject) {
 		if !contentToolUsed(used) {
 			tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, topicMapTool())
-			tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, studyTools()...)
-			if !used["find_map_features:2"] {
+			tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, studyTools(geographicSubject(subject))...)
+			if geographicSubject(subject) && !used["find_map_features:2"] {
 				tool.OfNamespace.Tools = append(tool.OfNamespace.Tools, mapSearchTool())
 			}
 		}
@@ -96,14 +96,14 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 			if err != nil {
 				return err
 			}
-			text += "\n[Mappa già mostrata, dati: " + string(encoded) + "]"
+			text += "\n[Schema della frase già mostrato, dati: " + string(encoded) + "]"
 		}
 		if m.TopicMap != nil {
 			encoded, err := json.Marshal(m.TopicMap)
 			if err != nil {
 				return err
 			}
-			text += "\n[Mappa di argomenti già mostrata, dati: " + string(encoded) + "]"
+			text += "\n[Mappa concettuale già mostrata, dati: " + string(encoded) + "]"
 		}
 		if m.WordExplanation != nil {
 			encoded, err := json.Marshal(m.WordExplanation)
@@ -125,7 +125,7 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 			present bool
 		}{
 			{"Argomento da chiarire", m.StudyClarification, m.StudyClarification != nil},
-			{"Visuale didattica già mostrata", m.LearningVisual, m.LearningVisual != nil},
+			{learningVisualContext(m.LearningVisual), m.LearningVisual, m.LearningVisual != nil},
 		} {
 			if attachment.present {
 				encoded, err := json.Marshal(attachment.data)
@@ -149,24 +149,39 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 	}
 	if studySubject(subject) {
 		instructions = settings.Prompt + "\n\n" + imageInstructions + "\n\n" + assistantProfiles[subject].instructions
+		if !geographicSubject(subject) {
+			instructions += "\nLe cartine geografiche sono disponibili soltanto in Geografia e Storia. In questa materia usa gli altri disegni, schemi o spiegazioni; non chiamare find_map_features e non usare kind=map."
+		}
 	} else {
 		instructions += "\n\n" + wordClarificationInstructions
+	}
+	var plan *studyPlan
+	if geographicSubject(subject) {
+		decision, err := g.planStudy(ctx, &token, settings.Model, input)
+		if err != nil {
+			return err
+		}
+		plan = &decision
+		if plan.Decision == "map" {
+			return g.streamMap(ctx, &token, settings.Model, instructions, input, decision, emit)
+		}
+		encoded, _ := json.Marshal(decision)
+		instructions += "\nDECISIONE INTERNA DEL SERVER: " + string(encoded) + "\nRispetta il formato deciso. Per continue resta sul punto selezionato senza ricreare visuali. Non dichiarare di aver mostrato cartine se non c'è un allegato kind=map. Titoli, riepiloghi e spiegazioni devono essere autonomi, senza riferimenti inventati a visuali precedenti."
 	}
 	params := responses.ResponseNewParams{
 		Model: settings.Model, Instructions: openai.String(instructions),
 		Input: responses.ResponseNewParamsInputUnion{OfInputItemList: input}, Store: openai.Bool(false),
-		Tools: []responses.ToolUnionParam{subjectTools(used, subject)}, ParallelToolCalls: openai.Bool(false),
+		Tools: plannedTools(used, subject, plan), ParallelToolCalls: openai.Bool(false),
 		Include: []responses.ResponseIncludable{responses.ResponseIncludableReasoningEncryptedContent},
 	}
 	chars := 0
 	hasContent := false
-	foundPlaces := map[string]bool{}
-	searches := 0
+	formatCorrections := 0
 	maxRounds := 3
 	if studySubject(subject) {
 		maxRounds = 4
 	}
-	// Geographic lookup is preparatory; at most one main content attachment.
+	// At most one main content attachment, followed by brief prose if needed.
 	for round := 0; round < maxRounds; round++ {
 		if round > 0 && chars > 0 {
 			if err := emit(GenerationEvent{Text: "\n\n"}); err != nil {
@@ -175,7 +190,7 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 			chars += 2
 		}
 		before := chars
-		result, err := g.streamResponse(ctx, &token, params, &chars, emit)
+		result, err := g.streamResponseWithRefresh(ctx, &token, params, &chars, emit, plan == nil)
 		if err != nil {
 			return err
 		}
@@ -212,21 +227,8 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 		for _, call := range calls {
 			output := imageToolResult{Images: []api.WordImage{}}
 			switch {
-			case call.Namespace != "lumi" || !subjectToolAllowed(subject, call.Name):
+			case call.Namespace != "lumi" || !subjectToolAllowed(subject, call.Name) || !plan.allows(call.Name):
 				output.Error = "Strumento non disponibile per questa materia."
-			case call.Name == "find_map_features":
-				if searches >= 2 || contentToolUsed(used) {
-					output.Error = "Le ricerche geografiche disponibili sono terminate. Continua con i luoghi già trovati o una spiegazione semplice."
-				} else {
-					searches++
-					output.MapFeatures, output.Error = findMapFeatures(call.Arguments)
-					for _, feature := range output.MapFeatures {
-						foundPlaces[feature.Id] = true
-					}
-					if searches == 2 {
-						used["find_map_features:2"] = true
-					}
-				}
 			case used[call.Name] || (call.Name != "show_images" && contentToolUsed(used)):
 				output.Error = "Sono disponibili un contenuto didattico o un chiarimento e una ricerca di immagini per turno."
 			default:
@@ -237,7 +239,11 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 				case "ask_study_focus":
 					output.StudyClarification, output.Error = executeStudyFocus(call.Arguments)
 				case "show_learning_visual":
-					output.LearningVisual, output.Error = executeLearningVisual(call.Arguments, foundPlaces)
+					if learningVisualKind(call.Arguments) == "map" {
+						output.Error = "Le cartine richiedono una pianificazione geografica. Non usare una cartina in questo turno."
+					} else {
+						output.LearningVisual, output.Error = executeLearningVisual(call.Arguments, nil)
+					}
 				case "ask_word_context":
 					output.WordClarification, output.Error = executeWordClarificationTool(call.Arguments, history)
 				case "show_word_explanation":
@@ -246,6 +252,12 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 					output.TopicMap, output.Error = executeProfileTopicMap(call.Arguments, subject)
 				case "show_sentence_map":
 					output.SentenceMap, output.Error = executeProfileSentenceMap(call.Arguments, history, subject)
+				}
+			}
+			if plan != nil && output.Error != "" {
+				formatCorrections++
+				if formatCorrections > 1 {
+					return errors.New("Non riesco a preparare il formato richiesto. Riprova tra poco.")
 				}
 			}
 			if output.Error != "" && (call.Name == "show_learning_visual" || call.Name == "ask_study_focus") {
@@ -308,7 +320,7 @@ func (g *OpenAIGenerator) Stream(ctx context.Context, settings api.Settings, his
 		if round == maxRounds-2 || (used["show_images"] && contentToolUsed(used)) || (studySubject(subject) && contentToolUsed(used)) {
 			params.ToolChoice.OfToolChoiceMode = openai.Opt(responses.ToolChoiceOptionsNone)
 		} else {
-			params.Tools = []responses.ToolUnionParam{subjectTools(used, subject)}
+			params.Tools = plannedTools(used, subject, plan)
 		}
 	}
 	return errors.New("La risposta si è interrotta. Puoi riprovare.")
@@ -354,7 +366,7 @@ func (g *OpenAIGenerator) executeImageTool(ctx context.Context, arguments string
 	return result
 }
 
-func (g *OpenAIGenerator) streamResponse(ctx context.Context, token *string, params responses.ResponseNewParams, chars *int, emit func(GenerationEvent) error) (responses.Response, error) {
+func (g *OpenAIGenerator) streamResponseWithRefresh(ctx context.Context, token *string, params responses.ResponseNewParams, chars *int, emit func(GenerationEvent) error, refresh bool) (responses.Response, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		streamClient := *g.auth.http
 		streamClient.Timeout = 125 * time.Second
@@ -395,7 +407,7 @@ func (g *OpenAIGenerator) streamResponse(ctx context.Context, token *string, par
 		err := stream.Err()
 		stream.Close()
 		var apiErr *openai.Error
-		if !received && attempt == 0 && errors.As(err, &apiErr) && apiErr.StatusCode == 401 {
+		if refresh && !received && attempt == 0 && errors.As(err, &apiErr) && apiErr.StatusCode == 401 {
 			*token, err = g.auth.Token(ctx, *token)
 			if err != nil {
 				return responses.Response{}, err
@@ -703,7 +715,7 @@ func subjectToolAllowed(subject api.Subject, name string) bool {
 		return true
 	}
 	if studySubject(subject) {
-		return name == "ask_study_focus" || name == "show_learning_visual" || name == "find_map_features"
+		return name == "ask_study_focus" || name == "show_learning_visual" || (geographicSubject(subject) && name == "find_map_features")
 	}
 	return name == "ask_word_context" || name == "show_word_explanation" || name == "show_sentence_map"
 }

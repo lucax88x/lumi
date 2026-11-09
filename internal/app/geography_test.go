@@ -124,10 +124,13 @@ func TestContinentCorrectionUsesHistoryAndOneLookup(t *testing.T) {
 		calls++
 		body := requestBody(t, r)
 		encoded, _ := json.Marshal(body["input"])
-		for _, text := range []string{"Intendevo una cartina", "I continenti", "Mappa di argomenti già mostrata"} {
+		for _, text := range []string{"Intendevo una cartina", "I continenti", "Mappa concettuale già mostrata"} {
 			if !strings.Contains(string(encoded), text) {
 				t.Fatalf("missing correction context %s", text)
 			}
+		}
+		if calls == 1 {
+			return plannedStream("map", "I continenti", true, 6), nil
 		}
 		instructions := body["instructions"].(string)
 		for _, instruction := range []string{"view=world", "Intendevo una cartina", "Non presentare una mappa delle idee"} {
@@ -135,14 +138,8 @@ func TestContinentCorrectionUsesHistoryAndOneLookup(t *testing.T) {
 				t.Fatal("missing cartography instruction", instruction)
 			}
 		}
-		if calls == 3 {
-			if body["tool_choice"] != "none" {
-				t.Fatal("tools should stop after map")
-			}
-			return completedStream("Ecco la cartina del mondo.", nil), nil
-		}
 		name, args := "find_map_features", `{"query":"continenti"}`
-		if calls == 2 {
+		if calls == 3 {
 			name, args = "show_learning_visual", arguments
 		}
 		call := toolCall(name, args)
