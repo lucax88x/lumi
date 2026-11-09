@@ -138,3 +138,87 @@ it('reports the missing English voice without reading English with an Italian vo
   expect(result.current.blocked).toBe(true);
   expect(result.current.speaking).toBe(false);
 });
+
+it('accepts device locale tags with underscores for Italian and English', () => {
+  vi.useFakeTimers();
+  const italian = { voiceURI: 'it', lang: 'it_IT', localService: true } as SpeechSynthesisVoice;
+  const english = { voiceURI: 'en', lang: 'en_US', localService: true } as SpeechSynthesisVoice;
+  const speak = vi.fn();
+  vi.stubGlobal('speechSynthesis', { getVoices: () => [italian, english], speak, cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} });
+  const { result, unmount } = renderHook(() => useSpeech());
+  expect(result.current.voices).toEqual([italian, english]);
+  act(() => result.current.speak([{ text: 'Ciao!', language: 'it' }, { text: 'Hello!', language: 'en' }]));
+  expect(speak.mock.calls[0][0].voice).toBe(italian);
+  expect(speak.mock.calls[0][0].lang).toBe('it-IT');
+  act(() => { speak.mock.calls[0][0].onstart(); speak.mock.calls[0][0].onend(); vi.advanceTimersByTime(1200); });
+  expect(speak.mock.calls[1][0].voice).toBe(english);
+  expect(speak.mock.calls[1][0].lang).toBe('en-US');
+  unmount();
+});
+
+it('refreshes voices at playback when the browser misses voiceschanged', () => {
+  const italian = { voiceURI: 'it', lang: 'it-IT' } as SpeechSynthesisVoice;
+  let voices: SpeechSynthesisVoice[] = [];
+  const speak = vi.fn();
+  vi.stubGlobal('speechSynthesis', { getVoices: () => voices, speak, cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} });
+  const { result, unmount } = renderHook(() => useSpeech());
+  voices = [italian];
+  act(() => result.current.speak('Ciao!'));
+  expect(speak.mock.calls[0][0].voice).toBe(italian);
+  expect(result.current.voices).toEqual([italian]);
+  expect(result.current.blocked).toBe(false);
+  unmount();
+});
+
+it('retries initially empty voice discovery for a bounded time and cleans up on unmount', () => {
+  vi.useFakeTimers();
+  const italian = { voiceURI: 'it', lang: 'it-IT' } as SpeechSynthesisVoice;
+  let voices: SpeechSynthesisVoice[] = [];
+  vi.stubGlobal('speechSynthesis', { getVoices: () => voices, cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  const first = renderHook(() => useSpeech());
+  act(() => vi.advanceTimersByTime(5000));
+  expect(vi.getTimerCount()).toBe(0);
+  first.unmount();
+  const second = renderHook(() => useSpeech());
+  voices = [italian];
+  act(() => vi.advanceTimersByTime(250));
+  expect(second.result.current.voices).toEqual([italian]);
+  second.unmount();
+  expect(vi.getTimerCount()).toBe(0);
+  voices = [];
+  const third = renderHook(() => useSpeech());
+  third.unmount();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it.each(['it', 'en'] as const)('lets the browser resolve a %s voice when enumeration is empty', language => {
+  vi.useFakeTimers();
+  const speak = vi.fn();
+  vi.stubGlobal('speechSynthesis', { getVoices: () => [], speak, cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} });
+  const { result, unmount } = renderHook(() => useSpeech());
+  act(() => result.current.speak([{ text: language === 'it' ? 'Ciao!' : 'Hello!', language }]));
+  expect(speak).toHaveBeenCalledTimes(1);
+  expect(speak.mock.calls[0][0].lang).toBe(language === 'it' ? 'it-IT' : 'en-US');
+  expect(speak.mock.calls[0][0].voice).toBeUndefined();
+  act(() => speak.mock.calls[0][0].onstart());
+  expect(result.current.blocked).toBe(false);
+  expect(result.current.missingLanguage).toBeNull();
+  unmount();
+});
+
+it.each(['language-unavailable', 'voice-unavailable', 'not-allowed', 'audio-busy'])('distinguishes %s from voice discovery failures', error => {
+  vi.useFakeTimers();
+  const speak = vi.fn();
+  vi.stubGlobal('speechSynthesis', { getVoices: () => [], speak, cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} });
+  const { result, unmount } = renderHook(() => useSpeech());
+  act(() => result.current.speak([{ text: 'Hello!', language: 'en' }]));
+  act(() => speak.mock.calls[0][0].onerror({ error }));
+  expect(result.current.blocked).toBe(true);
+  expect(result.current.missingLanguage).toBe(['language-unavailable', 'voice-unavailable'].includes(error) ? 'en' : null);
+  expect(result.current.speaking).toBe(false);
+  unmount();
+});

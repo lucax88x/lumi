@@ -52,7 +52,7 @@ function DictionaryWords({ words, speechRate }: { words: DictionaryEntry[]; spee
       </button>
       {entry?.id === word.id && <div id={`word-${word.id}`} className="dictionary-detail"><WordExplanation explanation={entry} onRead={read} readingPart={speech.activeMessageId ?? undefined}/></div>}
     </li>)}</ul>
-    {speech.blocked && <p className="notice">Per ascoltare serve una voce {speech.missingLanguage === 'en' ? 'inglese' : 'italiana'} sul dispositivo.</p>}
+    {speech.blocked && <p className="notice">{speech.missingLanguage ? `Per ascoltare serve una voce ${speech.missingLanguage === 'en' ? 'inglese' : 'italiana'} sul dispositivo.` : 'La voce non è partita. Tocca di nuovo il pulsante per ascoltare.'}</p>}
   </>;
 }
 
@@ -84,6 +84,6 @@ function Flashcards({ words, speechRate, onClose }: { words: DictionaryEntry[]; 
       {again.length > 0 && <button className="primary-button" onClick={() => { setDeck(again); setAgain([]); setIndex(0); setRevealed(false); }}><RotateCcw size={18}/>Ripassa ancora ({again.length})</button>}
       <button className="soft-button" onClick={onClose}>Finito per oggi</button>
     </div>}
-    {speech.blocked && <p className="notice">Per ascoltare serve una voce {speech.missingLanguage === 'en' ? 'inglese' : 'italiana'} sul dispositivo.</p>}
+    {speech.blocked && <p className="notice">{speech.missingLanguage ? `Per ascoltare serve una voce ${speech.missingLanguage === 'en' ? 'inglese' : 'italiana'} sul dispositivo.` : 'La voce non è partita. Tocca di nuovo il pulsante per ascoltare.'}</p>}
   </section>;
 }

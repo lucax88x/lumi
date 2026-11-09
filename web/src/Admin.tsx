@@ -74,7 +74,7 @@ function Preferences({ initial }: { initial: Settings }) {
       <button type="button" className="soft-button" onClick={() => speech.speaking ? speech.stop() : speech.speak([{ text: 'Hello! The dog is happy.', language: 'en' }, { text: 'Ciao! Il cane è felice.', language: 'it' }])}><Volume2 size={17}/>{speech.speaking ? 'Ferma la prova' : 'Prova la voce inglese'}</button>
     </div>
     <p id="voice-hint" className="field-hint">Le voci dipendono da Android o dal browser. La scelta vale su questo dispositivo.</p>
-    {speech.blocked && <p className="notice">Installa o abilita una voce {speech.missingLanguage === 'en' ? 'inglese' : 'italiana'} nelle impostazioni vocali del dispositivo.</p>}
+    {speech.blocked && <p className="notice">{speech.missingLanguage ? `Installa o abilita una voce ${speech.missingLanguage === 'en' ? 'inglese' : 'italiana'} nelle impostazioni vocali del dispositivo.` : 'La voce non è partita. Tocca di nuovo il pulsante per riprovare.'}</p>}
     <div className="preferences-actions"><button type="submit" className="primary-button" disabled={busy}><Save size={17}/>{busy ? 'Salvataggio…' : 'Salva impostazioni'}</button></div>{error && <p className="error-text" role="alert">{error}</p>}{saved && <p className="success-text" role="status">Impostazioni salvate.</p>}
   </form>;
 }
