@@ -59,7 +59,7 @@ it('separates subjects, searches English translations, and practices only the se
   const english: DictionaryEntry = { subject: 'english', id: 'dog', word: 'dog', meaning: 'cane', example: 'The dog is happy.', exampleTranslation: 'Il cane è felice.', firstAskedAt: '', lastAskedAt: '2026-10-25T12:00:00Z' };
   render(<Dictionary words={[...words, english]}/>);
   expect(screen.queryByRole('button', { name: /dog Scoperta/ })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Inglese' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Inglese' }));
   expect(screen.queryByRole('button', { name: /vigoroso Scoperta/ })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'CANE' } });
   expect(screen.getByRole('button', { name: /dog Scoperta/ })).toBeVisible();
@@ -67,7 +67,7 @@ it('separates subjects, searches English translations, and practices only the se
   expect(screen.getByText('Parola 1 di 1')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Mostra il significato' }));
   expect(screen.getByText('Il cane è felice.')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Italiano' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Italiano' }));
   expect(screen.queryByRole('heading', { name: 'dog' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: /vigoroso Scoperta/ })).toBeVisible();
 });

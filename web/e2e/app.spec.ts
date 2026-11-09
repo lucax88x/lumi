@@ -235,7 +235,7 @@ for (const item of clarificationCases) {
   test(`word context for ${item.clarification.word} resumes after reload and selects the intended meaning`, async ({ page }, testInfo) => {
     const api = await mockAPI(page);
     await page.goto('/spazi/test');
-    if (item.subject === 'english') await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+    if (item.subject === 'english') await page.getByRole('radio', { name: 'Inglese', exact: true }).click();
     await page.getByLabel('Scrivi una parola o una frase').fill(item.question);
     await page.getByRole('button', { name: 'Scopriamo!' }).click();
     const clarification = page.getByRole('region', { name: `Il contesto di ${item.clarification.word}` }).last();
@@ -584,6 +584,45 @@ test('Admin navigation works without a family and makes no family requests', asy
   await expect(page.getByRole('link', { name: 'Area coach', exact: true })).toHaveCount(0);
   expect(familyRequests).toHaveLength(0);
 });
+
+for (const width of [320, 390, 768, 1440]) {
+  test(`subject choices support touch and keyboard without losing the question at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 950 });
+    await mockAPI(page);
+    await page.goto('/spazi/test');
+    const picker = page.getByRole('radiogroup', { name: 'Scegli la materia' });
+    await expect(picker.getByRole('radio')).toHaveCount(6);
+    await expect(picker.getByRole('radio', { name: 'Italiano', exact: true })).toBeChecked();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const columns = await picker.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
+    expect(columns).toBe(width <= 600 ? 2 : 3);
+    for (const radio of await picker.getByRole('radio').all()) {
+      const bounds = await radio.boundingBox();
+      expect(bounds?.width).toBeGreaterThanOrEqual(44);
+      expect(bounds?.height).toBeGreaterThanOrEqual(44);
+    }
+    const question = page.getByLabel('Scrivi una parola o una frase');
+    await question.fill('La mia domanda');
+    const english = picker.getByRole('radio', { name: 'Inglese', exact: true });
+    await english.check();
+    await expect(english).toBeChecked();
+    await expect(question).toHaveValue('La mia domanda');
+    await expect(question).toHaveAttribute('placeholder', 'Per esempio: come si dice «cane»?');
+    await expect(page.locator('.subject-intro')).toHaveText('Impariamo l’inglese, con un aiuto in italiano.');
+    await english.focus();
+    await page.keyboard.press('ArrowRight');
+    const history = picker.getByRole('radio', { name: 'Storia', exact: true });
+    await expect(history).toBeChecked();
+    await expect(history).toBeFocused();
+    await expect(picker.getByRole('radio', { checked: true })).toHaveCount(1);
+    await page.keyboard.press('Tab');
+    await expect(question).toBeFocused();
+    await expect(question).toHaveValue('La mia domanda');
+    await question.fill('');
+    await history.focus();
+    await page.screenshot({ path: `test-results/subject-picker-${width}-${testInfo.project.name}.png`, fullPage: true });
+  });
+}
 
 test('home preserves its layout and account actions live in the sidebar', async ({ page }, testInfo) => {
   await mockAPI(page); await page.goto('/spazi/test');
@@ -1029,9 +1068,9 @@ test('parent preview shows a topic map and clears it for the next example', asyn
 test('English cards retain their subject after reload and share a separate dictionary entry across directions', async ({ page }, testInfo) => {
   const api = await mockAPI(page);
   await page.goto('/spazi/test');
-  await expect(page.getByRole('button', { name: 'Italiano', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('radio', { name: 'Italiano', exact: true })).toBeChecked();
   await expect(page.getByText('Matematica', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+  await page.getByRole('radio', { name: 'Inglese', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill('Come si dice cane?');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.locator('.word-heading')).toHaveText('dog');
@@ -1048,7 +1087,7 @@ test('English cards retain their subject after reload and share a separate dicti
   await openNavigation(page);
   await page.getByRole('link', { name: 'Il mio dizionario', exact: true }).click();
   await expect(page.getByText('Le parole che chiedi a Lumi compariranno qui.')).toBeVisible();
-  await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+  await page.getByRole('radio', { name: 'Inglese', exact: true }).click();
   await page.getByRole('searchbox').fill('cane');
   await page.getByRole('button', { name: 'Ripassiamo', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'dog', exact: true })).toBeVisible();
@@ -1060,7 +1099,7 @@ test('English cards retain their subject after reload and share a separate dicti
 test('English sentence and topic maps keep translations and selected follow-up context', async ({ page }, testInfo) => {
   const api = await mockAPI(page);
   await page.goto('/spazi/test');
-  await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+  await page.getByRole('radio', { name: 'Inglese', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill(englishCatMap.sentence);
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.locator('.sentence-translation')).toHaveText('Il gatto è sul tappeto.');
@@ -1083,7 +1122,7 @@ test('parents edit and preview English instructions independently from Italian',
   await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
   await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.settings.prompt);
-  await page.getByRole('button', { name: 'Inglese', exact: true }).click();
+  await page.getByRole('radio', { name: 'Inglese', exact: true }).click();
   await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.englishSettings.prompt);
   await page.getByLabel('Istruzioni per Lumi').fill('Usa esempi inglesi molto brevi.');
   await page.getByRole('button', { name: 'Salva istruzioni', exact: true }).click();
@@ -1096,7 +1135,7 @@ test('parents edit and preview English instructions independently from Italian',
   expect(api.dictionary).toHaveLength(0);
   await page.getByRole('button', { name: 'Ripristina il testo iniziale', exact: true }).click();
   await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.englishSettings.defaultPrompt);
-  await page.getByRole('button', { name: 'Italiano', exact: true }).click();
+  await page.getByRole('radio', { name: 'Italiano', exact: true }).click();
   await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.settings.prompt);
 });
 
@@ -1367,8 +1406,8 @@ test('chat adapts to keyboard viewport changes and small landscape screens', asy
 test('study narrows Egiziani to the Nilo and reopens a real cartographic attachment', async ({ page }, testInfo) => {
   const api = await mockAPI(page);
   await page.goto('/spazi/test');
-  for (const name of ['Italiano', 'Inglese', 'Storia', 'Geografia', 'Scienze', 'Geometria']) await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Storia', exact: true }).click();
+  for (const name of ['Italiano', 'Inglese', 'Storia', 'Geografia', 'Scienze', 'Geometria']) await expect(page.getByRole('radio', { name, exact: true })).toBeVisible();
+  await page.getByRole('radio', { name: 'Storia', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill('Gli Egiziani');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.getByRole('button', { name: 'Il Nilo', exact: true })).toBeVisible();
@@ -1396,7 +1435,7 @@ test('study narrows Egiziani to the Nilo and reopens a real cartographic attachm
 test('study asks which angles and allows a first discovery without another clarification', async ({ page }, testInfo) => {
   const api = await mockAPI(page);
   await page.goto('/spazi/test');
-  await page.getByRole('button', { name: 'Geometria', exact: true }).click();
+  await page.getByRole('radio', { name: 'Geometria', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill('I tipi di angoli');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.getByText('Hai già i nomi degli angoli che stai studiando?')).toBeVisible();
@@ -1417,7 +1456,7 @@ test('study asks which angles and allows a first discovery without another clari
 test('study accepts not knowing and keeps the input available for a free example', async ({ page }) => {
   const api = await mockAPI(page);
   await page.goto('/spazi/test');
-  await page.getByRole('button', { name: 'Storia', exact: true }).click();
+  await page.getByRole('radio', { name: 'Storia', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill('Gli Egiziani');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.getByLabel('Scrivi una parola o una frase')).toHaveAttribute('placeholder', 'Scrivi o racconta un esempio…');
@@ -1430,7 +1469,7 @@ test('study accepts not knowing and keeps the input available for a free example
 test('study displays an explorable science cycle with readable labels', async ({ page }, testInfo) => {
   await mockAPI(page);
   await page.goto('/spazi/test');
-  await page.getByRole('button', { name: 'Scienze', exact: true }).click();
+  await page.getByRole('radio', { name: 'Scienze', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill('Come funziona il ciclo dell’acqua?');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.getByRole('group', { name: 'Schema: Il ciclo dell’acqua' })).toBeVisible();
@@ -1445,7 +1484,7 @@ test('study displays an explorable science cycle with readable labels', async ({
 test('study supports Cretesi maps and the island of Crete', async ({ page }, testInfo) => {
   await mockAPI(page);
   await page.goto('/spazi/test');
-  await page.getByRole('button', { name: 'Storia', exact: true }).click();
+  await page.getByRole('radio', { name: 'Storia', exact: true }).click();
   await page.getByLabel('Scrivi una parola o una frase').fill('I Cretesi');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await page.getByRole('button', { name: 'La loro vita', exact: true }).click();
@@ -1463,7 +1502,7 @@ test('study previews and saves separate coach instructions for each new subject'
   await page.goto('/spazi/test/coach');
   await page.getByRole('tab', { name: 'Come insegna' }).click();
   for (const [subject, label] of [['history', 'Storia'], ['geography', 'Geografia'], ['science', 'Scienze'], ['geometry', 'Geometria']]) {
-    await page.getByRole('button', { name: label, exact: true }).click();
+    await page.getByRole('radio', { name: label, exact: true }).check();
     await expect(page.getByLabel('Istruzioni per Lumi')).toHaveValue(api.studySettings[subject].prompt);
   }
   await page.getByLabel('Istruzioni per Lumi').fill('Usa figure grandi e poche parole.');
@@ -1554,7 +1593,7 @@ for (const [width, height] of [[320, 640], [390, 760], [430, 880]]) {
     });
     const api = await mockAPI(page);
     await page.goto('/spazi/test');
-    await page.getByRole('button', { name: 'Geografia', exact: true }).click();
+    await page.getByRole('radio', { name: 'Geografia', exact: true }).click();
     await page.getByLabel('Scrivi una parola o una frase').fill('Mostrami i continenti e dove si trovano');
     await page.getByRole('button', { name: 'Scopriamo!' }).click();
     const map = page.getByRole('group', { name: 'Cartina: I continenti' });

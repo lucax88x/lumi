@@ -1,4 +1,5 @@
-import { BookOpen, Languages, Landmark, Map, Shapes, Sprout } from 'lucide-react';
+import { useId } from 'react';
+import { BookOpen, Check, Languages, Landmark, Map, Shapes, Sprout } from 'lucide-react';
 import type { Subject } from './api/types.gen';
 
 export const subjects: { id: Subject; label: string; hint: string; example: string }[] = [
@@ -13,7 +14,16 @@ export function subjectLabel(subject?: Subject) { return subjects.find(item => i
 const subjectIcons = { italian: BookOpen, english: Languages, history: Landmark, geography: Map, science: Sprout, geometry: Shapes };
 
 export function SubjectPicker({ value, onChange, disabled = false, only }: { only?: Subject[]; value: Subject; onChange: (subject: Subject) => void; disabled?: boolean }) {
-  return <div className="subject-picker" role="group" aria-label="Scegli la materia">
-    {subjects.filter(subject => !only || only.includes(subject.id)).map(subject => { const Icon = subjectIcons[subject.id]; return <button key={subject.id} type="button" className={`soft-button ${value === subject.id ? 'subject-selected' : ''}`} aria-pressed={value === subject.id} disabled={disabled} onClick={() => onChange(subject.id)}><Icon className="subject-icon" size={20} strokeWidth={1.7} aria-hidden="true"/><span>{subject.label}</span></button>; })}
+  const name = useId();
+  return <div className="subject-picker" role="radiogroup" aria-label="Scegli la materia">
+    {subjects.filter(subject => !only || only.includes(subject.id)).map(subject => {
+      const Icon = subjectIcons[subject.id];
+      return <label key={subject.id} className="subject-option">
+        <input type="radio" name={name} value={subject.id} checked={value === subject.id} disabled={disabled} onChange={() => onChange(subject.id)}/>
+        <Icon className="subject-icon" size={22} strokeWidth={1.7} aria-hidden="true"/>
+        <span className="subject-name">{subject.label}</span>
+        <span className="subject-check" aria-hidden="true"><Check size={12} strokeWidth={3}/></span>
+      </label>;
+    })}
   </div>;
 }
