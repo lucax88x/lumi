@@ -150,7 +150,7 @@ button svg, a svg { flex-shrink: 0; }
 .chat-shell .page-footer { display: none; }
 .conversation-page { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; padding: 0 40px; }
 .chat-reading-area { position: relative; display: flex; flex: 1; min-height: 0; }
-.chat-scroll { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: 24px 4px 8px; scrollbar-width: thin; scrollbar-color: #c8b8db transparent; }
+.chat-scroll { overflow-anchor: none; flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: 24px 4px 8px; scrollbar-width: thin; scrollbar-color: #c8b8db transparent; }
 .latest-answer { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 16px; white-space: nowrap; border: 1px solid #d4c4e5; border-radius: 24px; color: #69449a; background: #fff; box-shadow: 0 4px 16px #30283f18; font-size: 14px; }
 .conversation-page .question-card { flex-shrink: 0; margin: 0 0 12px; padding: 16px; border-radius: 16px; }
 .conversation-page .question-heading { justify-content: space-between; margin-bottom: 10px; }

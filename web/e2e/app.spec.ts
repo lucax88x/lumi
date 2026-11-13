@@ -331,6 +331,7 @@ test('word cards survive reload, save one dictionary entry, and support practice
   await page.getByLabel('Scrivi una parola o una frase').fill('VIGOROSO');
   await page.getByRole('button', { name: 'Scopriamo!' }).click();
   await expect(page.locator('.message.assistant')).toHaveCount(2);
+  await expect(answer.getByRole('region', { name: 'Significato', exact: true })).toBeInViewport({ ratio: 1 });
   expect(api.dictionary).toHaveLength(1);
   await openNavigation(page);
   await page.getByRole('link', { name: 'Il mio dizionario', exact: true }).click();
@@ -1395,11 +1396,19 @@ test('long streaming answers respect reading position and keep the composer in v
   const date = new Date().toISOString();
   api.chats.push({ id: 'long', title: 'Leggiamo un pezzetto alla volta', subject: 'italian', createdAt: date, updatedAt: date });
   const answer: Message = { id: 'long-answer', conversationId: 'long', role: 'assistant', status: 'streaming', text: 'Una parola nuova ci aiuta a raccontare quello che vediamo.\n\n'.repeat(35), createdAt: date };
-  api.messages.set('long', [answer]);
+  api.messages.set('long', [
+    { id: 'old-question', conversationId: 'long', role: 'user', status: 'completed', text: 'Una vecchia domanda. '.repeat(150), createdAt: date },
+    answer,
+  ]);
   await page.goto('/spazi/test/domande/long');
   const reading = page.getByRole('region', { name: 'Leggi la conversazione' });
   await expect(page.locator('.message.assistant')).toHaveCount(1);
   await expect.poll(() => reading.evaluate(area => area.scrollTop)).toBeGreaterThan(0);
+  const anchoredTop = await reading.evaluate(area => area.scrollTop);
+  answer.text += 'Altro contenuto in arrivo. '.repeat(40);
+  await page.clock.fastForward(2100);
+  await expect(page.locator('.message.assistant')).toContainText('Altro contenuto in arrivo.');
+  expect(await reading.evaluate(area => area.scrollTop)).toBeCloseTo(anchoredTop, 0);
   const composer = page.getByRole('region', { name: 'Fai una domanda' });
   const initialBox = (await composer.boundingBox())!;
   await reading.evaluate(area => { area.scrollTop = 0; });
@@ -1411,13 +1420,51 @@ test('long streaming answers respect reading position and keep the composer in v
   expect(await reading.evaluate(area => area.scrollTop)).toBe(0);
   await expect(latest).toBeVisible();
   await latest.click();
-  await expect.poll(() => reading.evaluate(area => area.scrollHeight - area.scrollTop - area.clientHeight)).toBeLessThan(2);
+  await expect.poll(async () => {
+    const area = (await reading.boundingBox())!;
+    const response = (await page.locator('[data-message-id="long-answer"]').boundingBox())!;
+    return Math.abs(response.y - area.y - 8);
+  }).toBeLessThan(2);
   await expect(latest).toBeHidden();
   const finalBox = (await composer.boundingBox())!;
   expect(finalBox.y).toBeCloseTo(initialBox.y, 0);
   expect(finalBox.y + finalBox.height).toBeLessThanOrEqual(700);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByRole('button', { name: 'Parla con Lumi' })).toBeInViewport();
+});
+
+test('late word cards keep the meaning visible through completion and reload', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.clock.install();
+  const api = await mockAPI(page);
+  const date = new Date().toISOString();
+  api.chats.push({ id: 'cards', title: 'Una parola', subject: 'english', createdAt: date, updatedAt: date });
+  const answer: Message = { id: 'cards-answer', conversationId: 'cards', role: 'assistant', status: 'streaming', text: '', createdAt: date };
+  api.messages.set('cards', [
+    { id: 'cards-question', conversationId: 'cards', role: 'user', status: 'completed', text: 'apple', createdAt: date },
+    answer,
+  ]);
+  await page.goto('/spazi/test/domande/cards');
+  await expect(page.locator('.thinking-play')).toBeVisible();
+  answer.wordExplanation = { word: 'apple', meaning: 'mela', example: 'I eat an apple. '.repeat(30), exampleTranslation: 'Mangio una mela. '.repeat(30), sourceWord: 'apple', sourceLanguage: 'en' };
+  await page.clock.fastForward(2100);
+  const meaning = page.getByRole('region', { name: 'Significato', exact: true });
+  await expect(meaning).toBeInViewport({ ratio: 1 });
+  const reading = page.getByRole('region', { name: 'Leggi la conversazione' });
+  const top = await reading.evaluate(area => area.scrollTop);
+  answer.images = rockImages;
+  await page.clock.fastForward(2100);
+  await expect(page.locator('.word-images')).toBeVisible();
+  await expect(meaning).toBeInViewport({ ratio: 1 });
+  expect(await reading.evaluate(area => area.scrollTop)).toBeCloseTo(top, 0);
+  answer.status = 'completed';
+  await page.clock.fastForward(2100);
+  await expect(page.locator('.thinking-dots')).toHaveCount(0);
+  await expect(meaning).toBeInViewport({ ratio: 1 });
+  expect(await reading.evaluate(area => area.scrollTop)).toBeCloseTo(top, 0);
+  await page.reload();
+  await expect(meaning).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('button', { name: 'Ultima risposta', exact: true })).toBeHidden();
 });
 
 test('chat adapts to keyboard viewport changes and small landscape screens', async ({ page }) => {

@@ -22,6 +22,7 @@ import { LoadingSkeleton } from './LoadingSkeleton';
 import { ThinkingPlay, isWaitingForAnswer } from './ThinkingPlay';
 import { useInvitationNotifications } from './InvitationNotifications';
 import { ConversationHistory } from './ConversationHistory';
+import { useAnswerScroll } from './useAnswerScroll';
 import { useSpeech } from './speech';
 import { errorMessage, messageSpeechParts, narrativeText, readStream } from './lib';
 
@@ -187,16 +188,12 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
   const [mapFocus, setMapFocus] = useState<{ kind: 'sentence' | 'topic' | 'visual'; context: string } | null>(null);
   const controller = useRef<AbortController | null>(null);
   const locked = useRef(false);
-  const readingArea = useRef<HTMLDivElement>(null);
-  const followAnswer = useRef(true);
-  const revealedStudy = useRef<string | null>(null);
-  const [showLatest, setShowLatest] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const speech = useSpeech(status.speechRate);
   const speechRef = useRef(speech); speechRef.current = speech;
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort(); speechRef.current.stop(); }; }, []);
-  useEffect(() => { speechRef.current.stop(); revealedStudy.current = null; }, [id]);
+  useEffect(() => { speechRef.current.stop(); }, [id]);
   // Only the plain question is handed across the route transition; it stays in memory.
   useEffect(() => {
     if (!id) return;
@@ -204,34 +201,6 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
     if (text) { qc.removeQueries({ queryKey: ['pending-question', familyId, id] }); setQueued(text); }
   }, [id, qc]);
   useEffect(() => { if (queued && id && detail.data) { const text = queued; setQueued(null); void submit('message', text); } }, [queued, id, detail.data]);
-  useEffect(() => {
-    const area = readingArea.current;
-    if (!area) return;
-    const latest = live ?? detail.data?.messages.at(-1);
-    if (isStudy && latest?.role === 'assistant' && (latest.learningVisual || latest.topicMap || latest.studyClarification) && revealedStudy.current !== latest.id) {
-      const article = [...area.querySelectorAll<HTMLElement>('[data-message-id]')].find(element => element.dataset.messageId === latest.id);
-      if (article) {
-        revealedStudy.current = latest.id;
-        followAnswer.current = false;
-        area.scrollTop += article.getBoundingClientRect().top - area.getBoundingClientRect().top - 8;
-        setShowLatest(false);
-        return;
-      }
-    }
-    if (followAnswer.current) area.scrollTop = area.scrollHeight;
-  }, [detail.dataUpdatedAt, pendingUser?.id, live?.text, live?.status, live?.images, live?.sentenceMap, live?.topicMap, live?.wordExplanation, live?.wordClarification, live?.studyClarification, live?.learningVisual, busy]);
-
-  function updateReadingPosition(area: HTMLDivElement) {
-    const nearBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 100;
-    followAnswer.current = nearBottom;
-    const viewport = area.getBoundingClientRect();
-    const readingStudy = isStudy && [...area.querySelectorAll<HTMLElement>('.learning-visual, .topic-map, .study-clarification')].some(lesson => {
-      const bounds = lesson.getBoundingClientRect();
-      return bounds.bottom > viewport.top && bounds.top < viewport.bottom;
-    });
-    setShowLatest(!nearBottom && !readingStudy);
-  }
-
   async function submit(action: SendMessage['action'] = 'message', override?: string) {
     const currentVisual = (live ?? detail.data?.messages.at(-1))?.learningVisual;
     const firstPoint = currentVisual?.kind === 'geometry' ? currentVisual.figures[0] : currentVisual?.kind === 'diagram' ? currentVisual.nodes[0] : currentVisual?.features[0];
@@ -240,7 +209,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
     const requestAction = focusedText ? 'message' : action;
     const text = focusedText ?? override ?? draft.trim();
     if (locked.current || recording || (id && !detail.data) || (!text && action === 'message')) return;
-    speech.stop(); setError(''); locked.current = true; setBusy(true); followAnswer.current = true; setShowLatest(false);
+    speech.stop(); setError(''); locked.current = true; setBusy(true); prepareAnswer();
     if (action === 'message') setMapFocus(null);
     else if (focusedText && focus) setMapFocus(focus);
     try {
@@ -280,6 +249,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
   const messages = [...(detail.data?.messages ?? [])];
   if (pendingUser && !messages.some(m => m.role === 'user' && m.text === pendingUser.text && new Date(m.createdAt).getTime() >= new Date(pendingUser.createdAt).getTime() - 1000)) messages.push(pendingUser);
   if (live) { const index = messages.findIndex(m => m.id === live.id); if (index >= 0) messages[index] = live; else messages.push(live); }
+  const { readingArea, showLatest, revealLatest, prepareAnswer, readingEvents } = useAnswerScroll(id, messages);
   const lastAnswer = [...messages].reverse().find(m => m.role === 'assistant' && m.status === 'completed');
   const latestMessage = messages.at(-1);
   const clarificationMessage = latestMessage?.role === 'assistant' && latestMessage.status === 'completed' && latestMessage.wordClarification ? latestMessage : undefined;
@@ -295,7 +265,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
     </> : <>
       <header className="chat-title"><Avatar mood={mood}/><div><h1 title={detail.data?.conversation.title}>{detail.data?.conversation.title ?? 'La tua domanda'}</h1><p className="chat-subject">{subjectLabel(subject)} con Lumi</p></div><Link to="/spazi/$familyId" params={{ familyId }} className="new-question" aria-label="Fai una nuova domanda"><Plus size={20}/><span>Nuova domanda</span></Link></header>
       <div className="chat-reading-area">
-      <div ref={readingArea} className="chat-scroll" tabIndex={0} role="region" aria-label="Leggi la conversazione" onScroll={event => updateReadingPosition(event.currentTarget)}>
+      <div ref={readingArea} className="chat-scroll" tabIndex={0} role="region" aria-label="Leggi la conversazione" {...readingEvents}>
       {detail.isPending && <LoadingSkeleton label="Caricamento della conversazione" variant="messages" rows={2}/>}
       {detail.isError && <p role="alert" className="notice error-notice">{errorMessage(detail.error)} <button className="text-button" onClick={() => void detail.refetch()}>Riprova</button></p>}
       <div className="messages" role="log" aria-label="Conversazione con Lumi" aria-live="off">
@@ -307,7 +277,7 @@ function ReadyChatPage({ id, status }: { id?: string; status: PublicStatus }) {
         {(mapFocus || ['history', 'geography', 'science', 'geometry'].includes(subject)) && <button className="soft-button" disabled={!canSend} onClick={() => void submit('next')}>Continua<ArrowRight size={17}/></button>}
       </div>}
       </div>
-      {showLatest && <button className="latest-answer" onClick={() => { const area = readingArea.current; followAnswer.current = true; setShowLatest(false); area?.scrollTo({ top: area.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}><ArrowDown size={18}/>Ultima risposta</button>}
+      {showLatest && <button className="latest-answer" onClick={revealLatest}><ArrowDown size={18}/>Ultima risposta</button>}
       </div>
     </>}
     {speech.blocked && <p className="notice">{speech.missingLanguage ? `Per ascoltare serve una voce ${speech.missingLanguage === 'en' ? 'inglese' : 'italiana'} sul dispositivo.` : 'La voce non è partita. Tocca il pulsante per riprovare.'} {lastAnswer && <button className="text-button" onClick={() => speech.speak(messageSpeechParts(lastAnswer), lastAnswer.id)}>Tocca per ascoltare</button>}</p>}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,9 +49,12 @@ func TestLiveWordClarification(t *testing.T) {
 		ambiguous               bool
 	}{
 		{"Italian ambiguity", api.Italian, "Cosa significa formato?", "formato", "Il gruppo è formato da tre persone.", true},
-		{"English ambiguity", api.English, "Cosa significa bank?", "bank", "I sit on the river bank.", true},
+		{"English ambiguity", api.English, "Cosa significa bank? Non so se si parla di soldi o di un fiume.", "bank", "I sit on the river bank.", true},
 		{"Italian to English ambiguity", api.English, "Come si dice pesca?", "pesca", "Mangio una pesca.", true},
 		{"context already supplied", api.Italian, "Cosa significa formato nella frase «Il gruppo è formato da tre persone»?", "formato", "", false},
+		{"bare apple", api.English, "apple", "apple", "", false},
+		{"bare tuta", api.English, "tuta", "tuta", "", false},
+		{"spacesuit context", api.English, "Parliamo degli astronauti: come si dice tuta?", "tuta", "", false},
 		{"clear English word", api.English, "Cosa significa dog?", "dog", "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,6 +113,15 @@ func TestLiveWordClarification(t *testing.T) {
 			}
 			if wordKey(word) != tc.word {
 				t.Fatalf("lost original word: %s", word)
+			}
+			if tc.name == "bare apple" && !strings.Contains(strings.ToLower(answer.WordExplanation.Meaning), "mela") {
+				t.Fatalf("expected mela: %+v", answer.WordExplanation)
+			}
+			if tc.name == "bare tuta" && wordKey(answer.WordExplanation.Word) != "tracksuit" {
+				t.Fatalf("expected tracksuit: %+v", answer.WordExplanation)
+			}
+			if tc.name == "spacesuit context" && wordKey(answer.WordExplanation.Word) != "spacesuit" {
+				t.Fatalf("expected spacesuit: %+v", answer.WordExplanation)
 			}
 			t.Logf("model=%s; word=%s; meaning=%s", settings.Model, answer.WordExplanation.Word, answer.WordExplanation.Meaning)
 		})

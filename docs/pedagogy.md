@@ -60,7 +60,7 @@ Lumi usa il contesto della conversazione e chiede una frase soltanto quando serv
 | «Cosa significa formato?» | Chiede la frase prima di scegliere fra dimensioni, composizione e altri sensi plausibili. Non mostra una definizione definitiva. |
 | Rispondi «Il gruppo è formato da tre persone.» | Spiega «formato» come «composto», senza avviare una mappa dell'intera frase. |
 | «Non ho una frase» | Propone due o tre esempi diversi; il tocco seleziona il contesto della parola iniziale. |
-| «Cosa significa bank?» in Inglese | Domanda in italiano, esempi inglesi con significati italiani; la lettura degli esempi usa la voce inglese. |
+| «Cosa significa bank? Non so se si parla di soldi o di un fiume.» in Inglese | Domanda in italiano, esempi inglesi con significati italiani; la lettura degli esempi usa la voce inglese. |
 | «Come si dice pesca?» in Inglese | Mantiene «pesca» come parola originale e distingue frutto e attività prima della traduzione inglese. |
 | «Cosa significa formato nella frase “Il gruppo è formato da tre persone”?» | Risponde direttamente usando il contesto già presente. |
 | Ricarica prima della risposta o della scelta | Conserva domanda ed esempi. Solo l'ultimo chiarimento completato in attesa di risposta offre pulsanti attivi. |
@@ -112,3 +112,31 @@ I test automatici usano risposte simulate per verificare strumenti, contratti,
 streaming, salvataggio e interazione. La qualità delle scelte e delle spiegazioni
 va valutata con questi esempi nell'anteprima coach. Le prove automatiche con un
 modello reale restano opt-in tramite `LUMI_LIVE_TEST_DATA_DIR`.
+
+## Parole comuni e traduzione immediata
+
+In Inglese una parola isolata richiede una traduzione. Il contesto disponibile
+ha precedenza; in sua assenza Lumi sceglie il significato quotidiano più probabile.
+Altri significati possibili o marchi non richiedono da soli un chiarimento.
+
+| Domanda o contesto | Cosa verificare |
+| --- | --- |
+| «apple» | Scheda con mela ed esempio bilingue; nessuna domanda sulla marca. |
+| «tuta» | Scheda con tracksuit, precisando tuta da ginnastica; niente immagini. |
+| Si parla di astronauti, poi «tuta» | Scheda con spacesuit. |
+| «Mostrami una foto di una tuta» | Ricerca immagini consentita dalla richiesta esplicita. |
+| Dopo una ricerca immagini, nuova parola «apple» | Torna alla traduzione, senza nuove immagini. |
+| Due sensi realmente concorrenti senza una scelta ragionevole | Un solo chiarimento mirato, senza chiedere automaticamente dove è stata letta la parola. |
+
+I primi tre casi sono inclusi in `TestLiveWordClarification`, anche con prompt
+personalizzati salvati. Le prove reali restano opt-in; i test simulati non
+dimostrano che il modello sceglierà sempre l'azione corretta.
+
+## Posizione di lettura nella chat
+
+Su mobile e desktop le nuove risposte si leggono dall'inizio: per una parola,
+prima il significato e poi l'esempio. Il testo in streaming e le schede o immagini
+aggiunte successivamente non trascinano la vista al fondo. Scorrere manualmente
+interrompe l'ancoraggio; «Ultima risposta» riporta all'inizio dell'ultima risposta
+e compare solo quando quel messaggio è interamente fuori vista. Anche riaprendo
+una chat si parte dall'inizio dell'ultima risposta.
